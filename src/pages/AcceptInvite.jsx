@@ -14,7 +14,7 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 
-const API_BASE = "https://api-attendance.onesaas.in";
+import { API_BASE } from "../utils/api";
 
 const STATUS_CONTENT = {
   pending: {

@@ -19,6 +19,7 @@ import {
 } from 'react-icons/fa';
 import Modal from "../components/Modal";
 import { useAuth } from "../context/AuthContext";
+import { getMediaUrl } from "../utils/api";
 
 const formatRole = (role) =>
     role?.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'User';
@@ -44,7 +45,7 @@ const CompanyLogo = ({ company, size = 8 }) => {
     if (company?.logo_url && !imgError) {
         return (
             <img
-                src={company.logo_url.startsWith('http') ? company.logo_url : `https://api-attendance.onesaas.in${company.logo_url}`}
+                src={getMediaUrl(company.logo_url)}
                 alt="Company Logo"
                 className={`w-${size} h-${size} rounded-xl object-cover border border-slate-100 bg-white shadow-sm`}
                 onError={() => setImgError(true)}
@@ -268,7 +269,7 @@ const Navbar = ({
                                         <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-lg bg-white border border-white/20">
                                             {user?.profile_picture ? (
                                                 <img
-                                                    src={user.profile_picture.startsWith('http') ? user.profile_picture : `https://api-attendance.onesaas.in${user.profile_picture}`}
+                                                    src={getMediaUrl(user.profile_picture)}
                                                     alt={user.name}
                                                     className="w-full h-full object-cover"
                                                 />
@@ -305,7 +306,7 @@ const Navbar = ({
                                                 <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-white shadow-sm bg-white">
                                                     {user?.profile_picture ? (
                                                         <img
-                                                            src={user.profile_picture.startsWith('http') ? user.profile_picture : `https://api-attendance.onesaas.in${user.profile_picture}`}
+                                                            src={getMediaUrl(user.profile_picture)}
                                                             alt={user.name}
                                                             className="w-full h-full object-cover"
                                                         />

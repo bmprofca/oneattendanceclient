@@ -466,7 +466,7 @@ function AppContent() {
           accessDeniedDescription="Your current role does not have access to bank account management."
           accessDeniedIcon={FaInfoCircle}
         />
-        </MainLayout></ProtectedRoute>}/>
+        </MainLayout></ProtectedRoute>} />
         <Route path="/employee-profile/:employeeId/:tabKey?" element={<ProtectedRoute pageKey="employeeProfile"><MainLayout><EmployeeProfile /></MainLayout></ProtectedRoute>} />
         <Route path="/employee-salary-history/:employeeId" element={<ProtectedRoute pageKey="salaryManagement"><MainLayout><EmployeeSalaryHistory /></MainLayout></ProtectedRoute>} />
 

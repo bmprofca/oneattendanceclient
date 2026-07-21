@@ -8,7 +8,7 @@ import {
   FaShieldAlt, FaUserCheck, FaChevronDown,
 } from "react-icons/fa";
 import { toast } from 'react-toastify';
-import apiCall from '../utils/api';
+import apiCall, { getMediaUrl } from '../utils/api';
 import Skeleton from "../components/SkeletonComponent";
 import Pagination, { usePagination } from "../components/PaginationComponent";
 import { useAuth } from "../context/AuthContext";
@@ -139,7 +139,7 @@ const InviteCard = ({ invite, index, onView, onAccept, onReject }) => {
 
   const companyLogo = invite.company?.logo_url ? (
     <img
-      src={invite.company.logo_url.startsWith('http') ? invite.company.logo_url : `https://api-attendance.onesaas.in${invite.company.logo_url}`}
+      src={getMediaUrl(invite.company.logo_url)}
       alt="logo"
       className="w-10 h-10 rounded-xl object-cover border border-purple-200 bg-white shrink-0"
       onError={(e) => { e.target.style.display = 'none'; }}
@@ -252,7 +252,7 @@ const ViewModal = ({ invite, onClose, onAccept, onReject }) => {
           <div className="flex items-center gap-4 pb-4 border-b">
             {invite.company?.logo_url ? (
               <img
-                src={invite.company.logo_url.startsWith('http') ? invite.company.logo_url : `https://api-attendance.onesaas.in${invite.company.logo_url}`}
+                src={getMediaUrl(invite.company.logo_url)}
                 alt="Company Logo"
                 className="w-14 h-14 rounded-xl object-cover border border-purple-200 shadow-md bg-white shrink-0"
                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -672,7 +672,7 @@ export default function MyInvites() {
         <div className="flex items-center gap-3">
           {invite.company?.logo_url ? (
             <img
-              src={invite.company.logo_url.startsWith('http') ? invite.company.logo_url : `https://api-attendance.onesaas.in${invite.company.logo_url}`}
+              src={getMediaUrl(invite.company.logo_url)}
               alt="logo"
               className="w-9 h-9 rounded-full object-cover border border-purple-200 bg-white shrink-0"
               onError={(e) => { e.target.style.display = 'none'; }}

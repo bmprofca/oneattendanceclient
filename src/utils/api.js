@@ -1,4 +1,11 @@
-const API_BASE = "https://api-attendance.onesaas.in";
+export const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:7736";
+
+/** Resolve relative media paths (logos, profile pictures) against the API host. */
+export const getMediaUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http")) return url;
+  return `${API_BASE}${url}`;
+};
 
 /**
  * Unified API calling utility
@@ -44,18 +51,18 @@ export const apiCall = async (endpoint, method = 'GET', body = null, companyId =
 
   try {
     const response = await fetch(url, options);
-    
+
     // Global 401 Unauthorized handler
     if (response.status === 401 && !requestOverrides.skipUnauthorizedRedirect) {
       localStorage.removeItem('token');
       localStorage.removeItem('company');
-      
+
       // Redirect to login page if not already there
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
-    
+
     return response;
   } catch (error) {
     console.error(`API Call Error (${url}):`, error);
@@ -72,7 +79,8 @@ export const uploadFile = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch('https://upload.onesaas.in/api/upload', {
+  const uploadUrl = process.env.REACT_APP_UPLOAD_URL || "https://upload.onesaas.in/api/upload";
+  const response = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
       'key': 'onedevelopers'

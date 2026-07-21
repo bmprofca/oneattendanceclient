@@ -1,5 +1,6 @@
 import React from "react";
 import { FaEdit, FaTrash, FaBuilding } from "react-icons/fa";
+import { getMediaUrl } from "../../utils/api";
 
 function CompanyCard({ company, isActive, onSwitch, onEdit, onDelete, canManageCompany = true }) {
   return (
@@ -10,7 +11,7 @@ function CompanyCard({ company, isActive, onSwitch, onEdit, onDelete, canManageC
       <div className="flex items-center gap-4 flex-1">
         {company.logo_url ? (
           <img 
-            src={company.logo_url.startsWith('http') ? company.logo_url : `https://api-attendance.onesaas.in${company.logo_url}`} 
+            src={getMediaUrl(company.logo_url)} 
             alt="Company Logo" 
             className="w-10 h-10 rounded-lg object-cover border border-gray-200 shadow-sm bg-white shrink-0"
             onError={(e) => {

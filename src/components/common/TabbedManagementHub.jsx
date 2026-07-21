@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { FaChevronRight } from 'react-icons/fa';
-import usePermissionAccess from '../../hooks/usePermissionAccess';
-import { ManagementHub } from './index';
+import React, { useEffect, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { FaChevronRight } from "react-icons/fa";
+import usePermissionAccess from "../../hooks/usePermissionAccess";
+import { ManagementHub } from "./index";
 
 const normalizeTab = (tab, fallback) => {
   if (!tab) return fallback;
@@ -13,7 +13,7 @@ export default function TabbedManagementHub({
   title,
   description,
   eyebrow,
-  accent = 'slate',
+  accent = "slate",
   routePath,
   defaultTab,
   tabs = [],
@@ -25,30 +25,41 @@ export default function TabbedManagementHub({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const requestedTab = normalizeTab(searchParams.get('tab'), defaultTab);
+  const searchParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search],
+  );
+  const requestedTab = normalizeTab(searchParams.get("tab"), defaultTab);
 
   const resolvedTabs = useMemo(
     () =>
       tabs.map((tab) => {
-        const allowed = tab.pageKey ? checkPageAccess(tab.pageKey).allowed : true;
+        const allowed = tab.pageKey
+          ? checkPageAccess(tab.pageKey).allowed
+          : true;
         return { ...tab, access: { allowed } };
       }),
-    [checkPageAccess, tabs]
+    [checkPageAccess, tabs],
   );
 
   const accessibleTabs = resolvedTabs.filter((tab) => tab.access.allowed);
-  const fallbackTab = accessibleTabs[0]?.id || resolvedTabs[0]?.id || defaultTab;
-  const activeTab = resolvedTabs.find((tab) => tab.id === requestedTab && tab.access.allowed)?.id || fallbackTab;
+  const fallbackTab =
+    accessibleTabs[0]?.id || resolvedTabs[0]?.id || defaultTab;
+  const activeTab =
+    resolvedTabs.find((tab) => tab.id === requestedTab && tab.access.allowed)
+      ?.id || fallbackTab;
 
   useEffect(() => {
     if (!routePath || !resolvedTabs.length) return;
     const nextSearchParams = new URLSearchParams(location.search);
-    if (activeTab) nextSearchParams.set('tab', activeTab);
+    if (activeTab) nextSearchParams.set("tab", activeTab);
 
     const nextSearch = nextSearchParams.toString();
     if (`?${nextSearch}` !== location.search) {
-      navigate({ pathname: routePath, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+      navigate(
+        { pathname: routePath, search: nextSearch ? `?${nextSearch}` : "" },
+        { replace: true },
+      );
     }
   }, [activeTab, location.search, navigate, routePath, resolvedTabs.length]);
 
@@ -70,12 +81,16 @@ export default function TabbedManagementHub({
       summary={
         currentTab ? (
           <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <span className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold ${currentTab.accent || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+            <span
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold ${currentTab.accent || "bg-slate-100 text-slate-600 border-slate-200"}`}
+            >
               {CurrentIcon && <CurrentIcon size={12} />}
               {currentTab.shortLabel || currentTab.label}
             </span>
             <FaChevronRight className="text-slate-300" size={12} />
-            <span className="text-xs text-slate-500">{currentTab.description}</span>
+            <span className="text-xs text-slate-500">
+              {currentTab.description}
+            </span>
           </div>
         ) : null
       }
@@ -85,7 +100,9 @@ export default function TabbedManagementHub({
         icon: tab.icon,
         disabled: !tab.access.allowed,
         description: tab.description,
-        title: tab.access.allowed ? tab.description : 'You do not have access to this section',
+        title: tab.access.allowed
+          ? tab.description
+          : "You do not have access to this section",
       }))}
       activeTab={activeTab}
       onTabChange={handleTabChange}
@@ -97,8 +114,12 @@ export default function TabbedManagementHub({
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
             {AccessDeniedIcon ? <AccessDeniedIcon size={20} /> : null}
           </div>
-          <h2 className="text-lg font-bold text-slate-800">{accessDeniedTitle}</h2>
-          <p className="mt-2 text-sm text-slate-500">{accessDeniedDescription}</p>
+          <h2 className="text-lg font-bold text-slate-800">
+            {accessDeniedTitle}
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            {accessDeniedDescription}
+          </p>
         </div>
       )}
     </ManagementHub>

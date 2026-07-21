@@ -12,7 +12,7 @@ import CreateCompanyModal from "../components/CompanyModals/CreateCompanyModal";
 import EditCompanyModal from "../components/CompanyModals/EditCompanyModal";
 import ModalScrollLock from "../components/ModalScrollLock";
 import Skeleton from "../components/SkeletonComponent";
-import apiCall from "../utils/api";
+import apiCall, { getMediaUrl } from "../utils/api";
 import { TabbedManagementHub } from "../components/common";
 import { usePasswordValidation } from "../hooks/usePasswordValidation";
 
@@ -263,7 +263,7 @@ const CompaniesTab = () => {
             <div className="shrink-0">
               {activeCompany.logo_url ? (
                 <img
-                  src={activeCompany.logo_url.startsWith('http') ? activeCompany.logo_url : `https://api-attendance.onesaas.in${activeCompany.logo_url}`}
+                  src={getMediaUrl(activeCompany.logo_url)}
                   alt="Company Logo"
                   className="w-16 h-16 rounded-xl object-cover border border-white shadow-md bg-white"
                   onError={(e) => {

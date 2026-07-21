@@ -8,7 +8,7 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
-import apiCall, { uploadFile } from "../utils/api";
+import apiCall, { uploadFile, getMediaUrl } from "../utils/api";
 import Modal from "../components/Modal";
 import CategoryPermissionSelector from "../components/common/CategoryPermissionSelector";
 import { CountryCodeModal, getFlagEmoji } from "../components/common";
@@ -154,9 +154,7 @@ export default function ProfilePage() {
         setOriginalProfile(nextProfile);
         setImagePreview(
             currentUser.profile_picture
-                ? currentUser.profile_picture.startsWith("http")
-                    ? currentUser.profile_picture
-                    : `https://api-attendance.onesaas.in${currentUser.profile_picture}`
+                ? getMediaUrl(currentUser.profile_picture)
                 : null
         );
     }, [currentUser?.id, currentUser?.name, currentUser?.profile_picture, currentUser?.whatsapp, currentUser?.profession]);
@@ -434,7 +432,7 @@ export default function ProfilePage() {
                             >
                                 {user.profile_picture ? (
                                     <img
-                                        src={user.profile_picture.startsWith('http') ? user.profile_picture : `https://api-attendance.onesaas.in${user.profile_picture}`}
+                                        src={getMediaUrl(user.profile_picture)}
                                         alt={user.name}
                                         className="w-full h-full object-cover"
                                     />
@@ -639,7 +637,7 @@ export default function ProfilePage() {
                                         <div className="w-24 h-24 rounded-2xl border-4 border-white shadow-lg overflow-hidden bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
                                             {imagePreview ? (
                                                 <img
-                                                    src={imagePreview.startsWith("http") ? imagePreview : `https://api-attendance.onesaas.in${imagePreview}`}
+                                                    src={getMediaUrl(imagePreview)}
                                                     alt="Profile"
                                                     className="w-full h-full object-cover"
                                                     onError={() => setImagePreview(null)}
