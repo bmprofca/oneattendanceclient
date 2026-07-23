@@ -87,6 +87,10 @@ export default function AcceptInvite() {
         `${API_BASE}/company/invites/accept-invite?token=${encodeURIComponent(token)}`,
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ token }),
         }
       );
       const result = await response.json().catch(() => ({}));

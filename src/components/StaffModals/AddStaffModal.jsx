@@ -91,6 +91,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const [employmentType, setEmploymentType] = useState(null);
   const [selectedAttendanceMethods, setSelectedAttendanceMethods] = useState([]);
   const [autoApprove, setAutoApprove] = useState(false);
+  const [enableOvertime, setEnableOvertime] = useState(true);
+  const [enableDeduction, setEnableDeduction] = useState(true);
   const [shiftStart, setShiftStart] = useState(DEFAULT_SHIFT_START);
   const [shiftEnd, setShiftEnd] = useState(DEFAULT_SHIFT_END);
   const [breakMinutes, setBreakMinutes] = useState(DEFAULT_DURATION);
@@ -99,6 +101,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const [baseAmount, setBaseAmount] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(getCurrentMonthDate);
   const [effectiveTo, setEffectiveTo] = useState("");
+  const [joiningDate, setJoiningDate] = useState(""); // NEW
   const [salaryComponents, setSalaryComponents] = useState([]);
   const [availableSalaryComponents, setAvailableSalaryComponents] = useState([]);
   const [isLoadingSalaryComponents, setIsLoadingSalaryComponents] = useState(false);
@@ -231,6 +234,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     setEmploymentType(null);
     setSelectedAttendanceMethods([]);
     setAutoApprove(false);
+    setEnableOvertime(true);
+    setEnableDeduction(true);
     setShiftStart(DEFAULT_SHIFT_START);
     setShiftEnd(DEFAULT_SHIFT_END);
     setBreakMinutes(DEFAULT_DURATION);
@@ -239,6 +244,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     setBaseAmount("");
     setEffectiveFrom(getCurrentMonthDate());
     setEffectiveTo("");
+    setJoiningDate(""); // reset
     setSalaryComponents([]);
     setSelectedPackage(null);
   }, [isOpen]);
@@ -349,6 +355,12 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     if (typeof pkg.auto_approve !== "undefined") {
       setAutoApprove(Boolean(pkg.auto_approve));
     }
+    if (typeof pkg.enable_overtime !== "undefined") {
+      setEnableOvertime(Boolean(pkg.enable_overtime));
+    }
+    if (typeof pkg.enable_deduction !== "undefined") {
+      setEnableDeduction(Boolean(pkg.enable_deduction));
+    }
 
     // Shift Times
     if (pkg.shift_start) setShiftStart(pkg.shift_start);
@@ -369,8 +381,9 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     if (typeof pkg.base_amount !== "undefined") setBaseAmount(String(pkg.base_amount || ""));
     if (pkg.effective_from) setEffectiveFrom(normalizeDate(pkg.effective_from));
     if (typeof pkg.effective_to !== "undefined") setEffectiveTo(normalizeDate(pkg.effective_to));
+    if (typeof pkg.joining_date !== "undefined") setJoiningDate(normalizeDate(pkg.joining_date)); // NEW
 
-    // Salary Components — use salary_components from invite package response
+    // Salary Components
     const components = pkg.salary_components || pkg.components || [];
     if (Array.isArray(components)) {
       setSalaryComponents(normalizeSalaryComponents(components));
@@ -566,6 +579,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       toast.warning("Please select salary effective from date");
       return;
     }
+    // joining_date is optional, no validation needed
     const invalidComponent = salaryComponents.find(
       (component) => !component.component_id || !component.calc_type || component.calc_value === ""
     );
@@ -585,6 +599,9 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
         designation: designation.value,
         attendance_methods: selectedAttendanceMethods,
         auto_approve: autoApprove,
+        enable_overtime: enableOvertime,
+        enable_deduction: enableDeduction,
+        joining_date: joiningDate || null, // NEW
         shift_start: shiftStart,
         shift_end: shiftEnd,
         break_minutes: normalizeDuration(breakMinutes),
@@ -599,7 +616,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
           calc_value: parseFloat(component.calc_value),
           ...(component.effective_from ? { effective_from: component.effective_from } : {}),
           effective_to: component.effective_to || null,
-          reason: component.reason || "",
+          remark: component.reason || component.remark || "",
         })),
       };
 
@@ -628,6 +645,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     setSelectedPermissionPackage(null);
     setSelectedAttendanceMethods([]);
     setAutoApprove(false);
+    setEnableOvertime(true);
+    setEnableDeduction(true);
     setShiftStart(DEFAULT_SHIFT_START);
     setShiftEnd(DEFAULT_SHIFT_END);
     setBreakMinutes(DEFAULT_DURATION);
@@ -636,6 +655,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     setBaseAmount("");
     setEffectiveFrom(getCurrentMonthDate());
     setEffectiveTo("");
+    setJoiningDate("");
     setSalaryComponents([]);
     setSelectedPackage(null);
     setIsSubmitting(false);
@@ -1089,6 +1109,16 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                             className={getInputClass(baseAmount, "w-full rounded-xl border px-4 py-2.5 text-sm font-semibold outline-none transition")}
                           />
                         </div>
+                        {/* NEW: Joining Date */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Joining Date</label>
+                          <input
+                            type="date"
+                            value={joiningDate}
+                            onChange={(e) => setJoiningDate(e.target.value)}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                          />
+                        </div>
                       </div>
 
                       {/* Salary Components */}
@@ -1267,7 +1297,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* Attendance Settings */}
+              {/* Attendance Settings (includes Auto Approve, Overtime, Deduction) */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <button
                   type="button"
@@ -1292,21 +1322,41 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                       exit={{ height: 0, opacity: 0, marginTop: 0 }}
                       className="overflow-hidden"
                     >
-                      <label className="mt-1 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={autoApprove}
-                          onChange={(e) => setAutoApprove(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-sm text-slate-700">Auto approve Attendance</span>
-                      </label>
+                      <div className="flex flex-col gap-3">
+                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={autoApprove}
+                            onChange={(e) => setAutoApprove(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-sm text-slate-700">Auto approve Attendance</span>
+                        </label>
+                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={enableOvertime}
+                            onChange={(e) => setEnableOvertime(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-sm text-slate-700">Enable Overtime</span>
+                        </label>
+                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={enableDeduction}
+                            onChange={(e) => setEnableDeduction(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-sm text-slate-700">Enable Deduction</span>
+                        </label>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
 
-
+              {/* Shift Timings */}
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <button
                   type="button"
@@ -1344,6 +1394,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
+              {/* Duration Settings */}
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <button
                   type="button"
@@ -1376,6 +1427,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Weekends */}
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <button
                   type="button"

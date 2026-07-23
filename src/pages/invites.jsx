@@ -348,7 +348,6 @@ const ViewModal = ({ invite, onClose, onAccept, onReject }) => {
                 {showWeekends && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden">
                     <div className="p-3 bg-white grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[320px] overflow-y-auto">
-                      {/* ✅ FIX: weekends is array of strings, not objects */}
                       {invite.weekends.map((weekend, idx) => (
                         <motion.div
                           key={`${weekend}-${idx}`}
@@ -414,7 +413,6 @@ const ViewModal = ({ invite, onClose, onAccept, onReject }) => {
                 {showAttendance && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden">
                     <div className="p-3 bg-white flex flex-wrap gap-2">
-                      {/* ✅ FIX: attendance_methods is array of strings, not objects */}
                       {invite.attendance_methods.map((method, idx) => (
                         <motion.div
                           key={`method-${idx}`}
@@ -482,9 +480,9 @@ const AcceptModal = ({ invite, onClose, onConfirm, processingId }) => (
       </div>
       <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 shrink-0">
         <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">Cancel</button>
-        <button onClick={() => onConfirm(invite.invite_token)} disabled={processingId === invite.invite_token}
+        <button onClick={() => onConfirm(invite.token || invite.invite_token)} disabled={processingId === (invite.token || invite.invite_token)}
           className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-green-100 hover:shadow-xl transition-all disabled:opacity-50 flex items-center gap-2">
-          {processingId === invite.invite_token && <FaSpinner className="animate-spin" />} Accept Invitation
+          {processingId === (invite.token || invite.invite_token) && <FaSpinner className="animate-spin" />} Accept Invitation
         </button>
       </div>
     </motion.div>
@@ -514,9 +512,9 @@ const RejectModal = ({ invite, onClose, onConfirm, processingId }) => (
       </div>
       <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 shrink-0">
         <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">Cancel</button>
-        <button onClick={() => onConfirm(invite.invite_token)} disabled={processingId === invite.invite_token}
+        <button onClick={() => onConfirm(invite.token || invite.invite_token)} disabled={processingId === (invite.token || invite.invite_token)}
           className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-red-100 hover:shadow-xl transition-all disabled:opacity-50 flex items-center gap-2">
-          {processingId === invite.invite_token && <FaSpinner className="animate-spin" />} Reject Invitation
+          {processingId === (invite.token || invite.invite_token) && <FaSpinner className="animate-spin" />} Reject Invitation
         </button>
       </div>
     </motion.div>

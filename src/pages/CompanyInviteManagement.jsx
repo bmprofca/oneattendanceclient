@@ -4,7 +4,7 @@ import {
   FaUserTie, FaClock, FaExclamationCircle, FaSpinner,
   FaEye, FaEdit, FaBan, FaCheckCircle, FaTimesCircle, FaEnvelope,
   FaPhone, FaCalendarAlt, FaBriefcase, FaTag,
-  FaSearch, FaTimes, FaShieldAlt, FaUserCircle, FaPlus, FaListUl, FaChevronDown, FaUserCheck, FaCog
+  FaSearch, FaTimes, FaShieldAlt, FaUserCircle, FaPlus, FaChevronDown, FaUserCheck, FaCog
 } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import apiCall from "../utils/api";
@@ -12,7 +12,6 @@ import Pagination, { usePagination } from "../components/PaginationComponent";
 import EditStaffModal from "../components/StaffModals/EditStaffModal";
 import CreateInviteModal from "../components/StaffModals/AddStaffModal";
 import Skeleton from "../components/SkeletonComponent";
-import ModalScrollLock from "../components/ModalScrollLock";
 import ActionMenu from "../components/ActionMenu";
 import ManagementGrid from '../components/ManagementGrid';
 import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
@@ -21,8 +20,9 @@ import Modal from "../components/Modal";
 import { RefreshButton } from "../components/common";
 import ProfileAvatar from "../components/common/ProfileAvatar";
 import CurrencyIcon from "../components/common/CurrencyIcon";
+import AdvancedDateFilter from '../components/AdvancedDateFilter';
 
-// ─── Constants & Helpers ─────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const isExpired = (date) => new Date(date) < new Date();
 
@@ -61,6 +61,8 @@ const formatDisplay = (str) => {
   return str ? String(str).replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "N/A";
 };
 
+const formatBoolean = (value) => (value ? "Yes" : "No");
+
 const minutesToDuration = (value) => {
   if (value === null || typeof value === "undefined" || value === "") return null;
   const minutes = Number(value);
@@ -74,12 +76,10 @@ const normalizeDuration = (value, fallback = null) => {
   if (value === null || typeof value === "undefined" || value === "") return fallback;
   if (typeof value === "number") return minutesToDuration(value);
   if (typeof value !== "string") return fallback;
-
   const parts = value.split(":");
   if (parts.length >= 2) {
     return `${String(parts[0] || "00").padStart(2, "0")}:${String(parts[1] || "00").padStart(2, "0")}`;
   }
-
   return fallback;
 };
 
@@ -112,18 +112,20 @@ const formatWeekendDay = (weekend) => {
   return "N/A";
 };
 
+// Normalise invite record – guarantees a unique token for React keys & ActionMenu
 const normalizeInviteRecord = (invite) => ({
   ...invite,
+  id: invite.invite_id,
+  token: invite.invite_token || `inv-${invite.invite_id}`, // fallback ensures never empty
   user_id: invite?.user?.id ?? invite?.user_id ?? null,
   permission_package_id: invite?.permission_package?.id ?? invite?.permission_package_id ?? null,
-  break_minutes: normalizeDuration(
-    invite?.break_minutes,
-    "00:30"
-  ),
+  break_minutes: normalizeDuration(invite?.break_minutes, "00:30"),
   grace_minutes: normalizeDuration(invite?.grace_minutes, "00:30"),
+  enable_overtime: Boolean(invite?.enable_overtime),
+  enable_deduction: Boolean(invite?.enable_deduction),
 });
 
-// ─── Local Components ────────────────────────────────────────────────────────
+// ─── InfoItem ────────────────────────────────────────────────────────────────
 
 const InfoItem = ({ icon, label, value, className = "" }) => (
   <div className={`flex items-start gap-2 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 px-3 py-2 ${className}`}>
@@ -139,7 +141,7 @@ const InfoItem = ({ icon, label, value, className = "" }) => (
   </div>
 );
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function CompanyInvites() {
   const { checkActionAccess, getAccessMessage } = usePermissionAccess();
@@ -151,6 +153,7 @@ export default function CompanyInvites() {
   const [activeActionMenu, setActiveActionMenu] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [dateFilter, setDateFilter] = useState(null);   // NEW: { date?, month?, year?, from_date?, to_date? }
   const [viewMode, setViewMode] = useState("table");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingInvite, setEditingInvite] = useState(null);
@@ -159,6 +162,8 @@ export default function CompanyInvites() {
   const [showPermissions, setShowPermissions] = useState(false);
   const [showAttendance, setShowAttendance] = useState(false);
   const [showWeekends, setShowWeekends] = useState(false);
+  const [showWorkSchedule, setShowWorkSchedule] = useState(true);
+  const [showSalaryComponents, setShowSalaryComponents] = useState(true);
   const fetchInProgress = useRef(false);
 
   const MODAL_TYPES = {
@@ -174,15 +179,15 @@ export default function CompanyInvites() {
 
   const company_id = JSON.parse(localStorage.getItem("company"))?.id;
 
-  // Debounce search
+  // ── Debounce search ──────────────────────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 500);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // ── Fetch invites ────────────────────────────────────────────────────────
   const fetchInvites = useCallback(
-    async (page = pagination.page, search = debouncedSearchTerm, resetLoading = true) => {
+    async (page = pagination.page, resetLoading = true) => {
       if (fetchInProgress.current) return;
       fetchInProgress.current = true;
       if (resetLoading) setLoading(true);
@@ -190,7 +195,28 @@ export default function CompanyInvites() {
       try {
         const company = JSON.parse(localStorage.getItem("company"));
         const params = new URLSearchParams({ page: page.toString(), limit: pagination.limit.toString() });
-        if (search) params.append("search", search);
+        if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
+
+        if (dateFilter) {
+          if (dateFilter.date) {
+            params.append("from_date", dateFilter.date);
+            params.append("to_date", dateFilter.date);
+          } else {
+            if (dateFilter.from_date) {
+              params.append("from_date", dateFilter.from_date);
+            }
+
+            if (dateFilter.to_date) {
+              params.append("to_date", dateFilter.to_date);
+            }
+          }
+
+          if (dateFilter.month && dateFilter.year) {
+            params.append("month", dateFilter.month);
+            params.append("year", dateFilter.year);
+          }
+        }
+
         const response = await apiCall(`/company/invites/list?${params.toString()}`, 'GET', null, company?.id);
         if (!response.ok) throw new Error("Failed to fetch invites");
 
@@ -225,10 +251,9 @@ export default function CompanyInvites() {
         fetchInProgress.current = false;
       }
     },
-    [company_id, pagination.limit, updatePagination, debouncedSearchTerm]
+    [company_id, pagination.limit, updatePagination, debouncedSearchTerm, dateFilter]
   );
 
-  // Page change trigger
   const handlePageChange = useCallback(
     (newPage) => { if (newPage !== pagination.page) goToPage(newPage); },
     [pagination.page, goToPage]
@@ -236,39 +261,38 @@ export default function CompanyInvites() {
 
   useEffect(() => {
     if (!isInitialLoad && !fetchInProgress.current) {
-      fetchInvites(pagination.page, debouncedSearchTerm, true);
+      fetchInvites(pagination.page, true);
     }
-  }, [pagination.page, pagination.limit, debouncedSearchTerm]); // eslint-disable-line
+  }, [pagination.page, pagination.limit, debouncedSearchTerm, dateFilter]);
 
   useEffect(() => {
     if (!isInitialLoad) {
       if (pagination.page !== 1) goToPage(1);
-      else fetchInvites(1, debouncedSearchTerm, true);
+      else fetchInvites(1, true);
     }
-  }, [debouncedSearchTerm]); // eslint-disable-line
+  }, [debouncedSearchTerm, dateFilter]);
 
   useEffect(() => {
     if (company_id && isInitialLoad) {
-      fetchInvites(1, "", true);
+      fetchInvites(1, true);
     } else if (!company_id) {
       toast.error("Company ID not found. Please ensure you're logged in as a company.");
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [company_id]); // eslint-disable-line
+  }, [company_id]);
 
-  // ── Cancel ─────────────────────────────────────────────────────────────────
+  // ── Cancel invite ────────────────────────────────────────────────────────
   const handleCancelInvite = async (inviteId) => {
     try {
       setProcessingId(inviteId);
       const company = JSON.parse(localStorage.getItem("company"));
       const response = await apiCall('/company/invites/cancel', 'DELETE', { token: inviteId }, company?.id);
       if (!response.ok) throw new Error("Failed to cancel invite");
-
       const result = await response.json();
       if (result.success) {
         toast.success("Invitation cancelled successfully.");
-        await fetchInvites(pagination.page, debouncedSearchTerm, false);
+        await fetchInvites(pagination.page, false);
         closeModal();
       } else {
         throw new Error(result.message || "Failed to cancel invite");
@@ -280,29 +304,20 @@ export default function CompanyInvites() {
     }
   };
 
-  // ── Edit ───────────────────────────────────────────────────────────────────
+  // ── Resend invite ────────────────────────────────────────────────────────
   const handleResendInvite = async (invite) => {
-    const inviteId = invite?.id ?? invite?.invite_id;
-    if (!inviteId) {
-      toast.error("Invite ID not found.");
-      return;
-    }
-
+    const inviteId = invite.id;
+    if (!inviteId) return toast.error("Invite ID not found.");
     const processingKey = `resend-${inviteId}`;
     try {
       setProcessingId(processingKey);
       setActiveActionMenu(null);
-
       const company = JSON.parse(localStorage.getItem("company"));
       const response = await apiCall('/company/invites/resend', 'POST', { invite_id: inviteId }, company?.id);
       const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to resend invite");
-      }
-
+      if (!response.ok || !result.success) throw new Error(result.message || "Failed to resend invite");
       toast.success(result.message || "Invitation resent successfully.");
-      await fetchInvites(pagination.page, debouncedSearchTerm, false);
+      await fetchInvites(pagination.page, false);
     } catch (err) {
       toast.error(err.message || "Something went wrong while resending.");
     } finally {
@@ -310,6 +325,7 @@ export default function CompanyInvites() {
     }
   };
 
+  // ── Edit invite ──────────────────────────────────────────────────────────
   const handleEditClick = (invite) => {
     if (updateInviteAccess.disabled) return;
     setEditingInvite(normalizeInviteRecord(invite));
@@ -319,7 +335,7 @@ export default function CompanyInvites() {
 
   const handleEditSuccess = () => {
     toast.success("Invitation updated successfully.");
-    fetchInvites(pagination.page, debouncedSearchTerm, false);
+    fetchInvites(pagination.page, false);
     setIsEditModalOpen(false);
     setEditingInvite(null);
   };
@@ -331,6 +347,8 @@ export default function CompanyInvites() {
     setShowPermissions(false);
     setShowAttendance(false);
     setShowWeekends(false);
+    setShowWorkSchedule(true);
+    setShowSalaryComponents(true);
   };
   const closeModal = () => {
     setSelectedInvite(null);
@@ -338,9 +356,11 @@ export default function CompanyInvites() {
     setShowPermissions(false);
     setShowAttendance(false);
     setShowWeekends(false);
+    setShowWorkSchedule(true);
+    setShowSalaryComponents(true);
   };
 
-  // ─── Responsive Columns ──────────────────────────────────────────────────
+  // ─── Responsive columns ─────────────────────────────────────────────────
   const getEffectiveWidth = () => {
     const width = window.innerWidth;
     const offset = width >= 1024 ? 280 : (width >= 768 ? 80 : 0);
@@ -353,7 +373,10 @@ export default function CompanyInvites() {
     showDesignation: width >= 600,
     showEmployment: width >= 1000,
     showStatus: width >= 500,
-    showExpires: width >= 1200
+    showExpires: width >= 1200,
+    showJoiningDate: width >= 1400,
+    showOvertime: width >= 1600,
+    showDeduction: width >= 1800,
   }), []);
 
   const [visibleColumns, setVisibleColumns] = useState(() => getVisibleColumns(getEffectiveWidth()));
@@ -370,12 +393,10 @@ export default function CompanyInvites() {
     return () => { clearTimeout(t); window.removeEventListener("resize", onResize); };
   }, [getVisibleColumns]);
 
-  // ── View Modal ─────────────────────────────────────────────────────────────
-
-  // ── Early returns ──────────────────────────────────────────────────────────
+  // ── Early return ─────────────────────────────────────────────────────────
   if (isInitialLoad && loading) return <Skeleton />;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen">
       <div className="max-w-[1600px] mx-auto">
@@ -409,7 +430,7 @@ export default function CompanyInvites() {
                 <span className="text-gray-500">invites</span>
               </div>
 
-              <RefreshButton loading={loading} onClick={() => fetchInvites(pagination.page, debouncedSearchTerm, true)}>
+              <RefreshButton loading={loading} onClick={() => fetchInvites(pagination.page, true)}>
                 Refresh
               </RefreshButton>
 
@@ -432,21 +453,20 @@ export default function CompanyInvites() {
             onClose={() => setOpenCreateInviteModal(false)}
             onSuccess={() => {
               setOpenCreateInviteModal(false);
-              fetchInvites(pagination.page, debouncedSearchTerm, false);
+              fetchInvites(pagination.page, false);
             }}
             submitDisabled={createInviteAccess.disabled}
             submitTitle={createInviteAccess.disabled ? getAccessMessage(createInviteAccess) : ""}
           />
         </motion.div>
 
-        {/* ─── Consolidated Filter & View Bar ─── */}
+        {/* Search, Date Filter & View bar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-6"
         >
-          {/* Left Section: Search, Result Info & View Mode */}
           <div className="flex flex-col md:flex-row md:items-center gap-4 flex-1">
             <div className="relative flex-1 w-full">
               <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
@@ -458,33 +478,37 @@ export default function CompanyInvites() {
                 className="w-full pl-11 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-sm min-h-[42px]"
               />
               {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                >
+                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
                   <FaTimes size={14} />
                 </button>
               )}
             </div>
-            <div className="hidden lg:block h-8 w-px bg-gray-200 mx-1"></div>
-            <div>
-              <ManagementViewSwitcher
-                viewMode={viewMode}
-                onChange={setViewMode}
-                accent="blue"
+
+            {/* NEW: Advanced Date Filter */}
+            <div className="w-full sm:w-auto min-w-[220px]">
+              <AdvancedDateFilter
+                value={dateFilter}
+                onChange={(filter) => {
+                  setDateFilter(filter);
+                  // fetch will be triggered by useEffect due to dateFilter dependency
+                }}
+                placeholder="Filter by date"
+                buttonClassName="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 min-h-[42px] text-gray-700"
               />
             </div>
 
+            <div className="hidden lg:block h-8 w-px bg-gray-200 mx-1"></div>
+            <div>
+              <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="blue" />
+            </div>
           </div>
         </motion.div>
 
-        {/* Loading skeleton */}
+        {/* Loading / Empty */}
         {loading && !invites.length && <Skeleton />}
 
-        {/* Empty State */}
         {!loading && invites.length === 0 && (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-            className="text-center py-16 bg-white rounded-xl shadow-xl">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16 bg-white rounded-xl shadow-xl">
             <FaEnvelope className="text-8xl text-gray-300 mx-auto mb-4" />
             <p className="text-xl text-gray-500">No invitations found</p>
             <p className="text-gray-400 mt-2">
@@ -507,6 +531,9 @@ export default function CompanyInvites() {
                         {visibleColumns.showEmployment && <th className="px-6 py-4">Employment</th>}
                         {visibleColumns.showStatus && <th className="px-6 py-4">Status</th>}
                         {visibleColumns.showExpires && <th className="px-6 py-4">Expires</th>}
+                        {visibleColumns.showJoiningDate && <th className="px-6 py-4">Joining</th>}
+                        {visibleColumns.showOvertime && <th className="px-6 py-4">OT</th>}
+                        {visibleColumns.showDeduction && <th className="px-6 py-4">Deduction</th>}
                         <th className="px-6 py-4 text-right"><FaCog className="w-4 h-4 ml-auto" /></th>
                       </tr>
                     </thead>
@@ -515,7 +542,7 @@ export default function CompanyInvites() {
                         const status = getStatusBadge(invite.status, invite.expires_at);
                         const StatusIcon = status.icon;
                         return (
-                          <motion.tr key={invite.token} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                          <motion.tr key={invite.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.05 }}
                             onClick={() => openModal(invite, MODAL_TYPES.VIEW)}
                             className="cursor-pointer hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-300">
@@ -555,18 +582,9 @@ export default function CompanyInvites() {
                                   <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-xs font-medium">{formatDisplay(invite.salary_type)}</span>
                                 </div>
                                 <div className="mt-2 space-y-1 text-[11px] text-gray-500">
-                                  <div className="flex items-center gap-1.5">
-                                    <FaClock className="text-indigo-400" />
-                                    <span>Shift: {invite.shift_start || "N/A"} - {invite.shift_end || "N/A"}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <FaClock className="text-amber-400" />
-                                    <span>Break Minutes: {formatDurationDisplay(invite.break_minutes)}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <FaClock className="text-rose-400" />
-                                    <span>Grace Minutes: {formatDurationDisplay(invite.grace_minutes)}</span>
-                                  </div>
+                                  <div className="flex items-center gap-1.5"><FaClock className="text-indigo-400" /><span>Shift: {invite.shift_start || "N/A"} - {invite.shift_end || "N/A"}</span></div>
+                                  <div className="flex items-center gap-1.5"><FaClock className="text-amber-400" /><span>Break: {formatDurationDisplay(invite.break_minutes)}</span></div>
+                                  <div className="flex items-center gap-1.5"><FaClock className="text-rose-400" /><span>Grace: {formatDurationDisplay(invite.grace_minutes)}</span></div>
                                 </div>
                               </td>
                             )}
@@ -578,55 +596,38 @@ export default function CompanyInvites() {
                               </td>
                             )}
                             {visibleColumns.showExpires && (
+                              <td className="px-6 py-4"><FaClock className="inline text-gray-400 mr-1" />{formatDateSimple(invite.expires_at)}</td>
+                            )}
+                            {visibleColumns.showJoiningDate && (
+                              <td className="px-6 py-4"><FaCalendarAlt className="inline text-gray-400 mr-1" />{formatDateSimple(invite.joining_date)}</td>
+                            )}
+                            {visibleColumns.showOvertime && (
                               <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <FaClock className="text-gray-400 text-xs" />
-                                  <span className="text-sm">{formatDateSimple(invite.expires_at)}</span>
-                                </div>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${invite.enable_overtime ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {invite.enable_overtime ? 'Yes' : 'No'}
+                                </span>
+                              </td>
+                            )}
+                            {visibleColumns.showDeduction && (
+                              <td className="px-6 py-4">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${invite.enable_deduction ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {invite.enable_deduction ? 'Yes' : 'No'}
+                                </span>
                               </td>
                             )}
                             <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                               <ActionMenu
                                 menuId={invite.token}
                                 activeId={activeActionMenu}
-                                onToggle={(e, id) => {
-                                  setActiveActionMenu((current) => (current === id ? null : id));
-                                }}
+                                onToggle={(e, id) => setActiveActionMenu((current) => (current === id ? null : id))}
                                 actions={[
-                                  {
-                                    label: 'View Details',
-                                    icon: <FaEye size={14} />,
-                                    onClick: () => openModal(invite, MODAL_TYPES.VIEW),
-                                    className: 'text-green-600 hover:text-green-700 hover:bg-green-50'
-                                  },
+                                  { label: 'View Details', icon: <FaEye size={14} />, onClick: () => openModal(invite, MODAL_TYPES.VIEW), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
                                   ...(invite.status === "pending" && !isExpired(invite.expires_at) ? [
-                                    {
-                                      label: 'Edit Invite',
-                                      icon: <FaEdit size={14} />,
-                                      onClick: () => handleEditClick(invite),
-                                      disabled: updateInviteAccess.disabled,
-                                      title: updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : "",
-                                      className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
-                                    },
-                                    {
-                                      label: 'Cancel Invite',
-                                      icon: <FaBan size={14} />,
-                                      onClick: () => !cancelInviteAccess.disabled && openModal(invite, MODAL_TYPES.CANCEL),
-                                      disabled: cancelInviteAccess.disabled,
-                                      title: cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : "",
-                                      className: 'text-red-600 hover:text-red-700 hover:bg-red-50'
-                                    }
-                                  ] : [])
-                                  ,
+                                    { label: 'Edit Invite', icon: <FaEdit size={14} />, onClick: () => handleEditClick(invite), disabled: updateInviteAccess.disabled, title: updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : "", className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
+                                    { label: 'Cancel Invite', icon: <FaBan size={14} />, onClick: () => !cancelInviteAccess.disabled && openModal(invite, MODAL_TYPES.CANCEL), disabled: cancelInviteAccess.disabled, title: cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : "", className: 'text-red-600 hover:text-red-700 hover:bg-red-50' }
+                                  ] : []),
                                   ...(invite.status === "pending" ? [
-                                    {
-                                      label: processingId === `resend-${invite.id ?? invite.invite_id}` ? 'Resending...' : 'Resend Invite',
-                                      icon: processingId === `resend-${invite.id ?? invite.invite_id}` ? <FaSpinner size={14} className="animate-spin" /> : <FaEnvelope size={14} />,
-                                      onClick: () => handleResendInvite(invite),
-                                      disabled: processingId === `resend-${invite.id ?? invite.invite_id}` || !(invite.id ?? invite.invite_id),
-                                      title: !(invite.id ?? invite.invite_id) ? "Invite ID not found" : "",
-                                      className: 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50'
-                                    }
+                                    { label: processingId === `resend-${invite.id}` ? 'Resending...' : 'Resend Invite', icon: processingId === `resend-${invite.id}` ? <FaSpinner size={14} className="animate-spin" /> : <FaEnvelope size={14} />, onClick: () => handleResendInvite(invite), disabled: processingId === `resend-${invite.id}` || !invite.id, title: !invite.id ? "Invite ID not found" : "", className: 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50' }
                                   ] : [])
                                 ]}
                               />
@@ -646,7 +647,7 @@ export default function CompanyInvites() {
                   const status = getStatusBadge(invite.status, invite.expires_at);
                   const StatusIcon = status.icon;
                   return (
-                    <motion.div key={invite.token} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                    <motion.div key={invite.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
                       onClick={() => openModal(invite, MODAL_TYPES.VIEW)}
                       className="bg-white rounded-xl shadow-md border border-gray-100 p-5 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
@@ -665,55 +666,39 @@ export default function CompanyInvites() {
                               <StatusIcon size={10} />{status.text}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                            <FaEnvelope className="text-gray-400" size={10} />{invite.user?.email}
-                          </p>
+                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><FaEnvelope className="text-gray-400" size={10} />{invite.user?.email}</p>
                           <div className="mt-3 space-y-2">
-                            <p className="text-sm text-gray-600 flex items-center gap-2">
-                              <FaBriefcase className="text-blue-500" />{formatDisplay(invite.designation)}
-                            </p>
+                            <p className="text-sm text-gray-600 flex items-center gap-2"><FaBriefcase className="text-blue-500" />{formatDisplay(invite.designation)}</p>
                             <div className="flex flex-wrap gap-2">
                               <span className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full">{formatDisplay(invite.employment_type)}</span>
                               <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">{formatDisplay(invite.salary_type)}</span>
                             </div>
                             <div className="grid grid-cols-1 gap-1.5 pt-1 text-xs text-gray-500">
+                              <div className="flex items-center gap-1.5"><FaClock className="text-indigo-400" /><span>Shift: {invite.shift_start || "N/A"} - {invite.shift_end || "N/A"}</span></div>
+                              <div className="flex items-center gap-1.5"><FaClock className="text-amber-400" /><span>Break: {formatDurationDisplay(invite.break_minutes)}</span></div>
+                              <div className="flex items-center gap-1.5"><FaClock className="text-rose-400" /><span>Grace: {formatDurationDisplay(invite.grace_minutes)}</span></div>
+                              <div className="flex items-center gap-1.5"><FaCalendarAlt className="text-teal-400" /><span>Joining: {formatDateSimple(invite.joining_date)}</span></div>
                               <div className="flex items-center gap-1.5">
-                                <FaClock className="text-indigo-400" />
-                                <span>Shift: {invite.shift_start || "N/A"} - {invite.shift_end || "N/A"}</span>
+                                <FaTag className="text-indigo-400" />
+                                <span>OT: {invite.enable_overtime ? 'Yes' : 'No'}</span>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <FaClock className="text-amber-400" />
-                                <span>Break Minutes: {formatDurationDisplay(invite.break_minutes)}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <FaClock className="text-rose-400" />
-                                <span>Grace Minutes: {formatDurationDisplay(invite.grace_minutes)}</span>
+                                <FaTag className="text-rose-400" />
+                                <span>Deduction: {invite.enable_deduction ? 'Yes' : 'No'}</span>
                               </div>
                             </div>
                             <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                              <span className="text-xs text-gray-500 flex items-center gap-1">
-                                <FaClock className="text-yellow-500" />
-                                Expires: {formatDateSimple(invite.expires_at)}
-                              </span>
+                              <span className="text-xs text-gray-500"><FaClock className="inline text-yellow-500 mr-1" />Expires: {formatDateSimple(invite.expires_at)}</span>
                             </div>
                           </div>
                         </div>
                       </div>
                       <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" onClick={() => openModal(invite, MODAL_TYPES.VIEW)}
-                          className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all duration-300 hover:scale-110">
-                          <FaEye size={16} />
-                        </button>
+                        <button onClick={() => openModal(invite, MODAL_TYPES.VIEW)} className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all hover:scale-110"><FaEye size={16} /></button>
                         {invite.status === "pending" && !isExpired(invite.expires_at) && (
                           <>
-                            <button type="button" onClick={() => handleEditClick(invite)} disabled={updateInviteAccess.disabled} title={updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : ""}
-                              className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed">
-                              <FaEdit size={16} />
-                            </button>
-                            <button type="button" onClick={() => !cancelInviteAccess.disabled && openModal(invite, MODAL_TYPES.CANCEL)} disabled={cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""}
-                              className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed">
-                              <FaBan size={16} />
-                            </button>
+                            <button onClick={() => handleEditClick(invite)} disabled={updateInviteAccess.disabled} title={updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : ""} className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all hover:scale-110 disabled:opacity-50"><FaEdit size={16} /></button>
+                            <button onClick={() => !cancelInviteAccess.disabled && openModal(invite, MODAL_TYPES.CANCEL)} disabled={cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all hover:scale-110 disabled:opacity-50"><FaBan size={16} /></button>
                           </>
                         )}
                       </div>
@@ -723,347 +708,250 @@ export default function CompanyInvites() {
               </ManagementGrid>
             )}
 
-            {!loading && (invites.length > 0 || pagination.total > 0) && (
-              <Pagination
-                currentPage={pagination.page}
-                totalItems={pagination.total || invites.length}
-                itemsPerPage={pagination.limit}
-                onPageChange={handlePageChange}
-                showInfo={true}
-                onLimitChange={changeLimit}
-              />
-            )}
+            <Pagination
+              currentPage={pagination.page}
+              totalItems={pagination.total || invites.length}
+              itemsPerPage={pagination.limit}
+              onPageChange={handlePageChange}
+              showInfo={true}
+              onLimitChange={changeLimit}
+            />
           </>
         )}
 
         {/* Modals */}
         <AnimatePresence>
-          {/* VIEW MODAL */}
-          <Modal
-            isOpen={modalType === MODAL_TYPES.VIEW && !!selectedInvite}
-            onClose={closeModal}
-            title="Invitation Details"
-            subtitle="Review sent invitation parameters"
-            icon={<FaEye className="h-6 w-6" />}
-            size="4xl"
-            footer={
-              <>
-                <button
-                  onClick={closeModal}
-                  className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
-                >
-                  Close
-                </button>
-                {selectedInvite?.status === "pending" && (
-                  <>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleResendInvite(selectedInvite)}
-                      disabled={processingId === `resend-${selectedInvite?.id ?? selectedInvite?.invite_id}` || !(selectedInvite?.id ?? selectedInvite?.invite_id)}
-                      title={!(selectedInvite?.id ?? selectedInvite?.invite_id) ? "Invite ID not found" : ""}
-                      className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-200 transition disabled:opacity-50"
-                    >
-                      {processingId === `resend-${selectedInvite?.id ?? selectedInvite?.invite_id}` ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaEnvelope className="h-4 w-4" />}
-                      {processingId === `resend-${selectedInvite?.id ?? selectedInvite?.invite_id}` ? 'Resending...' : 'Resend Invite'}
-                    </motion.button>
-
-                    {!isExpired(selectedInvite?.expires_at) && (
-                      <>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => !cancelInviteAccess.disabled && openModal(selectedInvite, MODAL_TYPES.CANCEL)}
-                          disabled={cancelInviteAccess.disabled}
-                          title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""}
-                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-red-200 transition disabled:opacity-50"
-                        >
-                          <FaBan className="h-4 w-4" />
-                          Cancel Invite
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => handleEditClick(selectedInvite)}
-                          disabled={updateInviteAccess.disabled}
-                          title={updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : ""}
-                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-green-200 transition disabled:opacity-50"
-                        >
-                          <FaEdit className="h-4 w-4" />
-                          Edit Invite
-                        </motion.button>
-                      </>
-                    )}
-                  </>
-                )}
-              </>
-            }
-          >
-            {selectedInvite && (
-              <div className="space-y-4">
-                {/* Profile Section */}
-                <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-                  <ProfileAvatar
-                    record={selectedInvite.user}
-                    name={selectedInvite.user?.name || selectedInvite.user?.email}
-                    className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg flex items-center justify-center shrink-0 overflow-hidden"
-                  >
-                    <FaUserCircle className="text-white text-md" />
-                  </ProfileAvatar>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-800">{selectedInvite.user?.name || "No name"}</h3>
-                    <div className="flex flex-wrap gap-3 mt-1.5">
-                      <p className="text-sm text-slate-500 flex items-center gap-2">
-                        <FaEnvelope className="text-blue-500" size={14} />{selectedInvite.user?.email}
-                      </p>
-                      {selectedInvite.user?.phone && (
-                        <p className="text-sm text-slate-500 flex items-center gap-2">
-                          <FaPhone className="text-green-500" size={14} />{selectedInvite.user.phone}
-                        </p>
+          {modalType === MODAL_TYPES.VIEW && selectedInvite && (
+            <Modal
+              key="view-modal"
+              isOpen={true}
+              onClose={closeModal}
+              title="Invitation Details"
+              subtitle="Review sent invitation parameters"
+              icon={<FaEye className="h-6 w-6" />}
+              size="4xl"
+              footer={
+                <>
+                  <button onClick={closeModal} className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">Close</button>
+                  {selectedInvite?.status === "pending" && (
+                    <>
+                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={() => handleResendInvite(selectedInvite)}
+                        disabled={processingId === `resend-${selectedInvite.id}` || !selectedInvite.id}
+                        title={!selectedInvite.id ? "Invite ID not found" : ""}
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-200 transition disabled:opacity-50"
+                      >
+                        {processingId === `resend-${selectedInvite.id}` ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaEnvelope className="h-4 w-4" />}
+                        {processingId === `resend-${selectedInvite.id}` ? 'Resending...' : 'Resend Invite'}
+                      </motion.button>
+                      {!isExpired(selectedInvite?.expires_at) && (
+                        <>
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                            onClick={() => !cancelInviteAccess.disabled && openModal(selectedInvite, MODAL_TYPES.CANCEL)}
+                            disabled={cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""}
+                            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-red-200 transition disabled:opacity-50"><FaBan className="h-4 w-4" />Cancel Invite</motion.button>
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                            onClick={() => handleEditClick(selectedInvite)}
+                            disabled={updateInviteAccess.disabled} title={updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : ""}
+                            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-green-200 transition disabled:opacity-50"><FaEdit className="h-4 w-4" />Edit Invite</motion.button>
+                        </>
                       )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Info Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <InfoItem icon={<FaBriefcase className="text-blue-500" />} label="Designation" value={formatDisplay(selectedInvite.designation)} />
-                  <InfoItem icon={<FaUserTie className="text-purple-500" />} label="Employment Type" value={formatDisplay(selectedInvite.employment_type)} />
-                  <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Salary Type" value={formatDisplay(selectedInvite.salary_type)} />
-                  <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Base Amount" value={formatCurrency(selectedInvite.base_amount)} />
-                  <InfoItem icon={<FaShieldAlt className="text-indigo-500" />} label="Permission Package" value={selectedInvite.permission_package?.name || selectedInvite.permission_package_name || "N/A"} />
-                  <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective From" value={formatDateSimple(selectedInvite.effective_from)} />
-                  <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective To" value={formatDateSimple(selectedInvite.effective_to)} />
-                  <InfoItem icon={<FaCalendarAlt className="text-rose-500" />} label="Sent Date" value={formatDate(selectedInvite.created_at)} />
-                  <InfoItem icon={<FaClock className="text-yellow-500" />} label="Expires At" value={formatDate(selectedInvite.expires_at)} />
-                  <InfoItem icon={<FaTag className="text-orange-500" />} label="Status"
-                    value={
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(selectedInvite.status, selectedInvite.expires_at).className}`}>
-                        {getStatusBadge(selectedInvite.status, selectedInvite.expires_at).text}
-                      </span>
-                    } />
-                </div>
-
-                {/* Work Schedule */}
-                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <FaClock className="text-indigo-500" /> Work Schedule
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">Shift Hours</span>
-                      <span className="text-xs font-bold text-slate-700">{selectedInvite.shift_start || 'N/A'} - {selectedInvite.shift_end || 'N/A'}</span>
-                    </div>
-                    <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">Break Time</span>
-                      <span className="text-xs font-bold text-slate-700">{formatDurationDisplay(selectedInvite.break_minutes)}</span>
-                    </div>
-                    <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">Grace Period</span>
-                      <span className="text-xs font-bold text-slate-700">{formatDurationDisplay(selectedInvite.grace_minutes)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Collapsible Sections */}
-                <div className="space-y-3">
-                  {/* Permissions */}
-                  {selectedInvite.permissions?.length > 0 && (
-                    <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden shadow-sm">
-                      <button
-                        onClick={() => setShowPermissions(!showPermissions)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 transition-colors"
-                      >
-                        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                          <FaShieldAlt className="text-blue-500" /> Assigned Permissions
-                        </h4>
-                        <div className="flex items-center gap-3">
-                          <span className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700 font-bold">
-                            {selectedInvite.permissions.length}
-                          </span>
-                          <motion.div animate={{ rotate: showPermissions ? 180 : 0 }}>
-                            <FaChevronDown className="w-3 h-3 text-slate-400" />
-                          </motion.div>
-                        </div>
-                      </button>
-                      <AnimatePresence>
-                        {showPermissions && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden bg-white border-t border-blue-50"
-                          >
-                            <div className="p-3 flex flex-wrap gap-2">
-                              {selectedInvite.permissions.map((perm) => (
-                                <span key={perm.id} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-100 shadow-sm">
-                                  {perm.name}
-                                </span>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                    </>
                   )}
-
-                  {/* Attendance Methods */}
-                  {selectedInvite.attendance_methods?.length > 0 && (
-                    <div className="rounded-xl border border-purple-100 bg-purple-50/30 overflow-hidden shadow-sm">
-                      <button
-                        onClick={() => setShowAttendance(!showAttendance)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-purple-50/50 transition-colors"
-                      >
-                        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                          <FaUserCheck className="text-purple-500" /> Attendance Methods
-                        </h4>
-                        <div className="flex items-center gap-3">
-                          <span className="px-2 py-0.5 text-[10px] rounded-full bg-purple-100 text-purple-700 font-bold">
-                            {selectedInvite.attendance_methods.length}
-                          </span>
-                          <motion.div animate={{ rotate: showAttendance ? 180 : 0 }}>
-                            <FaChevronDown className="w-3 h-3 text-slate-400" />
-                          </motion.div>
-                        </div>
-                      </button>
-                      <AnimatePresence>
-                        {showAttendance && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden bg-white border-t border-purple-50"
-                          >
-                            <div className="p-3 flex flex-wrap gap-2">
-                              {selectedInvite.attendance_methods.map((method, idx) => (
-                                <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-700 text-[11px] font-semibold rounded-full border border-slate-100 shadow-sm capitalize">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                                  {formatAttendanceMethod(method)}
-                                  {method?.is_auto && <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-black ml-1">AUTO</span>}
-                                </span>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-
-                  {/* Weekends */}
-                  {selectedInvite.weekends?.length > 0 && (
-                    <div className="rounded-xl border border-rose-100 bg-rose-50/30 overflow-hidden shadow-sm">
-                      <button
-                        onClick={() => setShowWeekends(!showWeekends)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-rose-50/50 transition-colors"
-                      >
-                        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                          <FaCalendarAlt className="text-rose-500" /> Weekend Policy
-                        </h4>
-                        <div className="flex items-center gap-3">
-                          <span className="px-2 py-0.5 text-[10px] rounded-full bg-rose-100 text-rose-700 font-bold">
-                            {selectedInvite.weekends.length}
-                          </span>
-                          <motion.div animate={{ rotate: showWeekends ? 180 : 0 }}>
-                            <FaChevronDown className="w-3 h-3 text-slate-400" />
-                          </motion.div>
-                        </div>
-                      </button>
-                      <AnimatePresence>
-                        {showWeekends && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden bg-white border-t border-rose-50"
-                          >
-                            <div className="p-3 flex flex-wrap gap-2">
-                              {selectedInvite.weekends.map((weekend, idx) => (
-                                <div key={idx} className="text-center px-3 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-slate-100 shadow-sm min-w-[120px]">
-                                  <span className="text-sm text-light-500 capitalize">{formatWeekendDay(weekend)}</span>
-
-                                </div>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-
-                  {selectedInvite.salary_components?.length > 0 && (
-                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 overflow-hidden shadow-sm">
-                      <div className="w-full flex items-center justify-between p-4">
-                        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                          <CurrencyIcon className="text-emerald-500" size={12} /> Salary Components
-                        </h4>
-                        <span className="px-2 py-0.5 text-[10px] rounded-full bg-emerald-100 text-emerald-700 font-bold">
-                          {selectedInvite.salary_components.length}
-                        </span>
+                </>
+              }
+            >
+              {selectedInvite && (
+                <div className="space-y-4">
+                  {/* Profile Section */}
+                  <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
+                    <ProfileAvatar record={selectedInvite.user} name={selectedInvite.user?.name || selectedInvite.user?.email} className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg flex items-center justify-center shrink-0 overflow-hidden"><FaUserCircle className="text-white text-md" /></ProfileAvatar>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">{selectedInvite.user?.name || "No name"}</h3>
+                      <div className="flex flex-wrap gap-3 mt-1.5">
+                        <p className="text-sm text-slate-500 flex items-center gap-2"><FaEnvelope className="text-blue-500" size={14} />{selectedInvite.user?.email}</p>
+                        {selectedInvite.user?.phone && <p className="text-sm text-slate-500 flex items-center gap-2"><FaPhone className="text-green-500" size={14} />{selectedInvite.user.phone}</p>}
                       </div>
-                      <div className="border-t border-emerald-50 bg-white p-3">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {selectedInvite.salary_components.map((component) => (
-                            <div key={component.id ?? component.component_id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 shadow-sm">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="truncate text-[11px] font-bold text-slate-700">
-                                    {component.component_name || component.name || `Component ${component.component_id}`}
-                                  </p>
-                                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                    {component.component_code || component.code || "N/A"}
-                                  </p>
-                                </div>
-                                <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[10px] font-bold uppercase text-slate-600 ring-1 ring-slate-200">
-                                  {component.calc_type || "N/A"}
-                                </span>
+                    </div>
+                  </div>
+
+                  {/* Info Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <InfoItem icon={<FaBriefcase className="text-blue-500" />} label="Designation" value={formatDisplay(selectedInvite.designation)} />
+                    <InfoItem icon={<FaUserTie className="text-purple-500" />} label="Employment Type" value={formatDisplay(selectedInvite.employment_type)} />
+                    <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Salary Type" value={formatDisplay(selectedInvite.salary_type)} />
+                    <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Base Amount" value={formatCurrency(selectedInvite.base_amount)} />
+                    <InfoItem icon={<FaShieldAlt className="text-indigo-500" />} label="Permission Package" value={selectedInvite.permission_package?.name || selectedInvite.permission_package_name || "N/A"} />
+                    <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective From" value={formatDateSimple(selectedInvite.effective_from)} />
+                    <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective To" value={formatDateSimple(selectedInvite.effective_to)} />
+                    <InfoItem icon={<FaCalendarAlt className="text-teal-500" />} label="Joining Date" value={formatDateSimple(selectedInvite.joining_date)} />
+                    <InfoItem icon={<FaTag className="text-indigo-500" />} label="Overtime" value={formatBoolean(selectedInvite.enable_overtime)} />
+                    <InfoItem icon={<FaTag className="text-rose-500" />} label="Deduction" value={formatBoolean(selectedInvite.enable_deduction)} />
+                    <InfoItem icon={<FaCalendarAlt className="text-rose-500" />} label="Sent Date" value={formatDate(selectedInvite.created_at)} />
+                    <InfoItem icon={<FaClock className="text-yellow-500" />} label="Expires At" value={formatDate(selectedInvite.expires_at)} />
+                    <InfoItem icon={<FaTag className="text-orange-500" />} label="Status"
+                      value={<span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(selectedInvite.status, selectedInvite.expires_at).className}`}>{getStatusBadge(selectedInvite.status, selectedInvite.expires_at).text}</span>} />
+                  </div>
+
+                  {/* Collapsible Work Schedule */}
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden shadow-sm">
+                    <button onClick={() => setShowWorkSchedule(!showWorkSchedule)} className="w-full flex items-center justify-between p-4 hover:bg-indigo-50/50 transition-colors">
+                      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaClock className="text-indigo-500" /> Work Schedule</h4>
+                      <motion.div animate={{ rotate: showWorkSchedule ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
+                    </button>
+                    <AnimatePresence>
+                      {showWorkSchedule && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-indigo-50">
+                          <div className="p-3 flex flex-wrap gap-2">
+                            <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] text-slate-400 font-bold uppercase">Shift</span><span className="text-xs font-bold text-slate-700 block">{selectedInvite.shift_start || 'N/A'} - {selectedInvite.shift_end || 'N/A'}</span></div>
+                            <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] text-slate-400 font-bold uppercase">Break</span><span className="text-xs font-bold text-slate-700 block">{formatDurationDisplay(selectedInvite.break_minutes)}</span></div>
+                            <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] text-slate-400 font-bold uppercase">Grace</span><span className="text-xs font-bold text-slate-700 block">{formatDurationDisplay(selectedInvite.grace_minutes)}</span></div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Collapsible Sections: Permissions, Attendance, Weekends, Salary Components */}
+                  <div className="space-y-3">
+                    {/* Permissions */}
+                    {selectedInvite.permissions?.length > 0 && (
+                      <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden shadow-sm">
+                        <button onClick={() => setShowPermissions(!showPermissions)} className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 transition-colors">
+                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaShieldAlt className="text-blue-500" /> Assigned Permissions</h4>
+                          <div className="flex items-center gap-3">
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700 font-bold">{selectedInvite.permissions.length}</span>
+                            <motion.div animate={{ rotate: showPermissions ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
+                          </div>
+                        </button>
+                        <AnimatePresence>
+                          {showPermissions && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-blue-50">
+                              <div className="p-3 flex flex-wrap gap-2">
+                                {selectedInvite.permissions.map((perm, idx) => (
+                                  <span key={perm.id || `perm-${idx}`} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-100 shadow-sm">{perm.name}</span>
+                                ))}
                               </div>
-                              <p className="mt-2 text-sm font-bold text-emerald-700">
-                                {component.calc_type === "percentage" ? `${component.calc_value}%` : formatCurrency(component.calc_value)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </Modal>
+                    )}
 
-          {/* CANCEL MODAL */}
-          <Modal
-            isOpen={modalType === MODAL_TYPES.CANCEL && !!selectedInvite}
-            onClose={closeModal}
-            title="Cancel Invitation"
-            subtitle="This action cannot be undone"
-            icon={<FaBan className="h-6 w-6 text-red-500" />}
-            size="md"
-            footer={
-              <>
-                <button onClick={closeModal} className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">Keep</button>
-                <button onClick={() => selectedInvite?.token && handleCancelInvite(selectedInvite.token)} disabled={!selectedInvite || processingId === selectedInvite?.token || cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""}
-                  className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-red-100 hover:shadow-xl transition-all disabled:opacity-50 flex items-center gap-2">
-                  {processingId === selectedInvite?.token && <FaSpinner className="animate-spin" />}
-                  Confirm Cancellation
-                </button>
-              </>
-            }
-          >
-            {selectedInvite && (
-              <div className="text-center py-4">
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", duration: 0.5 }}
-                  className="w-24 h-24 bg-gradient-to-br from-red-100 to-rose-100 rounded-full flex items-center justify-center mx-auto mb-4"
-                >
-                  <FaBan className="text-4xl text-red-600" />
-                </motion.div>
-                <p className="text-xl text-gray-700 mb-2 font-semibold">Are you sure?</p>
-                <p className="text-gray-500">
-                  You are about to cancel the invitation for <span className="font-semibold text-red-600">{selectedInvite.user?.email}</span>.
-                </p>
-              </div>
-            )}
-          </Modal>
+                    {/* Attendance Methods */}
+                    {selectedInvite.attendance_methods?.length > 0 && (
+                      <div className="rounded-xl border border-purple-100 bg-purple-50/30 overflow-hidden shadow-sm">
+                        <button onClick={() => setShowAttendance(!showAttendance)} className="w-full flex items-center justify-between p-4 hover:bg-purple-50/50 transition-colors">
+                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaUserCheck className="text-purple-500" /> Attendance Methods</h4>
+                          <div className="flex items-center gap-3">
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-purple-100 text-purple-700 font-bold">{selectedInvite.attendance_methods.length}</span>
+                            <motion.div animate={{ rotate: showAttendance ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
+                          </div>
+                        </button>
+                        <AnimatePresence>
+                          {showAttendance && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-purple-50">
+                              <div className="p-3 flex flex-wrap gap-2">
+                                {selectedInvite.attendance_methods.map((method, idx) => (
+                                  <span key={`att-${idx}`} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-700 text-[11px] font-semibold rounded-full border border-slate-100 shadow-sm capitalize"><div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>{formatAttendanceMethod(method)}</span>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {/* Weekends */}
+                    {selectedInvite.weekends?.length > 0 && (
+                      <div className="rounded-xl border border-rose-100 bg-rose-50/30 overflow-hidden shadow-sm">
+                        <button onClick={() => setShowWeekends(!showWeekends)} className="w-full flex items-center justify-between p-4 hover:bg-rose-50/50 transition-colors">
+                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaCalendarAlt className="text-rose-500" /> Weekend Policy</h4>
+                          <div className="flex items-center gap-3">
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-rose-100 text-rose-700 font-bold">{selectedInvite.weekends.length}</span>
+                            <motion.div animate={{ rotate: showWeekends ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
+                          </div>
+                        </button>
+                        <AnimatePresence>
+                          {showWeekends && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-rose-50">
+                              <div className="p-3 flex flex-wrap gap-2">
+                                {selectedInvite.weekends.map((weekend, idx) => (
+                                  <div key={`weekend-${idx}`} className="text-center px-3 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-slate-100 shadow-sm min-w-[120px]"><span className="text-sm text-light-500 capitalize">{formatWeekendDay(weekend)}</span></div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {/* Salary Components */}
+                    {selectedInvite.salary_components?.length > 0 && (
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 overflow-hidden shadow-sm">
+                        <button onClick={() => setShowSalaryComponents(!showSalaryComponents)} className="w-full flex items-center justify-between p-4 hover:bg-emerald-50/50 transition-colors">
+                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><CurrencyIcon className="text-emerald-500" size={12} /> Salary Components</h4>
+                          <div className="flex items-center gap-3">
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-emerald-100 text-emerald-700 font-bold">{selectedInvite.salary_components.length}</span>
+                            <motion.div animate={{ rotate: showSalaryComponents ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
+                          </div>
+                        </button>
+                        <AnimatePresence>
+                          {showSalaryComponents && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-emerald-50">
+                              <div className="p-3 grid gap-2 sm:grid-cols-2">
+                                {selectedInvite.salary_components.map((component, idx) => (
+                                  <div key={component.id ?? component.component_id ?? `comp-${idx}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-[11px] font-bold text-slate-700">{component.component_name || component.name || `Component ${component.component_id}`}</p>
+                                        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{component.component_code || component.code || "N/A"}</p>
+                                      </div>
+                                      <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[10px] font-bold uppercase text-slate-600 ring-1 ring-slate-200">{component.calc_type || "N/A"}</span>
+                                    </div>
+                                    <p className="mt-2 text-sm font-bold text-emerald-700">{component.calc_type === "percentage" ? `${component.calc_value}%` : formatCurrency(component.calc_value)}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </Modal>
+          )}
+          {modalType === MODAL_TYPES.CANCEL && selectedInvite && (
+            <Modal
+              key="cancel-modal"
+              isOpen={true}
+              onClose={closeModal}
+              title="Cancel Invitation"
+              subtitle="This action cannot be undone"
+              icon={<FaBan className="h-6 w-6 text-red-500" />}
+              size="md"
+              footer={
+                <>
+                  <button onClick={closeModal} className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">Keep</button>
+                  <button onClick={() => selectedInvite?.token && handleCancelInvite(selectedInvite.token)} disabled={!selectedInvite || processingId === selectedInvite?.token || cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""}
+                    className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-red-100 hover:shadow-xl transition-all disabled:opacity-50 flex items-center gap-2">
+                    {processingId === selectedInvite?.token && <FaSpinner className="animate-spin" />}
+                    Confirm Cancellation
+                  </button>
+                </>
+              }
+            >
+              {selectedInvite && (
+                <div className="text-center py-4">
+                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", duration: 0.5 }} className="w-24 h-24 bg-gradient-to-br from-red-100 to-rose-100 rounded-full flex items-center justify-center mx-auto mb-4"><FaBan className="text-4xl text-red-600" /></motion.div>
+                  <p className="text-xl text-gray-700 mb-2 font-semibold">Are you sure?</p>
+                  <p className="text-gray-500">You are about to cancel the invitation for <span className="font-semibold text-red-600">{selectedInvite.user?.email}</span>.</p>
+                </div>
+              )}
+            </Modal>
+          )}
         </AnimatePresence>
 
         <EditStaffModal

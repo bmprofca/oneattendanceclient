@@ -53,9 +53,9 @@ const normalizeDate = (value) => (value ? String(value).split("T")[0] : "");
 const getMonthYearValue = (value) =>
   value
     ? {
-      month: parseInt(String(value).split("-")[1], 10),
-      year: parseInt(String(value).split("-")[0], 10),
-    }
+        month: parseInt(String(value).split("-")[1], 10),
+        year: parseInt(String(value).split("-")[0], 10),
+      }
     : null;
 
 const monthYearToDate = (value) =>
@@ -116,14 +116,17 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
   const [employmentType, setEmploymentType] = useState(null);
   const [selectedAttendanceMethods, setSelectedAttendanceMethods] = useState([]);
   const [autoApprove, setAutoApprove] = useState(false);
+  const [enableOvertime, setEnableOvertime] = useState(true);
+  const [enableDeduction, setEnableDeduction] = useState(true);
   const [shiftStart, setShiftStart] = useState(DEFAULT_SHIFT_START);
   const [shiftEnd, setShiftEnd] = useState(DEFAULT_SHIFT_END);
   const [breakMinutes, setBreakMinutes] = useState(DEFAULT_DURATION);
   const [graceMinutes, setGraceMinutes] = useState(DEFAULT_DURATION);
-  const [weekends, setWeekends] = useState([]); // Array of days (strings)
+  const [weekends, setWeekends] = useState([]);
   const [baseAmount, setBaseAmount] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [effectiveTo, setEffectiveTo] = useState("");
+  const [joiningDate, setJoiningDate] = useState(""); // NEW
   const [salaryComponents, setSalaryComponents] = useState([]);
   const [availableSalaryComponents, setAvailableSalaryComponents] = useState([]);
   const [isLoadingSalaryComponents, setIsLoadingSalaryComponents] = useState(false);
@@ -161,9 +164,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     if (typeof methods === "string") {
       methods = methods.includes(",") ? methods.split(",").map((m) => m.trim()) : [methods];
     }
-
     if (!Array.isArray(methods)) return [];
-
     return methods
       .map((item) => {
         if (typeof item === "object" && item !== null) {
@@ -328,28 +329,24 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     setSelectedPackage(pkg);
     if (!pkg) return;
 
-    // Designation
     if (pkg.designation) {
       const designationValue = getOptionValue(pkg.designation);
       const found = designations.find((d) => d.value === designationValue);
       setDesignation(found || { value: designationValue, label: getOptionLabel(pkg.designation) || formatDisplay(designationValue) });
     }
 
-    // Employment Type
     if (pkg.employment_type) {
       const employmentTypeValue = getOptionValue(pkg.employment_type);
       const found = employmentTypes.find((e) => e.value === employmentTypeValue);
       setEmploymentType(found || { value: employmentTypeValue, label: getOptionLabel(pkg.employment_type) || formatDisplay(employmentTypeValue) });
     }
 
-    // Salary Type
     if (pkg.salary_type) {
       const salaryTypeValue = getOptionValue(pkg.salary_type);
       const found = salaryTypes.find((s) => s.value === salaryTypeValue);
       setStaffType(found || { value: salaryTypeValue, label: getOptionLabel(pkg.salary_type) || formatDisplay(salaryTypeValue) });
     }
 
-    // Permission Package
     if (pkg.permission_package_id) {
       const found = permissionPackages.find((p) => p.value === pkg.permission_package_id);
       setSelectedPermissionPackage(
@@ -360,17 +357,20 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       );
     }
 
-    // Attendance Methods
     if (Array.isArray(pkg.attendance_methods)) {
       setSelectedAttendanceMethods(normalizeAttendanceMethods(pkg.attendance_methods));
     }
 
-    // Auto Approve
     if (typeof pkg.auto_approve !== "undefined") {
       setAutoApprove(Boolean(pkg.auto_approve));
     }
+    if (typeof pkg.enable_overtime !== "undefined") {
+      setEnableOvertime(Boolean(pkg.enable_overtime));
+    }
+    if (typeof pkg.enable_deduction !== "undefined") {
+      setEnableDeduction(Boolean(pkg.enable_deduction));
+    }
 
-    // Shift Times
     if (pkg.shift_start) setShiftStart(pkg.shift_start);
     if (pkg.shift_end) setShiftEnd(pkg.shift_end);
     if (typeof pkg.break_minutes !== "undefined") {
@@ -380,15 +380,16 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       setGraceMinutes(normalizeDuration(pkg.grace_minutes));
     }
 
-    // Weekends
     if (Array.isArray(pkg.weekends)) {
-      setWeekends(pkg.weekends.map(w => typeof w === 'object' ? w.day : w));
+      setWeekends(pkg.weekends.map((w) => (typeof w === "object" ? w.day : w)));
       if (pkg.weekends.length > 0) setIsWeekendsOpen(true);
     }
 
     if (typeof pkg.base_amount !== "undefined") setBaseAmount(String(pkg.base_amount || ""));
     if (pkg.effective_from) setEffectiveFrom(normalizeDate(pkg.effective_from));
     if (typeof pkg.effective_to !== "undefined") setEffectiveTo(normalizeDate(pkg.effective_to));
+    if (typeof pkg.joining_date !== "undefined") setJoiningDate(normalizeDate(pkg.joining_date)); // NEW
+
     const packageComponents = pkg.salary_components || pkg.components || [];
     if (Array.isArray(packageComponents)) {
       setSalaryComponents(normalizeSalaryComponents(packageComponents));
@@ -417,9 +418,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
   };
 
   const toggleWeekend = (day) => {
-    setWeekends(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    );
+    setWeekends((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
   };
 
   const fetchAllConstants = async () => {
@@ -606,6 +605,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       } else {
         setAutoApprove(false);
       }
+      setEnableOvertime(staffData.enable_overtime !== undefined ? Boolean(staffData.enable_overtime) : true);
+      setEnableDeduction(staffData.enable_deduction !== undefined ? Boolean(staffData.enable_deduction) : true);
 
       setShiftStart(staffData.shift_start || DEFAULT_SHIFT_START);
       setShiftEnd(staffData.shift_end || DEFAULT_SHIFT_END);
@@ -615,6 +616,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       setBaseAmount(staffData.base_amount === null || typeof staffData.base_amount === "undefined" ? "" : String(staffData.base_amount));
       setEffectiveFrom(normalizeDate(staffData.effective_from));
       setEffectiveTo(normalizeDate(staffData.effective_to));
+      setJoiningDate(normalizeDate(staffData.joining_date)); // NEW
       setSalaryComponents(normalizeSalaryComponents(staffData.salary_components || staffData.components || []));
       setSelectedSalaryPackageId("");
       if (Array.isArray(staffData.weekends) && staffData.weekends.length > 0) {
@@ -630,13 +632,13 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
 
   const methodBadges = companyAttendanceMethodList.length
     ? companyAttendanceMethodList.map((method) => ({
-      key: method,
-      label: ATTENDANCE_LABELS[method] || formatDisplay(method),
-    }))
+        key: method,
+        label: ATTENDANCE_LABELS[method] || formatDisplay(method),
+      }))
     : selectedAttendanceMethods.map((method) => ({
-      key: method,
-      label: ATTENDANCE_LABELS[method] || formatDisplay(method),
-    }));
+        key: method,
+        label: ATTENDANCE_LABELS[method] || formatDisplay(method),
+      }));
 
   const showInviteFields = Boolean(selectedUser || staffData);
 
@@ -653,6 +655,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       permissionPackageId: initialPermissionPackageId,
       attendanceMethods: initialAttendanceMethods,
       autoApprove: Boolean(staffData?.auto_approve),
+      enableOvertime: staffData?.enable_overtime !== undefined ? Boolean(staffData.enable_overtime) : true,
+      enableDeduction: staffData?.enable_deduction !== undefined ? Boolean(staffData.enable_deduction) : true,
       shiftStart: staffData?.shift_start ?? DEFAULT_SHIFT_START,
       shiftEnd: staffData?.shift_end ?? DEFAULT_SHIFT_END,
       breakMinutes: normalizeDuration(staffData?.break_minutes),
@@ -661,6 +665,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       baseAmount: staffData?.base_amount === null || typeof staffData?.base_amount === "undefined" ? "" : String(staffData.base_amount),
       effectiveFrom: normalizeDate(staffData?.effective_from),
       effectiveTo: normalizeDate(staffData?.effective_to),
+      joiningDate: normalizeDate(staffData?.joining_date) || "", // NEW
       components: normalizeSalaryComponents(staffData?.salary_components || staffData?.components || []).sort((a, b) => String(a.component_id).localeCompare(String(b.component_id))),
     };
   }, [staffData]);
@@ -682,6 +687,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       (staffType?.value ?? null) !== initialInviteState.salaryType ||
       currentPermissionPackageId !== initialInviteState.permissionPackageId ||
       autoApprove !== initialInviteState.autoApprove ||
+      enableOvertime !== initialInviteState.enableOvertime || // NEW
+      enableDeduction !== initialInviteState.enableDeduction || // NEW
       shiftStart !== initialInviteState.shiftStart ||
       shiftEnd !== initialInviteState.shiftEnd ||
       breakMinutes !== initialInviteState.breakMinutes ||
@@ -689,6 +696,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       baseAmount !== initialInviteState.baseAmount ||
       effectiveFrom !== initialInviteState.effectiveFrom ||
       effectiveTo !== initialInviteState.effectiveTo ||
+      joiningDate !== initialInviteState.joiningDate || // NEW
       JSON.stringify(currentSalaryComponents) !== JSON.stringify(initialInviteState.components) ||
       JSON.stringify([...weekends].sort()) !== JSON.stringify(initialInviteState.weekends) ||
       JSON.stringify(currentAttendanceMethods) !== JSON.stringify(initialInviteState.attendanceMethods)
@@ -700,6 +708,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     employmentType,
     staffType,
     autoApprove,
+    enableOvertime,
+    enableDeduction,
     currentAttendanceMethods,
     shiftStart,
     shiftEnd,
@@ -708,6 +718,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     baseAmount,
     effectiveFrom,
     effectiveTo,
+    joiningDate,
     currentSalaryComponents,
     weekends,
     initialInviteState,
@@ -902,6 +913,9 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
         designation: designation.value,
         attendance_methods: selectedAttendanceMethods,
         auto_approve: autoApprove,
+        enable_overtime: enableOvertime,
+        enable_deduction: enableDeduction,
+        joining_date: joiningDate || null, // NEW
         shift_start: shiftStart,
         shift_end: shiftEnd,
         break_minutes: normalizeDuration(breakMinutes),
@@ -916,7 +930,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
           calc_value: parseFloat(component.calc_value),
           ...(component.effective_from ? { effective_from: component.effective_from } : {}),
           effective_to: component.effective_to || null,
-          reason: component.reason || "",
+          remark: component.reason || component.remark || "",
         })),
       };
 
@@ -945,6 +959,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     setSelectedPermissionPackage(null);
     setSelectedAttendanceMethods([]);
     setAutoApprove(false);
+    setEnableOvertime(true);
+    setEnableDeduction(true);
     setShiftStart(DEFAULT_SHIFT_START);
     setShiftEnd(DEFAULT_SHIFT_END);
     setBreakMinutes(DEFAULT_DURATION);
@@ -953,6 +969,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     setBaseAmount("");
     setEffectiveFrom("");
     setEffectiveTo("");
+    setJoiningDate(""); // reset
     setSalaryComponents([]);
     setSelectedSalaryPackageId("");
     setSelectedPackage(null);
@@ -1211,6 +1228,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   </AnimatePresence>
                 </div>
 
+                {/* Salary Details */}
                 <div className="order-last rounded-xl border border-slate-200 bg-white p-4">
                   <button
                     type="button"
@@ -1286,6 +1304,16 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                               menuPosition="fixed"
                               menuPortalTarget={document.body}
                               styles={{ ...customSelectStyles, menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+                            />
+                          </div>
+                          {/* NEW: Joining Date */}
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Joining Date</label>
+                            <input
+                              type="date"
+                              value={joiningDate}
+                              onChange={(e) => setJoiningDate(e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
                             />
                           </div>
                         </div>
@@ -1402,6 +1430,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   </AnimatePresence>
                 </div>
 
+                {/* Attendance Methods */}
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <button
                     type="button"
@@ -1438,10 +1467,11 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                                   key={method.key}
                                   type="button"
                                   onClick={() => toggleAttendanceMethod(method.key)}
-                                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${active
-                                    ? "border-indigo-300 bg-indigo-600 text-white shadow-sm"
-                                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50"
-                                    }`}
+                                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                                    active
+                                      ? "border-indigo-300 bg-indigo-600 text-white shadow-sm"
+                                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50"
+                                  }`}
                                 >
                                   {active && <FaCheck className="h-3 w-3" />}
                                   {method.label}
@@ -1459,6 +1489,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   </AnimatePresence>
                 </div>
 
+                {/* Attendance Settings (now includes Overtime & Deduction toggles) */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <button
                     type="button"
@@ -1483,20 +1514,41 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                         exit={{ height: 0, opacity: 0, marginTop: 0 }}
                         className="overflow-hidden"
                       >
-                        <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={autoApprove}
-                            onChange={(e) => setAutoApprove(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="text-sm text-slate-700">Auto approve Attendance</span>
-                        </label>
+                        <div className="flex flex-col gap-3">
+                          <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={autoApprove}
+                              onChange={(e) => setAutoApprove(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-slate-700">Auto approve Attendance</span>
+                          </label>
+                          <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={enableOvertime}
+                              onChange={(e) => setEnableOvertime(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-slate-700">Enable Overtime</span>
+                          </label>
+                          <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={enableDeduction}
+                              onChange={(e) => setEnableDeduction(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-slate-700">Enable Deduction</span>
+                          </label>
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
 
+                {/* Shift Timings */}
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <button
                     type="button"
@@ -1523,20 +1575,10 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                       >
                         <div className="grid grid-cols-2 gap-3 mt-3">
                           <div className={!shiftStart ? "rounded-xl ring-2 ring-red-400 p-2" : ""}>
-                            <TimeDurationPickerField
-                              label="Start Time"
-                              value={shiftStart}
-                              onChange={setShiftStart}
-                              mode="time"
-                            />
+                            <TimeDurationPickerField label="Start Time" value={shiftStart} onChange={setShiftStart} mode="time" />
                           </div>
                           <div className={!shiftEnd ? "rounded-xl ring-2 ring-red-400 p-2" : ""}>
-                            <TimeDurationPickerField
-                              label="End Time"
-                              value={shiftEnd}
-                              onChange={setShiftEnd}
-                              mode="time"
-                            />
+                            <TimeDurationPickerField label="End Time" value={shiftEnd} onChange={setShiftEnd} mode="time" />
                           </div>
                         </div>
                       </motion.div>
@@ -1544,6 +1586,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   </AnimatePresence>
                 </div>
 
+                {/* Duration Settings */}
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <button
                     type="button"
@@ -1569,24 +1612,15 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                         className="overflow-hidden"
                       >
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 mt-3">
-                          <TimeDurationPickerField
-                            label="Break Minutes"
-                            value={breakMinutes}
-                            onChange={setBreakMinutes}
-                            mode="duration"
-                          />
-                          <TimeDurationPickerField
-                            label="Grace Minutes"
-                            value={graceMinutes}
-                            onChange={setGraceMinutes}
-                            mode="duration"
-                          />
+                          <TimeDurationPickerField label="Break Minutes" value={breakMinutes} onChange={setBreakMinutes} mode="duration" />
+                          <TimeDurationPickerField label="Grace Minutes" value={graceMinutes} onChange={setGraceMinutes} mode="duration" />
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
 
+                {/* Weekends */}
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <button
                     type="button"
@@ -1608,7 +1642,6 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                       <FaChevronDown className="h-3 w-3 text-slate-400" />
                     )}
                   </button>
-
                   <AnimatePresence>
                     {isWeekendsOpen && (
                       <motion.div
@@ -1618,19 +1651,18 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                         className="overflow-hidden"
                       >
                         <div className="flex flex-col gap-2 pt-1">
-                          {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                          {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => {
                             const isSelected = weekends.includes(day);
                             return (
                               <div key={day} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/50 p-2">
                                 <button
                                   type="button"
                                   onClick={() => toggleWeekend(day)}
-                                  className={`flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isSelected
-                                    ? 'bg-indigo-600 text-white shadow-md'
-                                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                                    }`}
+                                  className={`flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                    isSelected ? "bg-indigo-600 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                                  }`}
                                 >
-                                  <div className={`w-3.5 h-3.5 rounded-md flex items-center justify-center border ${isSelected ? 'bg-white border-white' : 'bg-slate-100 border-slate-200'}`}>
+                                  <div className={`w-3.5 h-3.5 rounded-md flex items-center justify-center border ${isSelected ? "bg-white border-white" : "bg-slate-100 border-slate-200"}`}>
                                     {isSelected && <FaCheck className="w-2.5 h-2.5 text-indigo-600" />}
                                   </div>
                                   {day.charAt(0).toUpperCase() + day.slice(1)}

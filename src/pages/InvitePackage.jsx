@@ -211,6 +211,8 @@ function PackageFormModal({ isOpen, onClose, onSuccess, packageData, isEditing, 
     weekends: [],
     attendance_methods: [],
     auto_approve: false,
+    enable_overtime: true,
+    enable_deduction: true,
     remarks: ""
   });
 
@@ -245,7 +247,9 @@ function PackageFormModal({ isOpen, onClose, onSuccess, packageData, isEditing, 
         grace_minutes: normalizeDuration(packageData.grace_minutes),
         weekends: Array.isArray(packageData.weekends) ? packageData.weekends : [],
         attendance_methods: normalizeAttendanceMethods(packageData.attendance_methods || []),
-        auto_approve: packageData.auto_approve || false,
+        auto_approve: packageData.auto_approve ?? false,
+        enable_overtime: packageData.enable_overtime ?? true,
+        enable_deduction: packageData.enable_deduction ?? true,
         remarks: packageData.remarks || ""
       });
     } else {
@@ -264,6 +268,8 @@ function PackageFormModal({ isOpen, onClose, onSuccess, packageData, isEditing, 
         weekends: [],
         attendance_methods: [],
         auto_approve: false,
+        enable_overtime: true,
+        enable_deduction: true,
         remarks: ""
       });
     }
@@ -341,19 +347,21 @@ function PackageFormModal({ isOpen, onClose, onSuccess, packageData, isEditing, 
       const payload = {
         code: formData.code,
         name: formData.name,
-        designation: formData.designation,
-        salary_type: formData.salary_type,
-        employment_type: formData.employment_type,
-        permission_package_id: parseInt(formData.permission_package_id),
+        designation: formData.designation || null,
+        salary_type: formData.salary_type || null,
+        employment_type: formData.employment_type || null,
+        permission_package_id: formData.permission_package_id ? parseInt(formData.permission_package_id) : null,
         component_package: formData.component_package ? parseInt(formData.component_package) : null,
-        shift_start: formData.shift_start,
-        shift_end: formData.shift_end,
-        break_minutes: formData.break_minutes,
-        grace_minutes: formData.grace_minutes,
+        shift_start: formData.shift_start || null,
+        shift_end: formData.shift_end || null,
+        break_minutes: formData.break_minutes || null,
+        grace_minutes: formData.grace_minutes || null,
         weekends: formData.weekends,
         attendance_methods: formData.attendance_methods,
         auto_approve: formData.auto_approve,
-        remarks: formData.remarks
+        enable_overtime: formData.enable_overtime,
+        enable_deduction: formData.enable_deduction,
+        remarks: formData.remarks || null
       };
 
       let response;
@@ -668,27 +676,78 @@ function PackageFormModal({ isOpen, onClose, onSuccess, packageData, isEditing, 
                 </AnimatePresence>
               </div>
 
-              {/* Auto Approve Toggle */}
-              <div className="rounded-xl border border-gray-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50">
-                      <FaCheckCircle className="h-4 w-4 text-indigo-500" />
+              {/* Toggles Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Auto Approve Toggle */}
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50">
+                        <FaCheckCircle className="h-4 w-4 text-indigo-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Auto Approve</p>
+                        <p className="text-xs text-gray-500">Auto approve attendance</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700">Auto Approve Attendance</p>
-                      <p className="text-xs text-gray-500">Automatically approve attendance records</p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, auto_approve: !prev.auto_approve }))}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.auto_approve ? 'bg-indigo-600' : 'bg-gray-200'
+                        }`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${formData.auto_approve ? 'translate-x-5' : 'translate-x-0'
+                        }`} />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, auto_approve: !prev.auto_approve }))}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.auto_approve ? 'bg-indigo-600' : 'bg-gray-200'
-                      }`}
-                  >
-                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${formData.auto_approve ? 'translate-x-5' : 'translate-x-0'
-                      }`} />
-                  </button>
+                </div>
+
+                {/* Enable Overtime Toggle */}
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50">
+                        <FaClock className="h-4 w-4 text-emerald-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Enable Overtime</p>
+                        <p className="text-xs text-gray-500">Allow overtime calc</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, enable_overtime: !prev.enable_overtime }))}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.enable_overtime ? 'bg-emerald-600' : 'bg-gray-200'
+                        }`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${formData.enable_overtime ? 'translate-x-5' : 'translate-x-0'
+                        }`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Enable Deduction Toggle */}
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50">
+                        <FaCoins className="h-4 w-4 text-rose-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Enable Deduction</p>
+                        <p className="text-xs text-gray-500">Allow penalty deductions</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, enable_deduction: !prev.enable_deduction }))}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.enable_deduction ? 'bg-rose-600' : 'bg-gray-200'
+                        }`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${formData.enable_deduction ? 'translate-x-5' : 'translate-x-0'
+                        }`} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -717,7 +776,7 @@ function PackageFormModal({ isOpen, onClose, onSuccess, packageData, isEditing, 
   );
 }
 
-// ─── View Modal ──────────────────────────────────────────────────────────────
+// ─── View Modal (Enhanced with ALL details) ─────────────────────────────────
 
 function ViewPackageModal({ isOpen, onClose, package: pkg, onEdit, onDelete, onToggleStatus, updateAccess, deleteAccess, getAccessMessage }) {
   const [showWeekends, setShowWeekends] = useState(false);
@@ -792,54 +851,105 @@ function ViewPackageModal({ isOpen, onClose, package: pkg, onEdit, onDelete, onT
                 </div>
               </div>
 
-              {/* Information Grid */}
+              {/* Information Grid - now includes all key fields */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 <InfoItem icon={<FaUserTie className="text-blue-500" />} label="Designation" value={formatDisplay(pkg.designation)} />
                 <InfoItem icon={<FaBriefcase className="text-purple-500" />} label="Employment" value={formatDisplay(pkg.employment_type)} />
                 <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Salary Type" value={formatDisplay(pkg.salary_type)} />
-                <InfoItem icon={<FaClock className="text-orange-500" />} label="Shift Start" value={pkg.shift_start} />
-                <InfoItem icon={<FaClock className="text-amber-500" />} label="Shift End" value={pkg.shift_end} />
+                <InfoItem icon={<FaClock className="text-orange-500" />} label="Shift Start" value={pkg.shift_start || "—"} />
+                <InfoItem icon={<FaClock className="text-amber-500" />} label="Shift End" value={pkg.shift_end || "—"} />
                 <InfoItem icon={<FaClock className="text-rose-500" />} label="Break Time" value={formatDurationDisplay(pkg.break_minutes)} />
                 <InfoItem icon={<FaClock className="text-indigo-500" />} label="Grace Period" value={formatDurationDisplay(pkg.grace_minutes)} />
                 <InfoItem icon={<FaShieldAlt className="text-indigo-400" />} label="Permission Package" value={pkg.permission_package_name || "—"} />
                 <InfoItem icon={<FaTag className="text-slate-500" />} label="Remarks" value={pkg.remarks || "—"} />
+                {/* Overtime & Deduction status */}
+                <InfoItem 
+                  icon={<FaClock className="text-emerald-500" />} 
+                  label="Overtime" 
+                  value={pkg.enable_overtime ? "Enabled" : "Disabled"} 
+                />
+                <InfoItem 
+                  icon={<FaCoins className="text-rose-500" />} 
+                  label="Deduction" 
+                  value={pkg.enable_deduction ? "Enabled" : "Disabled"} 
+                />
+                {/* Component package ID if present */}
+                {pkg.component_package && (
+                  <InfoItem 
+                    icon={<FaBox className="text-slate-500" />} 
+                    label="Component Pkg ID" 
+                    value={pkg.component_package} 
+                  />
+                )}
               </div>
 
-              {/* Advanced Settings Row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Advanced Settings Row - now includes Auto Approve, Overtime & Deduction */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* Auto Approve */}
                 <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${pkg.auto_approve ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-400'}`}>
                       <FaCheckCircle size={16} />
                     </div>
-                    <span className="text-sm font-semibold text-slate-700">Auto Approve Attendance</span>
+                    <span className="text-sm font-semibold text-slate-700">Auto Approve</span>
                   </div>
                   <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${pkg.auto_approve
                     ? 'bg-green-100 text-green-700 border border-green-200'
                     : 'bg-slate-100 text-slate-500 border border-slate-200'
                     }`}>
-                    {pkg.auto_approve ? "Enabled" : "Disabled"}
+                    {pkg.auto_approve ? "On" : "Off"}
                   </span>
                 </div>
 
-                {/* Attendance Methods */}
-                {pkg.attendance_methods?.length > 0 && (
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FaUserCheck className="text-indigo-500" size={16} />
-                      <span className="text-sm font-semibold text-slate-700">Attendance Methods</span>
+                {/* Enable Overtime */}
+                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${pkg.enable_overtime ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'}`}>
+                      <FaClock size={16} />
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {pkg.attendance_methods.map((method, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold capitalize border border-slate-100">
-                          {formatAttendanceMethod(method)}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="text-sm font-semibold text-slate-700">Overtime</span>
                   </div>
-                )}
+                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${pkg.enable_overtime
+                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                    }`}>
+                    {pkg.enable_overtime ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+
+                {/* Enable Deduction */}
+                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${pkg.enable_deduction ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-400'}`}>
+                      <FaCoins size={16} />
+                    </div>
+                    <span className="text-sm font-semibold text-slate-700">Deduction</span>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${pkg.enable_deduction
+                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                    }`}>
+                    {pkg.enable_deduction ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
               </div>
+
+              {/* Attendance Methods */}
+              {pkg.attendance_methods?.length > 0 && (
+                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FaUserCheck className="text-indigo-500" size={16} />
+                    <span className="text-sm font-semibold text-slate-700">Attendance Methods</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pkg.attendance_methods.map((method, idx) => (
+                      <span key={idx} className="px-2 py-0.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold capitalize border border-slate-100">
+                        {formatAttendanceMethod(method)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Weekends — collapsible */}
               {pkg.weekends?.length > 0 && (
