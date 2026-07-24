@@ -147,16 +147,32 @@ function formatMinutes(mins) {
 
 function computeWorkStats(dayData) {
   if (!dayData) return null;
+
   const activities = dayData.activities || [];
   const breaks = dayData.breaks || [];
+
+  const punches = [];
+  let tempIn = null;
+  for (const act of activities) {
+    if (act.type === "PUNCH_IN") {
+      tempIn = act;
+    } else if (act.type === "PUNCH_OUT" && tempIn) {
+      punches.push({ in: tempIn, out: act });
+      tempIn = null;
+    }
+  }
+  if (tempIn) {
+    punches.push({ in: tempIn, out: null });
+  }
 
   let totalWork = 0;
   let firstIn = null;
   let lastOut = null;
 
-  activities.forEach((pair) => {
-    const inTime = pair[0]?.time ? parseTime(pair[0].time) : null;
-    const outTime = pair[1]?.time ? parseTime(pair[1].time) : null;
+  punches.forEach(({ in: pin, out: pout }) => {
+    const inTime = pin?.time ? parseTime(pin.time) : null;
+    const outTime = pout?.time ? parseTime(pout.time) : null;
+
     if (inTime != null) {
       if (firstIn == null || inTime < firstIn) firstIn = inTime;
     }
@@ -169,15 +185,21 @@ function computeWorkStats(dayData) {
   });
 
   let totalBreak = 0;
-  breaks.forEach((pair) => {
-    const s = pair[0]?.time ? parseTime(pair[0].time) : null;
-    const e = pair[1]?.time ? parseTime(pair[1].time) : null;
-    if (s != null && e != null) {
-      let diff = e - s;
-      if (diff < 0) diff += 24 * 60;
-      totalBreak += diff;
+  let breakStart = null;
+  for (const b of breaks) {
+    if (b.type === "BREAK_START") {
+      breakStart = b;
+    } else if (b.type === "BREAK_END" && breakStart) {
+      const s = breakStart?.time ? parseTime(breakStart.time) : null;
+      const e = b?.time ? parseTime(b.time) : null;
+      if (s != null && e != null) {
+        let diff = e - s;
+        if (diff < 0) diff += 24 * 60;
+        totalBreak += diff;
+      }
+      breakStart = null;
     }
-  });
+  }
 
   const netWork = Math.max(0, totalWork - totalBreak);
   return {
@@ -186,7 +208,8 @@ function computeWorkStats(dayData) {
     grossMinutes: totalWork,
     firstIn: firstIn != null ? minutesToTimeStr(firstIn) : null,
     lastOut: lastOut != null ? minutesToTimeStr(lastOut) : null,
-    hasOpenSession: activities.some((pair) => pair[0]?.time && !pair[1]?.time),
+    hasOpenSession: punches.some((p) => p.out === null),
+    sessions: punches,
   };
 }
 
@@ -263,7 +286,7 @@ const CalendarCell = ({ cell, onClick }) => {
 
   const status = getDayStatus(data);
   const styles = CALENDAR_STATUS_STYLES[status] || CALENDAR_STATUS_STYLES.upcoming;
-  const workStats = (data?.activities?.length > 0) ? computeWorkStats(data) : null;
+  const workStats = data ? computeWorkStats(data) : null;
 
   return (
     <motion.div
@@ -465,8 +488,22 @@ const CalendarDayDetailsModal = ({ cell, onClose, shift }) => {
     </div>
   );
 
+  const sessions = workStats?.sessions || [];
   const breaks = data?.breaks || [];
-  const activities = data?.activities || [];
+
+  const breakPairs = [];
+  let breakIn = null;
+  for (const b of breaks) {
+    if (b.type === "BREAK_START") {
+      breakIn = b;
+    } else if (b.type === "BREAK_END" && breakIn) {
+      breakPairs.push({ start: breakIn, end: b });
+      breakIn = null;
+    }
+  }
+  if (breakIn) {
+    breakPairs.push({ start: breakIn, end: null });
+  }
 
   return (
     <motion.div
@@ -541,21 +578,21 @@ const CalendarDayDetailsModal = ({ cell, onClose, shift }) => {
             </div>
           )}
 
-          {activities.length > 0 && (
+          {sessions.length > 0 && (
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sessions</p>
               <div className="space-y-1.5">
-                {activities.map((pair, i) => (
+                {sessions.map((s, i) => (
                   <div key={i} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs">
                     <div className="flex items-center gap-1.5 text-emerald-600">
                       <FaSignInAlt size={11} />
-                      <span className="font-bold">{pair[0]?.time || "—"}</span>
+                      <span className="font-bold">{s.in?.time || "—"}</span>
                     </div>
                     <div className="flex-1 h-px bg-gray-200" />
                     <div className="flex items-center gap-1.5 text-rose-500">
                       <span className="font-bold">
-                        {pair[1]?.time
-                          ? pair[1].time
+                        {s.out?.time
+                          ? s.out.time
                           : <span className="text-indigo-400 animate-pulse">Active</span>
                         }
                       </span>
@@ -567,20 +604,25 @@ const CalendarDayDetailsModal = ({ cell, onClose, shift }) => {
             </div>
           )}
 
-          {breaks.length > 0 && (
+          {breakPairs.length > 0 && (
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                Breaks ({breaks.length})
+                Breaks ({breakPairs.length})
               </p>
               <div className="space-y-1.5">
-                {breaks.map((pair, i) => {
-                  const s = pair[0]?.time ? parseTime(pair[0].time) : null;
-                  const e = pair[1]?.time ? parseTime(pair[1].time) : null;
+                {breakPairs.map((bp, i) => {
+                  const sTime = bp.start?.time ? parseTime(bp.start.time) : null;
+                  const eTime = bp.end?.time ? parseTime(bp.end.time) : null;
                   let dur = null;
-                  if (s != null && e != null) { dur = e - s; if (dur < 0) dur += 24 * 60; }
+                  if (sTime != null && eTime != null) {
+                    dur = eTime - sTime;
+                    if (dur < 0) dur += 24 * 60;
+                  }
                   return (
                     <div key={i} className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-100 text-[11px]">
-                      <span className="font-bold text-amber-700">{pair[0]?.time || "—"} → {pair[1]?.time || "—"}</span>
+                      <span className="font-bold text-amber-700">
+                        {bp.start?.time || "—"} → {bp.end?.time || (bp.end === null ? "Active" : "—")}
+                      </span>
                       {dur != null && dur > 0 && <span className="font-black text-amber-600">{dur}m</span>}
                     </div>
                   );
@@ -770,7 +812,7 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
         <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/50">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div key={day} className="py-3 text-center">
-              <span className="hidden md:block text-[10px] font-black text-gray-400 uppercase tracking-widest">{day}urday</span>
+              <span className="hidden md:block text-[10px] font-black text-gray-400 uppercase tracking-widest">{day}</span>
               <span className="md:hidden text-[10px] font-black text-gray-400 uppercase tracking-widest">{day}</span>
             </div>
           ))}
@@ -3409,8 +3451,8 @@ export default function EmployeeProfilePage() {
                     <EmployeeAttendanceCalendar employee={profile.employee} fallbackId={employeeId} refreshKey={refreshKey} />
                   ) : activeTab === "ledger" ? (
                     <CompanyLedger employeeId={profile.employee?.id ?? employeeId} />
-                  ) : activeTab === "accounts" ? (                                    // 👈 add this
-                    <EmployeeBankAccountsTab employeeId={profile.employee?.id ?? employeeId} />  // 👈 add this
+                  ) : activeTab === "accounts" ? (
+                    <EmployeeBankAccountsTab employeeId={profile.employee?.id ?? employeeId} />
                   ) : (
                     <TabContent
                       tabKey={activeTab}

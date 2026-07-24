@@ -386,6 +386,48 @@ const EmployeeEditModal = ({
                             </AnimatePresence>
                         </div>
                     </div>
+
+                    {/* Additional Settings – Joining Date, Overtime, Deduction */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                            <FaCog className="h-4 w-4 text-indigo-500" />Additional Settings
+                        </label>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {/* Joining Date */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Joining Date</label>
+                                <AdvancedDateFilter
+                                    value={formData.joining_date ? { date: formData.joining_date } : null}
+                                    onChange={(val) => setFormData(p => ({ ...p, joining_date: val?.date || '' }))}
+                                    tabOptions={['date']}
+                                    placeholder="Select joining date"
+                                    buttonClassName="w-full min-h-[48px] rounded-xl border border-slate-200 bg-[#f9fafb] px-4 py-3 text-sm outline-none transition hover:border-slate-300 focus:border-indigo-500"
+                                />
+                            </div>
+                            {/* Overtime Toggle */}
+                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <label className="text-sm font-semibold text-slate-700">Enable Overtime</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData(p => ({ ...p, enable_overtime: !p.enable_overtime }))}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.enable_overtime ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.enable_overtime ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                            {/* Deduction Toggle */}
+                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <label className="text-sm font-semibold text-slate-700">Enable Deduction</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData(p => ({ ...p, enable_deduction: !p.enable_deduction }))}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.enable_deduction ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.enable_deduction ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </Modal>
@@ -1098,6 +1140,8 @@ const EmployeeManagement = () => {
         permission_package_id: null, attendance_methods: [], auto_approve: false,
         shift_start: DEFAULT_SHIFT_START, shift_end: DEFAULT_SHIFT_END,
         break_minutes: DEFAULT_DURATION, grace_minutes: DEFAULT_DURATION, weekends: [],
+        enable_overtime: false,
+        enable_deduction: false,
     });
 
     const [attendanceMethodsConfig, setAttendanceMethodsConfig] = useState({});
@@ -1357,6 +1401,9 @@ const EmployeeManagement = () => {
                 shift_start: employeeData.shift_start, shift_end: employeeData.shift_end,
                 break_minutes: employeeData.break_minutes, grace_minutes: employeeData.grace_minutes,
                 weekends: employeeData.weekends,
+                joining_date: employeeData.joining_date || undefined,
+                enable_overtime: employeeData.enable_overtime,
+                enable_deduction: employeeData.enable_deduction,
             };
             const response = await apiCall('/employees/update', 'PUT', payload, company?.id);
             const result = await response.json();
@@ -1548,6 +1595,8 @@ const EmployeeManagement = () => {
                 break_minutes: normalizeDuration(norm.break_minutes, DEFAULT_DURATION),
                 grace_minutes: normalizeDuration(norm.grace_minutes, DEFAULT_DURATION),
                 weekends: normalizedWeekends,
+                enable_overtime: !!norm.enable_overtime,
+                enable_deduction: !!norm.enable_deduction,
             });
 
             setModalType(MODAL_TYPES.EDIT);
@@ -1595,6 +1644,8 @@ const EmployeeManagement = () => {
             permission_package_id: null, selectedPackage: null, attendance_methods: [],
             auto_approve: false, shift_start: DEFAULT_SHIFT_START, shift_end: DEFAULT_SHIFT_END,
             break_minutes: DEFAULT_DURATION, grace_minutes: DEFAULT_DURATION, weekends: [],
+            enable_overtime: false,
+            enable_deduction: false,
         });
     };
 
@@ -1648,6 +1699,9 @@ const EmployeeManagement = () => {
             auto_approve: formData.auto_approve, shift_start: formData.shift_start,
             shift_end: formData.shift_end, break_minutes: formData.break_minutes,
             grace_minutes: formData.grace_minutes, weekends: formData.weekends,
+            joining_date: formData.joining_date,
+            enable_overtime: formData.enable_overtime,
+            enable_deduction: formData.enable_deduction,
         });
         if (result.success) { toast.success('Employee updated successfully!'); closeModal(); }
         else toast.error(result.error || 'Failed to update employee');
@@ -2111,6 +2165,8 @@ const EmployeeManagement = () => {
                                 <InfoItem icon={<FaBriefcase />} label="Employment" value={getEmploymentTypeDisplay(selectedEmployee.employment_type)} />
                                 <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Salary Type" value={getSalaryTypeDisplay(selectedEmployee.salary_type)} />
                                 <InfoItem icon={<FaCalendarAlt />} label="Joining Date" value={formatDate(selectedEmployee.joining_date)} />
+                                <InfoItem icon={<FaClock />} label="Overtime" value={selectedEmployee.enable_overtime ? 'Enabled' : 'Disabled'} />
+                                <InfoItem icon={<FaCog />} label="Deduction" value={selectedEmployee.enable_deduction ? 'Enabled' : 'Disabled'} />
                             </div>
 
                             {/* Work Schedule */}
@@ -2138,7 +2194,7 @@ const EmployeeManagement = () => {
                                     <button onClick={() => setShowPermissions(!showPermissions)}
                                         className="w-full flex items-center justify-between p-4 hover:bg-indigo-50/50 transition-colors">
                                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                            <FaShieldAlt className="text-indigo-500" />Security & Access
+                                            <FaShieldAlt className="text-indigo-500" />Permission & Access
                                         </h4>
                                         <motion.div animate={{ rotate: showPermissions ? 180 : 0 }} transition={{ duration: 0.2 }}
                                             className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
