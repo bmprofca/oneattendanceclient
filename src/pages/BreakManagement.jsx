@@ -102,7 +102,6 @@ function getBreakDurationMins(startTime, endTime) {
 
 function desigLabel(val) {
     if (!val) return '—';
-    // Handle deeply nested API object: { value: { value, label }, label: { value, label } }
     if (typeof val === 'object' && val !== null) {
         const inner = val.label ?? val.value;
         if (typeof inner === 'object' && inner !== null) return inner.label || '—';
@@ -306,8 +305,6 @@ const BreakDetailModal = ({ record, onClose, onEdit }) => {
     );
 };
 
-// ─── Delete Confirm Modal ──────────────────────────────────────────────────────
-
 // ─── Create / Edit Break Modal ─────────────────────────────────────────────────
 
 const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false }) => {
@@ -316,6 +313,7 @@ const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false }) =
     const [notes, setNotes] = useState(record?.remark || '');
     const [employeeId, setEmployeeId] = useState(isEdit ? (record?.employee_id || '') : '');
     const [date, setDate] = useState(isEdit ? (record?.attendance_date || '') : new Date().toISOString().slice(0, 10));
+    
     const initialEmployee = useMemo(() => {
         if (!record?.employee_id) return null;
         return {
@@ -332,14 +330,21 @@ const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false }) =
     const handleSubmit = () => {
         if (!breakStart) return toast.error('Break start time is required');
         if (!employeeId) return toast.error('Employee is required');
+
         const payload = {
-            ...(isEdit ? { attendance_id: record.attendance_id } : { employee_id: employeeId }),
+            employee_id: employeeId,
             date,
             type: 'break',
             start_time: breakStart,
             end_time: breakEnd || null,
             notes,
         };
+
+        // ✅ Include record ID when editing to ensure proper update
+        if (isEdit && record?.attendance_id) {
+            payload.attendance_id = record.attendance_id;
+        }
+
         onSubmit(payload);
     };
 
@@ -384,12 +389,22 @@ const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false }) =
                                 type="date"
                                 value={date}
                                 onChange={e => setDate(e.target.value)}
-                                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none shadow-sm transition-all focus:border-amber-400 focus:ring-4 focus:ring-amber-500/10"
+                                disabled={isEdit}
+                                className={`h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none shadow-sm transition-all focus:border-amber-400 focus:ring-4 focus:ring-amber-500/10 ${isEdit ? 'opacity-75 cursor-not-allowed' : ''}`}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <TimePickerField label="Break Start *" value={breakStart} onChange={setBreakStart} />
-                            <TimePickerField label="Break End" value={breakEnd} onChange={setBreakEnd} />
+                            <TimePickerField 
+                                label="Break Start *" 
+                                value={breakStart} 
+                                onChange={setBreakStart} 
+                                disabled={isEdit} // Start time cannot be changed when editing
+                            />
+                            <TimePickerField 
+                                label="Break End" 
+                                value={breakEnd} 
+                                onChange={setBreakEnd} 
+                            />
                         </div>
                         <div>
                             <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">Notes (optional)</label>
@@ -531,7 +546,7 @@ const BreakManagementPage = () => {
         setSaving(true);
         try {
             const companyId = JSON.parse(localStorage.getItem('company'))?.id ?? null;
-            const res = await apiCall('/attendance/update', 'PUT', payload, companyId);
+            const res = await apiCall('/attendance/mark', 'POST', payload, companyId);
             const result = await res.json();
             if (!result.success) throw new Error(result.message || 'Update failed');
             toast.success('Break updated successfully!');
@@ -550,8 +565,6 @@ const BreakManagementPage = () => {
         open: records.filter(r => getTimeStr(r.break_start) && !getTimeStr(r.break_end)).length,
         present: records.filter(r => r.day_status === 'present').length,
     }), [records, pagination.total]);
-
-
 
     if (isInitialLoad && loading) return <SkeletonComponent />;
 
@@ -593,89 +606,70 @@ const BreakManagementPage = () => {
                 </div>
 
                 {/* Search / Filter / View Toolbar */}
-              <motion.div
-  initial={{ opacity: 0, y: 18 }}
-  animate={{ opacity: 1, y: 0 }}
-  className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm"
->
-  {/* 
-    Responsive Layout:
-    
-    lg:
-    Search | Employee | Date | View Switcher
+                <motion.div
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm"
+                >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        {/* SEARCH */}
+                        <div className="w-full lg:flex-1">
+                            <div className="relative">
+                                <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(event) => setSearchTerm(event.target.value)}
+                                    placeholder="Search by employee name, code, or email..."
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-10 text-sm outline-none transition focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10 min-h-[42px]"
+                                />
+                                {searchTerm && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                        title="Clear search"
+                                    >
+                                        <FaTimes size={13} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
 
-    md/sm:
-    Row 1 -> Search
-    Row 2 -> Employee
-    Row 3 -> Date + View Switcher
-  */}
+                        {/* EMPLOYEE SELECT */}
+                        <div className="w-full lg:w-[240px] lg:flex-none">
+                            <EmployeeSelect
+                                value={employeeId}
+                                onChange={(value) => setEmployeeId(value || '')}
+                                placeholder="All employees"
+                            />
+                        </div>
 
-  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-
-    {/* SEARCH */}
-    <div className="w-full lg:flex-1">
-      <div className="relative">
-        <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Search by employee name, code, or email..."
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-10 text-sm outline-none transition focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10 min-h-[42px]"
-        />
-
-        {searchTerm && (
-          <button
-            type="button"
-            onClick={() => setSearchTerm('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            title="Clear search"
-          >
-            <FaTimes size={13} />
-          </button>
-        )}
-      </div>
-    </div>
-
-    {/* EMPLOYEE SELECT */}
-    <div className="w-full lg:w-[240px] lg:flex-none">
-      <EmployeeSelect
-        value={employeeId}
-        onChange={(value) => setEmployeeId(value || '')}
-        placeholder="All employees"
-      />
-    </div>
-
-    {/* DATE + VIEW */}
-    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:w-auto lg:flex-none">
-
-      {/* DATE FILTER */}
-      <div className="w-full sm:flex-1 lg:w-[260px] lg:flex-none">
-        <AdvancedDateFilter
-          value={dateFilter}
-          onChange={(val) => {
-            setDateFilter(val);
-            goToPage(1);
-          }}
-          placeholder="Date or range"
-          tabOptions={['date', 'range']}
-          showDateStepper
-          buttonClassName="h-full min-h-[42px] w-full bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10"
-        />
-      </div>
-
-      {/* VIEW SWITCHER */}
-      <div className="flex justify-end lg:justify-start">
-        <ManagementViewSwitcher
-          viewMode={viewMode}
-          onChange={setViewMode}
-          accent="amber"
-        />
-      </div>
-    </div>
-  </div>
-</motion.div>
+                        {/* DATE + VIEW */}
+                        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:w-auto lg:flex-none">
+                            <div className="w-full sm:flex-1 lg:w-[260px] lg:flex-none">
+                                <AdvancedDateFilter
+                                    value={dateFilter}
+                                    onChange={(val) => {
+                                        setDateFilter(val);
+                                        goToPage(1);
+                                    }}
+                                    placeholder="Date or range"
+                                    tabOptions={['date', 'range']}
+                                    showDateStepper
+                                    buttonClassName="h-full min-h-[42px] w-full bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10"
+                                />
+                            </div>
+                            <div className="flex justify-end lg:justify-start">
+                                <ManagementViewSwitcher
+                                    viewMode={viewMode}
+                                    onChange={setViewMode}
+                                    accent="amber"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
 
                 {/* Loading skeleton */}
                 {loading && !records.length && <SkeletonComponent />}
