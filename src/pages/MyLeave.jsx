@@ -940,7 +940,10 @@ const MyLeave = () => {
       title="My Leaves"
       description="Manage your leave applications and track leave balance."
       accent="violet"
-      onRefresh={() => loadLeaves(pagination.page, true)}
+      onRefresh={async () => {
+        await loadBalances();
+        await loadLeaves(pagination.page, true);
+      }}
       actions={
         <button
           type="button"

@@ -81,10 +81,14 @@ const ForgotPassword = () => {
     }
   };
 
+  // Build payload with country code prepended to phone number
   const getPayload = () => {
-    return forgotType === "email" 
-      ? { forgot_type: "email", email: identifier }
-      : { forgot_type: "phone", phone: identifier };
+    if (forgotType === "email") {
+      return { forgot_type: "email", email: identifier };
+    }
+    // Remove any non-digit characters and prepend +91 (the static country code shown in UI)
+    const cleanPhone = identifier.replace(/\D/g, "");
+    return { forgot_type: "phone", phone: `+91${cleanPhone}` };
   };
 
   const handleRequestOtp = async () => {

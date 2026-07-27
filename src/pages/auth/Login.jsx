@@ -147,7 +147,7 @@ const Login = () => {
       setLoadingAction("request-otp");
       const payload = {
         login_type: activeTab === "phone" ? "mobile" : "email",
-        mobile: activeTab === "phone" ? (countryCode + mobile) : "",
+        phone: activeTab === "phone" ? (countryCode + mobile) : "",
         email: activeTab === "email" ? email : "",
         password: password
       };
@@ -197,7 +197,6 @@ const Login = () => {
 
       const payload = {
         login_type: activeTab === "phone" ? "phone" : "email",
-        mobile: activeTab === "phone" ? (countryCode + mobile) : "",
         phone: activeTab === "phone" ? (countryCode + mobile) : "",
         email: activeTab === "email" ? email : "",
         password: password,
@@ -243,7 +242,7 @@ const Login = () => {
       setLoadingAction("resend-otp");
       const payload = {
         login_type: activeTab === "phone" ? "mobile" : "email",
-        mobile: activeTab === "phone" ? mobile : "",
+        phone: activeTab === "phone" ? mobile : "",
         email: activeTab === "email" ? email : "",
         password: password
       };
