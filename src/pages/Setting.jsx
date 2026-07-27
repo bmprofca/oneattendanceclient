@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FaBuilding, FaPlus, FaShieldAlt,
-  FaBars, FaTimes, FaSpinner, FaCog
+  FaBars, FaTimes, FaSpinner, FaCog, FaSync
 } from "react-icons/fa";
 import { FiLock, FiMonitor, FiTrash2, FiChevronDown, FiLogOut } from "react-icons/fi";
 import { toast } from "react-toastify";
@@ -18,7 +18,7 @@ import { usePasswordValidation } from "../hooks/usePasswordValidation";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Collapsible card wrapper (kept for other potential uses, though not used in new sub-tab layout)
+// (Kept for potential future use, not used in the new sub‑tab layout)
 const SecurityCard = ({ title, icon, badge, danger, headerAction, children }) => {
   const [open, setOpen] = useState(false);
 
@@ -68,7 +68,7 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
-// ─── Sub-Components ──────────────────────────────────────────────────────────
+// ─── Companies Tab ──────────────────────────────────────────────
 
 const CompaniesTab = () => {
   const { user, loading, refreshUser, companies, setCompanies, company } = useAuth();
@@ -386,6 +386,8 @@ const CompaniesTab = () => {
   );
 };
 
+// ─── Security Tab (UPDATED) ──────────────────────────────────────────────────
+
 const SecurityTab = () => {
   const { user, loading, refreshUser } = useAuth();
   const { validatePassword } = usePasswordValidation();
@@ -419,8 +421,12 @@ const SecurityTab = () => {
     setLoadingSessions(true);
     try {
       const response = await apiCall('/auth/sessions', 'GET');
-      const data = await response.json();
-      setSessions(data.sessions || []);
+      const result = await response.json();
+      if (result.success) {
+        setSessions(result.data || []);
+      } else {
+        toast.error(result.message || "Failed to load sessions");
+      }
     } catch {
       toast.error("Failed to load sessions");
     } finally {
@@ -778,15 +784,28 @@ const SecurityTab = () => {
                 <p className="text-xs text-slate-500">Manage all browser sessions and devices currently logged into your account</p>
               </div>
             </div>
-            
-            <button
-              onClick={forceLogoutAll}
-              disabled={loggingOutAll || sessions.filter((s) => !s.is_current).length === 0}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed self-start sm:self-auto"
-            >
-              {loggingOutAll ? <FaSpinner className="w-3 h-3 animate-spin" /> : <FiLogOut className="w-3 h-3" />}
-              <span className="whitespace-nowrap">Logout All Other Devices</span>
-            </button>
+
+            <div className="flex items-center gap-2">
+              {/* Refresh button */}
+              <button
+                onClick={fetchSessions}
+                disabled={loadingSessions}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white text-gray-500 border border-gray-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh sessions"
+              >
+                <FaSync className={`w-3 h-3 ${loadingSessions ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline whitespace-nowrap">Refresh</span>
+              </button>
+
+              <button
+                onClick={forceLogoutAll}
+                disabled={loggingOutAll || sessions.filter((s) => !s.is_current).length === 0}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed self-start sm:self-auto"
+              >
+                {loggingOutAll ? <FaSpinner className="w-3 h-3 animate-spin" /> : <FiLogOut className="w-3 h-3" />}
+                <span className="whitespace-nowrap">Logout All Other Devices</span>
+              </button>
+            </div>
           </div>
 
           {loadingSessions ? (
@@ -1145,7 +1164,7 @@ const SETTINGS_HUB_TABS = [
 const SettingsPage = () => {
   return (
     <div className="min-h-screen">
-      {/* Decorative Elements - Hidden on very small screens */}
+      {/* Decorative Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none hidden sm:block">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>

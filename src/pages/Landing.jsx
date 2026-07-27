@@ -445,8 +445,9 @@ export default function LandingPage() {
                   variants={fadeInUp}
                   whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.2)" }}
                   whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
                   onClick={() => navigate('/login')}
-                  className="px-10 py-4 font-semibold text-lg rounded-xl border-2 border-white hover:bg-white/20 transition-all duration-200"
+                  className="px-10 py-4 font-semibold text-lg rounded-xl border-2 border-white"
                 >
                   Login Now
                 </motion.button>
