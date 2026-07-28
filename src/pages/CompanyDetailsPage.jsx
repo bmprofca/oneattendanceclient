@@ -8,14 +8,15 @@ import { RefreshButton } from '../components/common';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaBuilding, FaGlobe, FaMapMarkerAlt, FaRoad, FaCity, FaEnvelope, FaCrosshairs,
-  FaCheck, FaTimes, FaSpinner, FaMapPin,FaPlus, FaTrash, FaLink, FaWifi, FaLocationArrow, FaCamera, FaQrcode, FaFingerprint, FaUserCheck, FaChevronDown, FaChevronUp, FaSave, FaInfoCircle, FaUndo
+  FaCheck, FaTimes, FaSpinner, FaMapPin, FaPlus, FaTrash, FaLink, FaWifi, FaLocationArrow,
+  FaCamera, FaQrcode, FaFingerprint, FaUserCheck, FaChevronDown, FaChevronUp, FaSave,
+  FaInfoCircle, FaUndo
 } from 'react-icons/fa';
 
 const GEOCODING_API = "https://nominatim.openstreetmap.org/search";
 
 const COMPANY_TABS = [
   { key: 'basic', label: 'Basic Information', icon: <FaBuilding size={12} /> },
-  { key: 'preferences', label: 'Preferences', icon: <FaGlobe size={12} /> },
   { key: 'address', label: 'Address & Location', icon: <FaMapMarkerAlt size={12} /> },
   { key: 'attendance', label: 'Attendance Config', icon: <FaUserCheck size={12} /> },
 ];
@@ -35,10 +36,12 @@ const DEFAULT_CURRENCY_OPTIONS = [
 ];
 
 const normalizeCurrencyValue = (value) => {
-  if (value && typeof value === "object") {
+  // Return null for null/undefined/empty so the field can be blank
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === "object") {
     return normalizeCurrencyValue(value.value || value.key);
   }
-  return String(value || "inr").trim().toLowerCase() || "inr";
+  return String(value).trim().toLowerCase();
 };
 
 const normalizeCurrencyOptions = (items = []) => {
@@ -51,7 +54,6 @@ const normalizeCurrencyOptions = (items = []) => {
       label: `${value.label || item?.label || item?.key || currencyValue.toUpperCase()}${symbol}`,
     };
   }).filter((item) => item.value);
-
   return options.length > 0 ? options : DEFAULT_CURRENCY_OPTIONS;
 };
 
@@ -124,71 +126,70 @@ const methodIcon = (value) => {
   }
 };
 
-// Collapsible Section Component
-function CollapsibleSection({ title, icon, children, defaultOpen = false, badge = null }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-500">{icon}</div>
-          <span className="text-[15px] font-bold text-gray-800">{title}</span>
-          {badge && (
-            <span className="ml-2 px-2.5 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700 font-semibold">
-              {badge}
-            </span>
-          )}
-        </div>
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <FaChevronDown className="text-gray-400" />
-        </motion.div>
-      </button>
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            style={{ overflow: "hidden" }}
-          >
-            <div className="p-5 border-t border-gray-100 space-y-4">
-              {children}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 function MethodTabButton({ tab, active, enabled, disabled, onClick, onExpand, onToggle }) {
   const Icon = methodIcon(tab.value);
   return (
-    <div className={`relative flex items-center gap-3 px-4 py-3 sm:py-4 transition-all ${active ? 'bg-indigo-50/50 rounded-t-xl' : 'hover:bg-slate-50 rounded-xl'} ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}>
-      <button type="button" onClick={onClick} disabled={disabled} className="flex flex-1 items-center gap-4 text-left w-full overflow-hidden">
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-500'}`}>
+    <div
+      className={`relative flex items-center gap-3 px-4 py-3 sm:py-4 transition-all 
+        ${active ? 'bg-indigo-50/50 rounded-t-xl' : !disabled ? 'hover:bg-slate-50 rounded-xl' : 'rounded-xl'} 
+        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`flex flex-1 items-center gap-4 text-left w-full overflow-hidden ${disabled ? 'cursor-not-allowed' : ''}`}
+      >
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all 
+            ${active ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-500'}`}
+        >
           <Icon size={16} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className={`block truncate text-[15px] font-bold transition-colors ${active ? 'text-indigo-900' : 'text-gray-800'}`}>{tab.label}</span>
-          <span className="block text-xs font-medium opacity-80 truncate text-gray-500 mt-0.5">{tab.description || tab.value}</span>
+          <span
+            className={`block truncate text-[15px] font-bold transition-colors 
+              ${active ? 'text-indigo-900' : 'text-gray-800'}`}
+          >
+            {tab.label}
+          </span>
+          <span className="block text-xs font-medium opacity-80 truncate text-gray-500 mt-0.5">
+            {tab.description || tab.value}
+          </span>
         </span>
-        <span className={`flex-shrink-0 ml-1 mr-2 p-1.5 rounded-full transition-colors ${active ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}>
+        {/* Chevron – no hover effect when disabled */}
+        <span
+          className={`flex-shrink-0 ml-1 mr-2 p-1.5 rounded-full transition-colors 
+            ${disabled
+              ? 'text-gray-400'
+              : active
+                ? 'bg-indigo-100 text-indigo-600'
+                : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+        >
           {active ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
         </span>
       </button>
 
+      {/* Checkbox – disabled cursor */}
       <div className="flex shrink-0 items-center justify-center pl-2 pr-1">
-        <label className="relative flex items-center cursor-pointer">
-          <input type="checkbox" className="peer sr-only" checked={enabled} onChange={() => { onToggle(); if (!active && onExpand) onExpand(); }} disabled={disabled} />
-          <div className={`h-6 w-6 rounded-lg border-2 transition-all flex items-center justify-center ${enabled ? 'border-emerald-500 bg-emerald-500 shadow-sm shadow-emerald-200' : 'border-gray-300 bg-white'}`}>
-            <FaCheck className={`text-white transition-all transform ${enabled ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`} size={12} />
+        <label
+          className={`relative flex items-center ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        >
+          <input
+            type="checkbox"
+            className="peer sr-only"
+            checked={enabled}
+            onChange={() => { onToggle(); if (!active && onExpand) onExpand(); }}
+            disabled={disabled}
+          />
+          <div
+            className={`h-6 w-6 rounded-lg border-2 transition-all flex items-center justify-center 
+              ${enabled ? 'border-emerald-500 bg-emerald-500 shadow-sm shadow-emerald-200' : 'border-gray-300 bg-white'}`}
+          >
+            <FaCheck
+              className={`text-white transition-all transform ${enabled ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
+              size={12}
+            />
           </div>
         </label>
       </div>
@@ -199,7 +200,7 @@ function MethodTabButton({ tab, active, enabled, disabled, onClick, onExpand, on
 export default function CompanyDetailsPage() {
   const { companyId } = useParams();
   const navigate = useNavigate();
-  
+
   const [company, setCompany] = useState(null);
   const [isLoadingCompany, setIsLoadingCompany] = useState(true);
   const [isRefreshingCompany, setIsRefreshingCompany] = useState(false);
@@ -207,7 +208,7 @@ export default function CompanyDetailsPage() {
   const [formData, setFormData] = useState({
     name: "", legal_name: "", logo_url: "", address_line1: "", address_line2: "",
     city: "", state: "", postal_code: "", country: "India", latitude: "", longitude: "",
-    transaction_currency: "inr", gst_no: "", max_distance: ""
+    transaction_currency: null, gst_no: "", max_distance: ""
   });
   const [originalData, setOriginalData] = useState({});
   const [currencyOptions, setCurrencyOptions] = useState(DEFAULT_CURRENCY_OPTIONS);
@@ -226,7 +227,6 @@ export default function CompanyDetailsPage() {
   const attendanceMethodsRequestRef = useRef(new Map());
   const attendanceMethodsCacheRef = useRef(new Map());
 
-  // Advanced settings state
   const [availableMethods, setAvailableMethods] = useState([]);
   const [activeMethod, setActiveMethod] = useState('manual');
   const [loadingMethods, setLoadingMethods] = useState(false);
@@ -241,10 +241,8 @@ export default function CompanyDetailsPage() {
       setIsLoadingCompany(false);
       return;
     }
-
     if (showInitialLoader) setIsLoadingCompany(true);
     else setIsRefreshingCompany(true);
-
     try {
       const requestKey = String(companyId);
       if (force || companyDetailsRequestRef.current.key !== requestKey || !companyDetailsRequestRef.current.promise) {
@@ -595,6 +593,7 @@ export default function CompanyDetailsPage() {
   const inputClass = "w-full border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm";
   const disabledClass = "bg-gray-50 text-gray-400 cursor-not-allowed";
 
+  // ---------- Method body with GPS max distance ----------
   const renderMethodBody = (methodItem) => {
     if (!methodItem) return null;
     const methodEnabled = enabledMethods.includes(methodItem.value);
@@ -637,14 +636,15 @@ export default function CompanyDetailsPage() {
         <div className="space-y-4">
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
             <p className="text-sm font-semibold text-blue-900">GPS attendance settings</p>
-            <p className="mt-1 text-xs text-blue-700">Update the company address and coordinates used for location-based attendance in the Basic Info section above.</p>
+            <p className="mt-1 text-xs text-blue-700">
+              Coordinates are managed in the <button onClick={() => setActiveTab('address')} className="underline font-medium">Address & Location</button> tab.
+            </p>
           </div>
-          <button type="button" onClick={() => toggleMethod('gps')} className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-semibold transition-all w-full ${enabledMethods.includes('gps') ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-200 hover:bg-emerald-50'}`}>
-            <span>{enabledMethods.includes('gps') ? 'GPS Enabled' : 'GPS Disabled'}</span>
-            <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${enabledMethods.includes('gps') ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-              {enabledMethods.includes('gps') ? <FaCheck size={12} /> : <FaTimes size={12} />}
-            </span>
-          </button>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">Max Distance (meters)</label>
+            <input name="max_distance" value={formData.max_distance} onChange={handleChange} className={inputClass} placeholder="e.g., 50" />
+            <p className="text-xs text-gray-400">Allowed radius from the company coordinates.</p>
+          </div>
         </div>
       );
     }
@@ -681,6 +681,7 @@ export default function CompanyDetailsPage() {
 
   const fullAddress = [formData.address_line1, formData.address_line2, formData.city, formData.state, formData.postal_code, formData.country].filter(Boolean).join(', ');
 
+  // ---------- Basic Information with improved logo upload ----------
   const renderBasicInformation = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
@@ -700,19 +701,52 @@ export default function CompanyDetailsPage() {
           <label className="text-sm font-semibold text-gray-700">GST Number</label>
           <input name="gst_no" value={formData.gst_no} onChange={handleChange} className={inputClass} placeholder="GST Number" />
         </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-gray-700">Transaction Currency</label>
+          <SelectField isLoading={loadingCurrencies} options={currencyOptions} value={currencyOptions.find(o => o.value === formData.transaction_currency) || null} onChange={handleCurrencyChange} placeholder="Select currency" />
+        </div>
+
+        {/* Logo section with custom upload button and larger preview */}
         <div className="md:col-span-2 space-y-2 pt-2">
           <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             <FaLink className="text-indigo-400" /> Company Logo
           </label>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-            <div className="flex-1 flex items-center gap-3 min-w-0">
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} disabled={isUploadingLogo} className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 disabled:opacity-50" />
-              {isUploadingLogo && <FaSpinner className="w-5 h-5 text-indigo-600 animate-spin" />}
-            </div>
-            {(logoPreview || formData.logo_url) && !isUploadingLogo && (
-              <div className="flex items-center gap-3 sm:pl-4 sm:border-l border-gray-200">
-                <img src={logoPreview || formData.logo_url} alt="Logo" className="w-12 h-12 rounded-lg object-contain bg-white border border-gray-200 shadow-sm" />
-                <button type="button" onClick={handleRemoveLogo} className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 transition-colors" title="Remove Logo"><FaTrash size={14} /></button>
+            {/* Hidden real file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              disabled={isUploadingLogo}
+              className="hidden"
+              id="logo-upload"
+            />
+            {/* Styled label as upload button */}
+            <label
+              htmlFor="logo-upload"
+              className={`inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition cursor-pointer ${isUploadingLogo ? 'pointer-events-none opacity-60' : ''}`}
+            >
+              {isUploadingLogo ? <FaSpinner className="animate-spin" /> : <FaCamera size={14} />}
+              {isUploadingLogo ? 'Uploading...' : (logoPreview || formData.logo_url) ? 'Change Logo' : 'Upload Logo'}
+            </label>
+
+            {/* Large preview image */}
+            {(logoPreview || formData.logo_url) && (
+              <div className="flex items-center gap-3">
+                <img
+                  src={logoPreview || formData.logo_url}
+                  alt="Logo"
+                  className="w-20 h-20 rounded-xl object-contain bg-white border border-gray-200 shadow-sm"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveLogo}
+                  className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition-colors"
+                  title="Remove Logo"
+                >
+                  <FaTrash size={14} />
+                </button>
               </div>
             )}
           </div>
@@ -721,21 +755,7 @@ export default function CompanyDetailsPage() {
     </div>
   );
 
-  const renderPreferences = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
-        <div className="p-2 bg-emerald-50 text-emerald-500 rounded-lg"><FaGlobe /></div>
-        <h3 className="text-base font-bold text-gray-800">Preferences</h3>
-      </div>
-      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">Transaction Currency</label>
-          <SelectField isLoading={loadingCurrencies} options={currencyOptions} value={currencyOptions.find(o => o.value === formData.transaction_currency) || null} onChange={handleCurrencyChange} placeholder="Select currency" />
-        </div>
-      </div>
-    </div>
-  );
-
+  // ---------- Address section (unchanged) ----------
   const renderAddress = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
@@ -807,6 +827,7 @@ export default function CompanyDetailsPage() {
     </div>
   );
 
+  // ---------- Attendance section (unchanged) ----------
   const renderAttendance = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
@@ -815,13 +836,6 @@ export default function CompanyDetailsPage() {
           <h3 className="text-base font-bold text-gray-800">Attendance Config</h3>
         </div>
         <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded-lg">{enabledMethods.length} Active</span>
-      </div>
-      <div className="p-5 border-b border-gray-100">
-        <div className="max-w-sm space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">Max Distance (meters)</label>
-          <input name="max_distance" value={formData.max_distance} onChange={handleChange} className={inputClass} placeholder="e.g., 50" />
-          <p className="text-xs text-gray-400 mt-1">Allowed radius for GPS attendance.</p>
-        </div>
       </div>
       <div className="p-0">
         {loadingMethods ? (
@@ -860,64 +874,46 @@ export default function CompanyDetailsPage() {
         transition={{ duration: 0.25 }}
         className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden"
       >
-        <div className="flex flex-col gap-4 px-5 pt-4 pb-4 border-b border-gray-100">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="h-12 w-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center overflow-hidden">
-                {formData.logo_url ? (
-                  <img src={formData.logo_url} alt={formData.name || 'Company logo'} className="h-full w-full object-contain bg-white" />
+        <div className="flex items-center gap-4 px-5 pt-4 pb-3">
+          <div className="h-14 w-14 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center overflow-hidden shrink-0">
+            {formData.logo_url ? (
+              <img src={formData.logo_url} alt="Logo" className="h-full w-full object-contain bg-white" />
+            ) : (
+              <FaBuilding className="text-2xl text-indigo-500" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-bold text-slate-900 truncate">{formData.name || company.name || 'Company'}</h1>
+            <p className="text-xs text-slate-500 truncate">{formData.legal_name || company.legal_name || 'No legal name'}</p>
+          </div>
+          <RefreshButton loading={isRefreshingCompany} onClick={handleRefreshCompany} className="hidden sm:inline-flex text-xs" />
+          <button onClick={handleRefreshCompany} disabled={isRefreshingCompany} className="sm:hidden p-2 hover:bg-gray-100 rounded-lg text-gray-500">
+            {isRefreshingCompany ? <FaSpinner className="animate-spin" /> : <FaUndo size={14} />}
+          </button>
+        </div>
+
+        <div className="px-5 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-500 min-w-0">
+            <p className="flex items-center gap-1.5 min-w-0">
+              <FaMapMarkerAlt size={10} className="shrink-0 text-indigo-400" />
+              <span className="truncate">{fullAddress || 'Address not provided'}</span>
+            </p>
+            <p className="flex items-center gap-1.5">
+              <FaGlobe size={10} className="shrink-0 text-emerald-400" />
+              <span className="font-semibold">
+                {formData.transaction_currency ? (
+                  <span className="uppercase">{formData.transaction_currency}</span>
                 ) : (
-                  <FaBuilding className="text-indigo-500" />
+                  'Not set'
                 )}
-              </div>
-              <div className="min-w-0">
-                <div className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-indigo-700 border-indigo-200">
-                  <FaBuilding size={11} /> Company Details
-                </div>
-                <h1 className="text-base font-bold text-slate-900 truncate leading-snug mt-1">
-                  {formData.name || company.name || 'Company'}
-                </h1>
-                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed truncate">
-                  {formData.legal_name || company.legal_name || 'No legal name provided'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <RefreshButton
-                loading={isRefreshingCompany}
-                onClick={handleRefreshCompany}
-                className="hidden sm:inline-flex"
-              >
-                Refresh
-              </RefreshButton>
-              
-            </div>
+              </span>
+            </p>
+            <p className="flex items-center gap-1.5">
+              <FaUserCheck size={10} className="shrink-0 text-purple-400" />
+              <span>{enabledMethods.length} attendance methods</span>
+            </p>
           </div>
-
-          <div className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-500 min-w-0">
-              <p className="flex items-center gap-1.5 min-w-0">
-                <FaMapMarkerAlt size={10} className="shrink-0 text-indigo-400" />
-                <span className="truncate">{fullAddress || 'Address not provided'}</span>
-              </p>
-              <p className="flex items-center gap-1.5">
-                <FaGlobe size={10} className="shrink-0 text-emerald-400" />
-                <span className="font-semibold uppercase">{formData.transaction_currency || 'inr'}</span>
-              </p>
-              <p className="flex items-center gap-1.5">
-                <FaUserCheck size={10} className="shrink-0 text-purple-400" />
-                <span>{enabledMethods.length} attendance methods</span>
-              </p>
-            </div>
-            <RefreshButton
-              loading={isRefreshingCompany}
-              onClick={handleRefreshCompany}
-              className="sm:hidden w-full"
-            >
-              Refresh
-            </RefreshButton>
-          </div>
+          <RefreshButton loading={isRefreshingCompany} onClick={handleRefreshCompany} className="sm:hidden w-full text-xs" />
         </div>
 
         <div className="flex items-center gap-1 px-4 overflow-x-auto scrollbar-none">
@@ -944,12 +940,10 @@ export default function CompanyDetailsPage() {
 
       <div className="px-1 lg:px-0">
         {activeTab === 'basic' && renderBasicInformation()}
-        {activeTab === 'preferences' && renderPreferences()}
         {activeTab === 'address' && renderAddress()}
         {activeTab === 'attendance' && renderAttendance()}
       </div>
 
-      {/* Floating Save Button Overlay */}
       <AnimatePresence>
         {hasChanges && (
           <motion.div
@@ -984,7 +978,6 @@ export default function CompanyDetailsPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

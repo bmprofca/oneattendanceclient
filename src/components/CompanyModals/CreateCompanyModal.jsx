@@ -384,7 +384,6 @@ function CreateCompanyModal({ isOpen, onClose, onSuccess, userId, onCompanyCreat
                 <CollapsibleSection
                   title="Address Information"
                   icon={<FaMapMarkerAlt className="w-4 h-4" />}
-                  badge={companyForm.city ? companyForm.city : null}
                 >
                   {/* Mode Toggle */}
                   <div className="flex items-center justify-between">
