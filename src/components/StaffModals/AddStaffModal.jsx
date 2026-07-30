@@ -19,12 +19,12 @@ import {
   FaFingerprint,
   FaCalendarAlt,
   FaSearch,
-  FaEnvelope,
   FaRegCheckCircle,
   FaListAlt,
   FaChevronDown,
   FaChevronUp,
   FaPlus,
+  FaPhone 
 } from "react-icons/fa";
 import ModalScrollLock from "../ModalScrollLock";
 import TimeDurationPickerField from "../TimeDurationPicker";
@@ -51,13 +51,15 @@ const normalizeDate = (value) => (value ? String(value).split("T")[0] : "");
 const getMonthYearValue = (value) =>
   value
     ? {
-      month: parseInt(String(value).split("-")[1], 10),
-      year: parseInt(String(value).split("-")[0], 10),
-    }
+        month: parseInt(String(value).split("-")[1], 10),
+        year: parseInt(String(value).split("-")[0], 10),
+      }
     : null;
 
 const monthYearToDate = (value) =>
-  value && value.month && value.year ? `${value.year}-${String(value.month).padStart(2, "0")}-01` : "";
+  value && value.month && value.year
+    ? `${value.year}-${String(value.month).padStart(2, "0")}-01`
+    : "";
 
 const getCurrentMonthDate = () => {
   const today = new Date();
@@ -78,6 +80,9 @@ const normalizeDuration = (value, fallback = DEFAULT_DURATION) => {
 function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, submitTitle = "" }) {
   const { attendanceMethods: companyAttendanceMethods = [] } = useAuth();
 
+  // ---------------------------
+  // State declarations
+  // ---------------------------
   const [permissionPackages, setPermissionPackages] = useState([]);
   const [employmentTypes, setEmploymentTypes] = useState([]);
   const [designations, setDesignations] = useState([]);
@@ -101,7 +106,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const [baseAmount, setBaseAmount] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(getCurrentMonthDate);
   const [effectiveTo, setEffectiveTo] = useState("");
-  const [joiningDate, setJoiningDate] = useState(""); // NEW
+  const [joiningDate, setJoiningDate] = useState("");
   const [salaryComponents, setSalaryComponents] = useState([]);
   const [availableSalaryComponents, setAvailableSalaryComponents] = useState([]);
   const [isLoadingSalaryComponents, setIsLoadingSalaryComponents] = useState(false);
@@ -109,16 +114,17 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const [invitePackages, setInvitePackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [isLoadingPackages, setIsLoadingPackages] = useState(false);
-  const [isWeekendsOpen, setIsWeekendsOpen] = useState(false);
-  const [isSalaryComponentsOpen, setIsSalaryComponentsOpen] = useState(false);
 
-  const [isInvitePackageOpen, setIsInvitePackageOpen] = useState(false);
-  const [isRoleFieldsOpen, setIsRoleFieldsOpen] = useState(false);
+  // NEW: single flag for any interaction
+  const [formInteracted, setFormInteracted] = useState(false);
+
+  // Collapsible section visibility
+  const [isRoleFieldsOpen, setIsRoleFieldsOpen] = useState(true);
   const [isSalaryDetailsOpen, setIsSalaryDetailsOpen] = useState(false);
-  const [isAttendanceMethodsOpen, setIsAttendanceMethodsOpen] = useState(false);
-  const [isAttendanceSettingsOpen, setIsAttendanceSettingsOpen] = useState(false);
-  const [isShiftTimingsOpen, setIsShiftTimingsOpen] = useState(false);
-  const [isDurationSettingsOpen, setIsDurationSettingsOpen] = useState(false);
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [isShiftOpen, setIsShiftOpen] = useState(false);
+  const [isInvitePackageOpen, setIsInvitePackageOpen] = useState(false);
+  const [isSalaryComponentDropdownOpen, setIsSalaryComponentDropdownOpen] = useState(false);
 
   const [isSearchingUser, setIsSearchingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -128,16 +134,18 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const permissionPackagesRequestRef = useRef(false);
   const invitePackagesRequestRef = useRef(false);
   const salaryComponentsRequestRef = useRef(false);
+  const initialResetDone = useRef(false);
 
+  // ---------------------------
+  // Derived data
+  // ---------------------------
   const companyAttendanceMethodList = useMemo(() => {
     let methods = companyAttendanceMethods;
     if (!methods) return [];
     if (typeof methods === "string") {
       methods = methods.includes(",") ? methods.split(",").map((m) => m.trim()) : [methods];
     }
-
     if (!Array.isArray(methods)) return [];
-
     return methods
       .map((item) => {
         if (typeof item === "object" && item !== null) {
@@ -148,119 +156,66 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       .filter(Boolean);
   }, [companyAttendanceMethods]);
 
-  const getIconForType = (key) => {
-    const iconMap = {
-      FULL_TIME: FaClock,
-      PART_TIME: FaClock,
-      CONTRACT: FaBriefcase,
-      INTERN: FaUserTag,
-      FREELANCER: FaBriefcase,
-      ADMIN: FaUserCog,
-      HR_MANAGER: FaUserCog,
-      HR_EXECUTIVE: FaUserCog,
-      MANAGER: FaUserTie,
-      SUPERVISOR: FaUserTag,
-      TEAM_LEAD: FaUserTag,
-      SENIOR_EMPLOYEE: FaUserCircle,
-      HOURLY: FaClock,
-      MONTHLY: FaCalendarAlt,
-    };
-    return iconMap[key] || FaUserCircle;
+  const methodBadges = companyAttendanceMethodList.length
+    ? companyAttendanceMethodList.map((method) => ({
+        key: method,
+        label: ATTENDANCE_LABELS[method] || method.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+      }))
+    : [];
+
+  // ---------------------------
+  // Validation helpers
+  // ---------------------------
+  const hasRoleError = useMemo(
+    () => !designation || !selectedPermissionPackage || !employmentType || !staffType,
+    [designation, selectedPermissionPackage, employmentType, staffType]
+  );
+  const hasSalaryError = useMemo(
+    () => !baseAmount || !effectiveFrom,
+    [baseAmount, effectiveFrom]
+  );
+  const hasAttendanceError = useMemo(
+    () => selectedAttendanceMethods.length === 0,
+    [selectedAttendanceMethods]
+  );
+  const hasShiftError = useMemo(
+    () => !shiftStart || !shiftEnd,
+    [shiftStart, shiftEnd]
+  );
+
+  // Helper for section class – red border if form has been interacted with and error exists
+  const sectionClass = (section, baseClasses = "rounded-xl border bg-white p-4") => {
+    const error =
+      (section === "role" && hasRoleError) ||
+      (section === "salary" && hasSalaryError) ||
+      (section === "attendance" && hasAttendanceError) ||
+      (section === "shift" && hasShiftError);
+    return `${baseClasses} ${formInteracted && error ? "border-red-400 ring-1 ring-red-400" : "border-slate-200"}`;
   };
 
-  const customSelectStyles = {
-    control: (base, state) => ({
-      ...base,
-      minHeight: "48px",
-      backgroundColor: "#f9fafb",
-      fontSize: "0.875rem",
-      borderColor: state.isFocused ? "#6366f1" : "#e2e8f0",
-      boxShadow: state.isFocused ? "0 0 0 4px rgba(99, 102, 241, 0.10)" : "none",
-      "&:hover": { borderColor: "#cbd5e1" },
-      borderRadius: "0.75rem",
-      padding: "0 0.5rem",
-    }),
-    valueContainer: (base) => ({
-      ...base,
-      padding: "0 14px",
-      fontSize: "0.875rem",
-    }),
-    input: (base) => ({
-      ...base,
-      margin: 0,
-      padding: 0,
-      fontSize: "0.875rem",
-    }),
-    placeholder: (base) => ({
-      ...base,
-      color: "#94a3b8",
-      fontWeight: 500,
-      fontSize: "0.875rem",
-    }),
-    singleValue: (base) => ({
-      ...base,
-      color: "#334155",
-      fontWeight: 500,
-      fontSize: "0.875rem",
-    }),
-    option: (base, state) => ({
-      ...base,
-      fontSize: "0.875rem",
-      backgroundColor: state.isSelected ? "#6366f1" : state.isFocused ? "#f1f5f9" : "white",
-      color: state.isSelected ? "white" : "#1e293b",
-      "&:active": { backgroundColor: "#6366f1" },
-    }),
-    multiValue: (base) => ({
-      ...base,
-      backgroundColor: "#e0e7ff",
-      borderRadius: "0.5rem",
-    }),
-    multiValueLabel: (base) => ({ ...base, color: "#4f46e5" }),
-    multiValueRemove: (base) => ({
-      ...base,
-      color: "#4f46e5",
-      "&:hover": { backgroundColor: "#4f46e5", color: "white" },
-    }),
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    setEmailQuery("");
-    setSelectedUser(null);
-    setDesignation(null);
-    setSelectedPermissionPackage(null);
-    setStaffType(null);
-    setEmploymentType(null);
-    setSelectedAttendanceMethods([]);
-    setAutoApprove(false);
-    setEnableOvertime(true);
-    setEnableDeduction(true);
-    setShiftStart(DEFAULT_SHIFT_START);
-    setShiftEnd(DEFAULT_SHIFT_END);
-    setBreakMinutes(DEFAULT_DURATION);
-    setGraceMinutes(DEFAULT_DURATION);
-    setWeekends([]);
-    setBaseAmount("");
-    setEffectiveFrom(getCurrentMonthDate());
-    setEffectiveTo("");
-    setJoiningDate(""); // reset
-    setSalaryComponents([]);
-    setSelectedPackage(null);
-  }, [isOpen]);
-
+  // ---------------------------
+  // Normalization (preserving component_name & component_code)
+  // ---------------------------
   const normalizeSalaryComponents = (components = []) =>
     components
       .map((component) => ({
         component_id: component.component_id ?? component.id,
+        component_name: component.component_name || "",
+        component_code: component.component_code || "",
         calc_type: component.calc_type || "percentage",
-        calc_value: component.calc_value === null || typeof component.calc_value === "undefined" ? "" : String(component.calc_value),
+        calc_value:
+          component.calc_value === null || typeof component.calc_value === "undefined"
+            ? ""
+            : String(component.calc_value),
         effective_from: normalizeDate(component.effective_from),
         effective_to: normalizeDate(component.effective_to),
         reason: component.reason || "",
       }))
       .filter((component) => component.component_id);
 
+  // ---------------------------
+  // Data fetching functions (same as before)
+  // ---------------------------
   const fetchSalaryComponents = async () => {
     if (availableSalaryComponents.length || isLoadingSalaryComponents || salaryComponentsRequestRef.current) return;
     salaryComponentsRequestRef.current = true;
@@ -311,31 +266,24 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     setSelectedPackage(pkg);
     if (!pkg) return;
 
-    // Designation
     if (pkg.designation) {
       const val = typeof pkg.designation === "object" ? pkg.designation.value : pkg.designation;
       const label = typeof pkg.designation === "object" ? pkg.designation.label : pkg.designation;
       const found = designations.find((d) => d.value === val);
       setDesignation(found || { value: val, label: label });
     }
-
-    // Employment Type
     if (pkg.employment_type) {
       const val = typeof pkg.employment_type === "object" ? pkg.employment_type.value : pkg.employment_type;
       const label = typeof pkg.employment_type === "object" ? pkg.employment_type.label : pkg.employment_type;
       const found = employmentTypes.find((e) => e.value === val);
       setEmploymentType(found || { value: val, label: label });
     }
-
-    // Salary Type
     if (pkg.salary_type) {
       const val = typeof pkg.salary_type === "object" ? pkg.salary_type.value : pkg.salary_type;
       const label = typeof pkg.salary_type === "object" ? pkg.salary_type.label : pkg.salary_type;
       const found = salaryTypes.find((s) => s.value === val);
       setStaffType(found || { value: val, label: label });
     }
-
-    // Permission Package
     if (pkg.permission_package_id) {
       const found = permissionPackages.find((p) => p.value === pkg.permission_package_id);
       setSelectedPermissionPackage(
@@ -345,45 +293,27 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
         }
       );
     }
-
-    // Attendance Methods
     if (Array.isArray(pkg.attendance_methods)) {
       setSelectedAttendanceMethods(pkg.attendance_methods.map((m) => m.toLowerCase()));
     }
+    if (typeof pkg.auto_approve !== "undefined") setAutoApprove(Boolean(pkg.auto_approve));
+    if (typeof pkg.enable_overtime !== "undefined") setEnableOvertime(Boolean(pkg.enable_overtime));
+    if (typeof pkg.enable_deduction !== "undefined") setEnableDeduction(Boolean(pkg.enable_deduction));
 
-    // Auto Approve
-    if (typeof pkg.auto_approve !== "undefined") {
-      setAutoApprove(Boolean(pkg.auto_approve));
-    }
-    if (typeof pkg.enable_overtime !== "undefined") {
-      setEnableOvertime(Boolean(pkg.enable_overtime));
-    }
-    if (typeof pkg.enable_deduction !== "undefined") {
-      setEnableDeduction(Boolean(pkg.enable_deduction));
-    }
-
-    // Shift Times
     if (pkg.shift_start) setShiftStart(pkg.shift_start);
     if (pkg.shift_end) setShiftEnd(pkg.shift_end);
-    if (typeof pkg.break_minutes !== "undefined") {
-      setBreakMinutes(normalizeDuration(pkg.break_minutes));
-    }
-    if (typeof pkg.grace_minutes !== "undefined") {
-      setGraceMinutes(normalizeDuration(pkg.grace_minutes));
-    }
+    if (typeof pkg.break_minutes !== "undefined") setBreakMinutes(normalizeDuration(pkg.break_minutes));
+    if (typeof pkg.grace_minutes !== "undefined") setGraceMinutes(normalizeDuration(pkg.grace_minutes));
 
-    // Weekends
     if (Array.isArray(pkg.weekends)) {
       setWeekends(pkg.weekends.map((w) => (typeof w === "object" ? w.day : w)));
-      if (pkg.weekends.length > 0) setIsWeekendsOpen(true);
     }
 
     if (typeof pkg.base_amount !== "undefined") setBaseAmount(String(pkg.base_amount || ""));
     if (pkg.effective_from) setEffectiveFrom(normalizeDate(pkg.effective_from));
     if (typeof pkg.effective_to !== "undefined") setEffectiveTo(normalizeDate(pkg.effective_to));
-    if (typeof pkg.joining_date !== "undefined") setJoiningDate(normalizeDate(pkg.joining_date)); // NEW
+    if (typeof pkg.joining_date !== "undefined") setJoiningDate(normalizeDate(pkg.joining_date));
 
-    // Salary Components
     const components = pkg.salary_components || pkg.components || [];
     if (Array.isArray(components)) {
       setSalaryComponents(normalizeSalaryComponents(components));
@@ -393,16 +323,19 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   };
 
   const fetchAllConstants = async () => {
-    if ((employmentTypes.length && designations.length && salaryTypes.length) || isLoadingConstants || constantsRequestRef.current) return;
+    if (
+      (employmentTypes.length && designations.length && salaryTypes.length) ||
+      isLoadingConstants ||
+      constantsRequestRef.current
+    )
+      return;
     constantsRequestRef.current = true;
     setIsLoadingConstants(true);
     try {
       const company = JSON.parse(localStorage.getItem("company"));
       const res = await apiCall("/constants/", "GET", null, company?.id);
       const data = await res.json();
-
       if (!data.success) throw new Error(data.message || "Failed to fetch configuration data");
-
       if (data.data.employment_types) {
         setEmploymentTypes(
           data.data.employment_types.map((item) => ({
@@ -414,7 +347,6 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
           }))
         );
       }
-
       if (data.data.designations) {
         setDesignations(
           data.data.designations.map((item) => ({
@@ -426,7 +358,6 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
           }))
         );
       }
-
       if (data.data.salary_types) {
         setSalaryTypes(
           data.data.salary_types.map((item) => ({
@@ -456,9 +387,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       const company = JSON.parse(localStorage.getItem("company"));
       const response = await apiCall("/permissions/permission-packages", "GET", null, company?.id);
       const result = await response.json();
-
       if (!response.ok) throw new Error(result?.message || "Failed to fetch permission packages");
-
       const packages = result.data?.packages || [];
       setPermissionPackages(
         packages.map((pkg) => ({
@@ -489,7 +418,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     return direct || null;
   };
 
-  const getResolvedUserId = (user) => user?.id ?? user?.user_id ?? user?.userId ?? user?.staff_id ?? user?.staffId ?? null;
+  const getResolvedUserId = (user) =>
+    user?.id ?? user?.user_id ?? user?.userId ?? user?.staff_id ?? user?.staffId ?? null;
   const getResolvedUserName = (user) =>
     user?.name ||
     user?.full_name ||
@@ -504,17 +434,14 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       toast.warning("Please enter a full email address");
       return;
     }
-
     setIsSearchingUser(true);
     try {
       const company = JSON.parse(localStorage.getItem("company"));
       const encodedEmail = encodeURIComponent(email);
       const endpoint = `/company/users/available?email=${encodedEmail}`;
-
       const res = await apiCall(endpoint, "GET", null, company?.id);
       const result = await res.json();
       if (!res.ok) throw new Error(result?.message || "Failed to search user");
-
       if (result.success) {
         const found = resolveUserPayload(result);
         if (found) {
@@ -543,50 +470,21 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     }
   };
 
-  const formatDisplay = (value) =>
-    value ? String(value).replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "N/A";
-
   const handleSubmit = async () => {
-    if (!selectedUser?.id) {
-      toast.warning("Please search and select a user first");
-      return;
-    }
-    if (!designation) {
-      toast.warning("Please select designation");
-      return;
-    }
-    if (!staffType) {
-      toast.warning("Please select salary type");
-      return;
-    }
-    if (!employmentType) {
-      toast.warning("Please select employment type");
-      return;
-    }
-    if (companyAttendanceMethodList.length === 0) {
-      toast.warning("No attendance methods are configured for this company");
-      return;
-    }
-    if (selectedAttendanceMethods.length === 0) {
-      toast.warning("Please select at least one attendance method");
-      return;
-    }
-    if (!baseAmount) {
-      toast.warning("Please enter base amount");
-      return;
-    }
-    if (!effectiveFrom) {
-      toast.warning("Please select salary effective from date");
-      return;
-    }
-    // joining_date is optional, no validation needed
+    setFormInteracted(true); // force all errors to appear
+
+    if (!selectedUser?.id) { toast.warning("Please search and select a user first"); return; }
+    if (!designation) { toast.warning("Please select designation"); return; }
+    if (!staffType) { toast.warning("Please select salary type"); return; }
+    if (!employmentType) { toast.warning("Please select employment type"); return; }
+    if (companyAttendanceMethodList.length === 0) { toast.warning("No attendance methods are configured for this company"); return; }
+    if (selectedAttendanceMethods.length === 0) { toast.warning("Please select at least one attendance method"); return; }
+    if (!baseAmount) { toast.warning("Please enter base amount"); return; }
+    if (!effectiveFrom) { toast.warning("Please select salary effective from date"); return; }
     const invalidComponent = salaryComponents.find(
       (component) => !component.component_id || !component.calc_type || component.calc_value === ""
     );
-    if (invalidComponent) {
-      toast.warning("Please complete salary component details");
-      return;
-    }
+    if (invalidComponent) { toast.warning("Please complete salary component details"); return; }
 
     setIsSubmitting(true);
     try {
@@ -601,7 +499,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
         auto_approve: autoApprove,
         enable_overtime: enableOvertime,
         enable_deduction: enableDeduction,
-        joining_date: joiningDate || null, // NEW
+        joining_date: joiningDate || null,
         shift_start: shiftStart,
         shift_end: shiftEnd,
         break_minutes: normalizeDuration(breakMinutes),
@@ -622,9 +520,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
 
       const response = await apiCall("/company/invites/send", "POST", payload, company?.id);
       const data = await response.json();
-
       if (!response.ok) throw new Error(data?.message || "Failed to create staff");
-
       toast.success("Staff created successfully");
       onSuccess?.();
       handleClose();
@@ -637,6 +533,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   };
 
   const handleClose = () => {
+    // full reset
     setEmailQuery("");
     setSelectedUser(null);
     setDesignation(null);
@@ -659,15 +556,130 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     setSalaryComponents([]);
     setSelectedPackage(null);
     setIsSubmitting(false);
+    setFormInteracted(false);
+    setIsRoleFieldsOpen(true);
+    setIsSalaryDetailsOpen(false);
+    setIsAttendanceOpen(false);
+    setIsShiftOpen(false);
+    setIsInvitePackageOpen(false);
+    setIsSalaryComponentDropdownOpen(false);
+    initialResetDone.current = false;
     onClose();
   };
 
-  const methodBadges = companyAttendanceMethodList.length
-    ? companyAttendanceMethodList.map((method) => ({
-      key: method,
-      label: ATTENDANCE_LABELS[method] || formatDisplay(method),
-    }))
-    : [];
+  useEffect(() => {
+    if (isOpen && !initialResetDone.current) {
+      initialResetDone.current = true;
+      // same reset as handleClose but without calling onClose
+      setEmailQuery("");
+      setSelectedUser(null);
+      setDesignation(null);
+      setSelectedPermissionPackage(null);
+      setStaffType(null);
+      setEmploymentType(null);
+      setSelectedAttendanceMethods([]);
+      setAutoApprove(false);
+      setEnableOvertime(true);
+      setEnableDeduction(true);
+      setShiftStart(DEFAULT_SHIFT_START);
+      setShiftEnd(DEFAULT_SHIFT_END);
+      setBreakMinutes(DEFAULT_DURATION);
+      setGraceMinutes(DEFAULT_DURATION);
+      setWeekends([]);
+      setBaseAmount("");
+      setEffectiveFrom(getCurrentMonthDate());
+      setEffectiveTo("");
+      setJoiningDate("");
+      setSalaryComponents([]);
+      setSelectedPackage(null);
+      setFormInteracted(false);
+      setIsRoleFieldsOpen(true);
+      setIsSalaryDetailsOpen(false);
+      setIsAttendanceOpen(false);
+      setIsShiftOpen(false);
+      setIsInvitePackageOpen(false);
+      setIsSalaryComponentDropdownOpen(false);
+    }
+  }, [isOpen]);
+
+  const getIconForType = (key) => {
+    const iconMap = {
+      FULL_TIME: FaClock,
+      PART_TIME: FaClock,
+      CONTRACT: FaBriefcase,
+      INTERN: FaUserTag,
+      FREELANCER: FaBriefcase,
+      ADMIN: FaUserCog,
+      HR_MANAGER: FaUserCog,
+      HR_EXECUTIVE: FaUserCog,
+      MANAGER: FaUserTie,
+      SUPERVISOR: FaUserTag,
+      TEAM_LEAD: FaUserTag,
+      SENIOR_EMPLOYEE: FaUserCircle,
+      HOURLY: FaClock,
+      MONTHLY: FaCalendarAlt,
+    };
+    return iconMap[key] || FaUserCircle;
+  };
+
+  const customSelectStyles = {
+    control: (base, state) => ({
+      ...base,
+      minHeight: "48px",
+      backgroundColor: "#f9fafb",
+      fontSize: "0.875rem",
+      borderColor: state.isFocused ? "#6366f1" : "#e2e8f0",
+      boxShadow: state.isFocused ? "0 0 0 4px rgba(99, 102, 241, 0.10)" : "none",
+      "&:hover": { borderColor: "#cbd5e1" },
+      borderRadius: "0.75rem",
+      padding: "0 0.5rem",
+    }),
+    valueContainer: (base) => ({ ...base, padding: "0 14px", fontSize: "0.875rem" }),
+    input: (base) => ({ ...base, margin: 0, padding: 0, fontSize: "0.875rem" }),
+    placeholder: (base) => ({ ...base, color: "#94a3b8", fontWeight: 500, fontSize: "0.875rem" }),
+    singleValue: (base) => ({ ...base, color: "#334155", fontWeight: 500, fontSize: "0.875rem" }),
+    option: (base, state) => ({
+      ...base,
+      fontSize: "0.875rem",
+      backgroundColor: state.isSelected ? "#6366f1" : state.isFocused ? "#f1f5f9" : "white",
+      color: state.isSelected ? "white" : "#1e293b",
+      "&:active": { backgroundColor: "#6366f1" },
+    }),
+    multiValue: (base) => ({ ...base, backgroundColor: "#e0e7ff", borderRadius: "0.5rem" }),
+    multiValueLabel: (base) => ({ ...base, color: "#4f46e5" }),
+    multiValueRemove: (base) => ({
+      ...base,
+      color: "#4f46e5",
+      "&:hover": { backgroundColor: "#4f46e5", color: "white" },
+    }),
+  };
+
+  // Select styles with error (using formInteracted instead of sectionTouched)
+  const getSelectStyles = (value) => ({
+    ...customSelectStyles,
+    control: (base, state) => ({
+      ...customSelectStyles.control(base, state),
+      borderColor: formInteracted && !value ? '#f87171' : state.isFocused ? '#6366f1' : '#e2e8f0',
+      backgroundColor: formInteracted && !value ? '#fef2f2' : '#ffffff',
+      boxShadow: formInteracted && !value
+        ? '0 0 0 1px rgba(248, 113, 113, 0.5)'
+        : state.isFocused
+        ? '0 0 0 4px rgba(99, 102, 241, 0.1)'
+        : 'none',
+      '&:hover': {
+        borderColor: formInteracted && !value ? '#f87171' : '#cbd5e1'
+      }
+    })
+  });
+
+  const getInputClass = (value, defaultClasses) => {
+    const isInvalid = !value || String(value).trim() === '';
+    return `${defaultClasses} ${
+      formInteracted && isInvalid
+        ? 'border-red-400 bg-red-50/10 ring-1 ring-red-400/50 focus:border-red-500 focus:ring-red-500/20'
+        : 'border-slate-200 bg-white focus:border-indigo-500 focus:ring-indigo-500/10'
+    }`;
+  };
 
   const toggleAttendanceMethod = (method) => {
     setSelectedAttendanceMethods((prev) =>
@@ -676,7 +688,9 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   };
 
   const toggleWeekend = (day) => {
-    setWeekends((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+    setWeekends((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
   };
 
   const handleBaseAmountChange = (value) => {
@@ -704,6 +718,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       ...prev,
       {
         component_id: component.id,
+        component_name: component.name || "",
+        component_code: component.code || "",
         calc_type: component.calc_type || "percentage",
         calc_value: component.calc_value === null || typeof component.calc_value === "undefined" ? "" : String(component.calc_value),
         effective_from: effectiveFrom,
@@ -711,29 +727,13 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
         reason: "",
       },
     ]);
-    setIsSalaryComponentsOpen(false);
-  };
-
-  const handleInvitePackageMenuOpen = () => {
-    fetchAllConstants();
-    fetchPermissionPackages();
-    fetchInvitePackages();
-  };
-
-  const handleSalaryComponentMenuOpen = () => {
-    fetchSalaryComponents();
-  };
-
-  const handleSalaryComponentsToggle = () => {
-    if (!isSalaryComponentsOpen) fetchSalaryComponents();
-    setIsSalaryComponentsOpen((prev) => !prev);
+    setIsSalaryComponentDropdownOpen(false);
   };
 
   const selectedSalaryComponentIds = useMemo(
     () => salaryComponents.map((component) => String(component.component_id)),
     [salaryComponents]
   );
-
   const salaryComponentOptions = useMemo(
     () =>
       availableSalaryComponents
@@ -741,24 +741,6 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
         .map((component) => ({ value: component.id, label: `${component.name} (${component.code})` })),
     [availableSalaryComponents, selectedSalaryComponentIds]
   );
-
-  const getInputClass = (value, defaultClasses) => {
-    const isInvalid = !value || String(value).trim() === '';
-    return `${defaultClasses} ${isInvalid ? 'border-red-400 bg-red-50/10 ring-1 ring-red-400/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 bg-white focus:border-indigo-500 focus:ring-indigo-500/10'}`;
-  };
-
-  const getSelectStyles = (value) => ({
-    ...customSelectStyles,
-    control: (base, state) => ({
-      ...customSelectStyles.control(base, state),
-      borderColor: !value ? '#f87171' : state.isFocused ? '#6366f1' : '#e2e8f0',
-      backgroundColor: !value ? '#fef2f2' : '#ffffff',
-      boxShadow: !value ? '0 0 0 1px rgba(248, 113, 113, 0.5)' : state.isFocused ? '0 0 0 4px rgba(99, 102, 241, 0.1)' : 'none',
-      '&:hover': {
-        borderColor: !value ? '#f87171' : '#cbd5e1'
-      }
-    })
-  });
 
   const canCreateInvite = Boolean(
     selectedUser &&
@@ -780,26 +762,31 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const inviteDisabledReason = submitDisabled
     ? submitTitle
     : !selectedUser
-      ? "Search and verify a user first"
-      : !designation
-        ? "Select a designation"
-        : !selectedPermissionPackage
-          ? "Select a permission package"
-          : !employmentType
-            ? "Select an employment type"
-            : !staffType
-              ? "Select a salary type"
-              : !shiftStart
-                ? "Set shift start time"
-                : !shiftEnd
-                  ? "Set shift end time"
-                  : selectedAttendanceMethods.length === 0
-                    ? "Select at least one attendance method"
-                    : !effectiveFrom
-                      ? "Select salary effective from date"
-                      : !baseAmount
-                        ? "Enter base salary amount"
-                        : "";
+    ? "Search and verify a user first"
+    : !designation
+    ? "Select a designation"
+    : !selectedPermissionPackage
+    ? "Select a permission package"
+    : !employmentType
+    ? "Select an employment type"
+    : !staffType
+    ? "Select a salary type"
+    : !shiftStart
+    ? "Set shift start time"
+    : !shiftEnd
+    ? "Set shift end time"
+    : selectedAttendanceMethods.length === 0
+    ? "Select at least one attendance method"
+    : !effectiveFrom
+    ? "Select salary effective from date"
+    : !baseAmount
+    ? "Enter base salary amount"
+    : "";
+
+  // Shared blur handler to mark form as interacted
+  const onFieldBlur = () => {
+    setFormInteracted(true);
+  };
 
   return (
     <Modal
@@ -901,8 +888,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="font-semibold text-slate-900">{selectedUser.full_name}</p>
                     <p className="flex items-center gap-2 text-sm text-slate-600">
-                      <FaEnvelope className="h-3.5 w-3.5 text-slate-400" />
-                      {selectedUser.email}
+                      <FaPhone  className="h-3.5 w-3.5 text-slate-400" />
+                      {selectedUser.phone}
                     </p>
                   </div>
                 </div>
@@ -919,11 +906,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                     <FaListAlt className="h-4 w-4 text-indigo-500" />
                     Quick Fill via Package (Optional)
                   </label>
-                  {isInvitePackageOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
+                  {isInvitePackageOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                 </button>
                 <AnimatePresence>
                   {isInvitePackageOpen && (
@@ -937,8 +920,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                         options={invitePackages}
                         value={selectedPackage}
                         onChange={handlePackageSelect}
-                        onMenuOpen={handleInvitePackageMenuOpen}
-                        onFocus={handleInvitePackageMenuOpen}
+                        onMenuOpen={() => { fetchAllConstants(); fetchPermissionPackages(); fetchInvitePackages(); }}
+                        onFocus={() => { fetchAllConstants(); fetchPermissionPackages(); fetchInvitePackages(); }}
                         placeholder={isLoadingPackages ? "Loading packages..." : "Optional: Select a package to auto-fill"}
                         isClearable
                         isLoading={isLoadingPackages}
@@ -949,8 +932,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* Role Fields */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
+              {/* ========== ROLE & EMPLOYMENT (collapsible) ========== */}
+              <div className={sectionClass("role")}>
                 <button
                   type="button"
                   onClick={() => setIsRoleFieldsOpen(!isRoleFieldsOpen)}
@@ -958,13 +941,9 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 >
                   <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                     <FaBriefcase className="h-4 w-4 text-indigo-500" />
-                    Role Fields
+                    Role & Employment
                   </label>
-                  {isRoleFieldsOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
+                  {isRoleFieldsOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                 </button>
                 <AnimatePresence>
                   {isRoleFieldsOpen && (
@@ -975,15 +954,13 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                       className="overflow-hidden"
                     >
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-3">
-                          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <FaBriefcase className="h-4 w-4 text-indigo-500" />
-                            Designation
-                          </label>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Designation *</label>
                           <Select
                             options={designations}
                             value={designation}
                             onChange={setDesignation}
+                            onBlur={onFieldBlur}
                             onMenuOpen={fetchAllConstants}
                             onFocus={fetchAllConstants}
                             placeholder="Select designation"
@@ -991,16 +968,13 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                             styles={getSelectStyles(designation)}
                           />
                         </div>
-
-                        <div className="space-y-3">
-                          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <FaShieldAlt className="h-4 w-4 text-indigo-500" />
-                            Permission Package
-                          </label>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Permission Package *</label>
                           <Select
                             options={permissionPackages}
                             value={selectedPermissionPackage}
                             onChange={setSelectedPermissionPackage}
+                            onBlur={onFieldBlur}
                             onMenuOpen={fetchPermissionPackages}
                             onFocus={fetchPermissionPackages}
                             placeholder={isLoadingPermissions ? "Loading..." : "Select permission package"}
@@ -1009,16 +983,13 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                             styles={getSelectStyles(selectedPermissionPackage)}
                           />
                         </div>
-
-                        <div className="space-y-3">
-                          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <FaUserTie className="h-4 w-4 text-indigo-500" />
-                            Employment Type
-                          </label>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Employment Type *</label>
                           <Select
                             options={employmentTypes}
                             value={employmentType}
                             onChange={setEmploymentType}
+                            onBlur={onFieldBlur}
                             onMenuOpen={fetchAllConstants}
                             onFocus={fetchAllConstants}
                             placeholder="Select employment type"
@@ -1026,16 +997,13 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                             styles={getSelectStyles(employmentType)}
                           />
                         </div>
-
-                        <div className="space-y-3">
-                          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <FaClock className="h-4 w-4 text-indigo-500" />
-                            Salary Type
-                          </label>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Salary Type *</label>
                           <Select
                             options={salaryTypes}
                             value={staffType}
                             onChange={setStaffType}
+                            onBlur={onFieldBlur}
                             onMenuOpen={fetchAllConstants}
                             onFocus={fetchAllConstants}
                             placeholder="Select salary type"
@@ -1049,25 +1017,22 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* Salary Details */}
-              <div className="order-last rounded-xl border border-slate-200 bg-white p-4">
+              {/* ========== SALARY DETAILS (collapsible) ========== */}
+              <div className={sectionClass("salary")}>
                 <button
                   type="button"
                   onClick={() => setIsSalaryDetailsOpen(!isSalaryDetailsOpen)}
                   className="flex w-full items-center justify-between"
+                  onBlur={onFieldBlur}
                 >
                   <div className="flex items-center gap-3">
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                      <CurrencyIcon className="h-3 w-3 text-indigo-500" size={12} />
+                      <CurrencyIcon className="h-4 w-4 text-indigo-500" size={14} />
                       Salary Details
                     </label>
                     <span className="text-xs text-slate-500">Required for invite payroll setup</span>
                   </div>
-                  {isSalaryDetailsOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
+                  {isSalaryDetailsOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                 </button>
                 <AnimatePresence>
                   {isSalaryDetailsOpen && (
@@ -1077,15 +1042,16 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                       exit={{ height: 0, opacity: 0, marginTop: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="grid gap-4 md:grid-cols-3">
+                      <div className="grid gap-4 md:grid-cols-4">
                         <div className="space-y-2">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Effective From</label>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Effective From *</label>
                           <AdvancedDateFilter
                             tabOptions={["month"]}
                             value={getMonthYearValue(effectiveFrom)}
                             onChange={(value) => setEffectiveFrom(monthYearToDate(value))}
                             placeholder="Select month"
                             buttonClassName={getInputClass(effectiveFrom, "w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition")}
+                            onBlur={onFieldBlur}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1099,23 +1065,24 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Base Amount</label>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Base Amount *</label>
                           <input
                             type="text"
                             inputMode="decimal"
                             value={baseAmount}
                             onChange={(e) => handleBaseAmountChange(e.target.value)}
+                            onBlur={onFieldBlur}
                             placeholder="Enter amount"
                             className={getInputClass(baseAmount, "w-full rounded-xl border px-4 py-2.5 text-sm font-semibold outline-none transition")}
                           />
                         </div>
-                        {/* NEW: Joining Date */}
                         <div className="space-y-2">
                           <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Joining Date</label>
                           <input
                             type="date"
                             value={joiningDate}
                             onChange={(e) => setJoiningDate(e.target.value)}
+                            onBlur={onFieldBlur}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
                           />
                         </div>
@@ -1127,7 +1094,10 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                           <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Salary Components</label>
                           <button
                             type="button"
-                            onClick={handleSalaryComponentsToggle}
+                            onClick={() => {
+                              fetchSalaryComponents();
+                              setIsSalaryComponentDropdownOpen((prev) => !prev);
+                            }}
                             className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-600 transition hover:bg-indigo-100"
                           >
                             <FaPlus className="h-2.5 w-2.5" />
@@ -1135,13 +1105,13 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                           </button>
                         </div>
 
-                        {isSalaryComponentsOpen && (
+                        {isSalaryComponentDropdownOpen && (
                           <div className="mb-4 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-3">
                             <Select
                               value={null}
                               onChange={addSalaryComponent}
-                              onMenuOpen={handleSalaryComponentMenuOpen}
-                              onFocus={handleSalaryComponentMenuOpen}
+                              onMenuOpen={fetchSalaryComponents}
+                              onFocus={fetchSalaryComponents}
                               options={salaryComponentOptions}
                               placeholder={isLoadingSalaryComponents ? "Loading components..." : "Choose a component"}
                               isLoading={isLoadingSalaryComponents}
@@ -1156,77 +1126,74 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
 
                         {salaryComponents.length > 0 ? (
                           <div className="space-y-3">
-                            {salaryComponents.map((component, index) => {
-                              const componentData = availableSalaryComponents.find(
-                                (item) => String(item.id) === String(component.component_id)
-                              );
-                              return (
-                                <div key={`${component.component_id}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                                  <div className="grid gap-3 md:grid-cols-12">
-                                    <div className="md:col-span-4">
-                                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Component</label>
-                                      <div className="truncate rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-                                        {componentData?.name || `Component ${component.component_id}`}
-                                        {componentData?.code && (
-                                          <span className="ml-2 text-[10px] font-normal text-slate-400">({componentData.code})</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="md:col-span-3">
-                                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</label>
-                                      <Select
-                                        value={{
-                                          value: component.calc_type,
-                                          label: component.calc_type === "percentage" ? "Percentage (%)" : "Fixed Amount",
-                                        }}
-                                        onChange={(option) => updateSalaryComponent(index, "calc_type", option?.value || "percentage")}
-                                        options={[
-                                          { value: "percentage", label: "Percentage (%)" },
-                                          { value: "fixed", label: "Fixed Amount" },
-                                        ]}
-                                        menuPlacement="auto"
-                                        menuPosition="fixed"
-                                        menuPortalTarget={document.body}
-                                        styles={{ ...customSelectStyles, menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
-                                      />
-                                    </div>
-                                    <div className="md:col-span-3">
-                                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Value</label>
-                                      <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={component.calc_value}
-                                        onChange={(e) => {
-                                          const value = e.target.value.replace(/[^0-9.]/g, "");
-                                          if (value === "" || /^\d*\.?\d*$/.test(value)) updateSalaryComponent(index, "calc_value", value);
-                                        }}
-                                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
-                                      />
-                                    </div>
-                                    <div className="flex items-end justify-end md:col-span-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => removeSalaryComponent(index)}
-                                        className="rounded-lg p-2.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
-                                        title="Remove component"
-                                      >
-                                        <FaTimes className="h-3.5 w-3.5" />
-                                      </button>
-                                    </div>
-                                    <div className="md:col-span-12">
-                                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Reason</label>
-                                      <input
-                                        type="text"
-                                        value={component.reason || ""}
-                                        onChange={(e) => updateSalaryComponent(index, "reason", e.target.value)}
-                                        placeholder="Reason for this component value"
-                                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm italic text-slate-600 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
-                                      />
+                            {salaryComponents.map((component, index) => (
+                              <div key={`${component.component_id}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <div className="grid gap-3 md:grid-cols-12">
+                                  <div className="md:col-span-4">
+                                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Component</label>
+                                    <div className="truncate rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                                      {component.component_name || `Component ${component.component_id}`}
+                                      {component.component_code && (
+                                        <span className="ml-2 text-[10px] font-normal text-slate-400">({component.component_code})</span>
+                                      )}
                                     </div>
                                   </div>
+                                  <div className="md:col-span-3">
+                                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</label>
+                                    <Select
+                                      value={{
+                                        value: component.calc_type,
+                                        label: component.calc_type === "percentage" ? "Percentage (%)" : "Fixed Amount",
+                                      }}
+                                      onChange={(option) => updateSalaryComponent(index, "calc_type", option?.value || "percentage")}
+                                      options={[
+                                        { value: "percentage", label: "Percentage (%)" },
+                                        { value: "fixed", label: "Fixed Amount" },
+                                      ]}
+                                      menuPlacement="auto"
+                                      menuPosition="fixed"
+                                      menuPortalTarget={document.body}
+                                      styles={{ ...customSelectStyles, menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+                                    />
+                                  </div>
+                                  <div className="md:col-span-3">
+                                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Value</label>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={component.calc_value}
+                                      onChange={(e) => {
+                                        const value = e.target.value.replace(/[^0-9.]/g, "");
+                                        if (value === "" || /^\d*\.?\d*$/.test(value)) updateSalaryComponent(index, "calc_value", value);
+                                      }}
+                                      onBlur={onFieldBlur}
+                                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                                    />
+                                  </div>
+                                  <div className="flex items-end justify-end md:col-span-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeSalaryComponent(index)}
+                                      className="rounded-lg p-2.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                                      title="Remove component"
+                                    >
+                                      <FaTimes className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="md:col-span-12">
+                                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Reason</label>
+                                    <input
+                                      type="text"
+                                      value={component.reason || ""}
+                                      onChange={(e) => updateSalaryComponent(index, "reason", e.target.value)}
+                                      onBlur={onFieldBlur}
+                                      placeholder="Reason for this component value"
+                                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm italic text-slate-600 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                                    />
+                                  </div>
                                 </div>
-                              );
-                            })}
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
@@ -1239,28 +1206,25 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* Attendance Methods */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
+              {/* ========== ATTENDANCE (collapsible) ========== */}
+              <div className={sectionClass("attendance")}>
                 <button
                   type="button"
-                  onClick={() => setIsAttendanceMethodsOpen(!isAttendanceMethodsOpen)}
+                  onClick={() => setIsAttendanceOpen(!isAttendanceOpen)}
                   className="flex w-full items-center justify-between"
+                  onBlur={onFieldBlur}
                 >
                   <div className="flex items-center gap-3">
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                       <FaFingerprint className="h-4 w-4 text-indigo-500" />
-                      Attendance Methods
+                      Attendance
                     </label>
                     <span className="text-xs text-slate-500">Choose from company methods</span>
                   </div>
-                  {isAttendanceMethodsOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
+                  {isAttendanceOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                 </button>
                 <AnimatePresence>
-                  {isAttendanceMethodsOpen && (
+                  {isAttendanceOpen && (
                     <motion.div
                       initial={{ height: 0, opacity: 0, marginTop: 0 }}
                       animate={{ height: "auto", opacity: 1, marginTop: 16 }}
@@ -1268,7 +1232,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                       className="overflow-hidden"
                     >
                       {methodBadges.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 mb-4">
                           {methodBadges.map((method) => {
                             const active = selectedAttendanceMethods.includes(method.key);
                             return (
@@ -1276,10 +1240,11 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                                 key={method.key}
                                 type="button"
                                 onClick={() => toggleAttendanceMethod(method.key)}
-                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${active
-                                  ? "border-indigo-300 bg-indigo-600 text-white shadow-sm"
-                                  : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50"
-                                  }`}
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                                  active
+                                    ? "border-indigo-300 bg-indigo-600 text-white shadow-sm"
+                                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50"
+                                }`}
                               >
                                 {active && <FaCheck className="h-3 w-3" />}
                                 {method.label}
@@ -1288,66 +1253,21 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                           })}
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500 mb-4">
                           No attendance methods available for this company.
                         </div>
                       )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Attendance Settings (includes Auto Approve, Overtime, Deduction) */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAttendanceSettingsOpen(!isAttendanceSettingsOpen)}
-                  className="flex w-full items-center justify-between"
-                >
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                    <FaCheck className="h-4 w-4 text-indigo-500" />
-                    Attendance Settings
-                  </label>
-                  {isAttendanceSettingsOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
-                </button>
-                <AnimatePresence>
-                  {isAttendanceSettingsOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                      animate={{ height: "auto", opacity: 1, marginTop: 12 }}
-                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                      className="overflow-hidden"
-                    >
                       <div className="flex flex-col gap-3">
                         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={autoApprove}
-                            onChange={(e) => setAutoApprove(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                          />
+                          <input type="checkbox" checked={autoApprove} onChange={(e) => setAutoApprove(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                           <span className="text-sm text-slate-700">Auto approve Attendance</span>
                         </label>
                         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={enableOvertime}
-                            onChange={(e) => setEnableOvertime(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                          />
+                          <input type="checkbox" checked={enableOvertime} onChange={(e) => setEnableOvertime(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                           <span className="text-sm text-slate-700">Enable Overtime</span>
                         </label>
                         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={enableDeduction}
-                            onChange={(e) => setEnableDeduction(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                          />
+                          <input type="checkbox" checked={enableDeduction} onChange={(e) => setEnableDeduction(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                           <span className="text-sm text-slate-700">Enable Deduction</span>
                         </label>
                       </div>
@@ -1356,134 +1276,72 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* Shift Timings */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
+              {/* ========== SHIFT & SCHEDULE (collapsible) ========== */}
+              <div className={sectionClass("shift")}>
                 <button
                   type="button"
-                  onClick={() => setIsShiftTimingsOpen(!isShiftTimingsOpen)}
+                  onClick={() => setIsShiftOpen(!isShiftOpen)}
                   className="flex w-full items-center justify-between"
+                  onBlur={onFieldBlur}
                 >
                   <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                     <FaClock className="h-4 w-4 text-indigo-500" />
-                    Shift Timings
+                    Shift & Schedule
                   </label>
-                  {isShiftTimingsOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
+                  {isShiftOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                 </button>
                 <AnimatePresence>
-                  {isShiftTimingsOpen && (
+                  {isShiftOpen && (
                     <motion.div
                       initial={{ height: 0, opacity: 0, marginTop: 0 }}
                       animate={{ height: "auto", opacity: 1, marginTop: 12 }}
                       exit={{ height: 0, opacity: 0, marginTop: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="grid grid-cols-2 gap-3 mt-3">
-                        <div className={!shiftStart ? "rounded-xl ring-2 ring-red-400 p-2" : ""}>
-                          <TimeDurationPickerField label="Start Time" value={shiftStart} onChange={setShiftStart} mode="time" />
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                          <TimeDurationPickerField
+                            label="Start Time"
+                            value={shiftStart}
+                            onChange={(val) => { setShiftStart(val); setFormInteracted(true); }}
+                            mode="time"
+                          />
                         </div>
-                        <div className={!shiftEnd ? "rounded-xl ring-2 ring-red-400 p-2" : ""}>
-                          <TimeDurationPickerField label="End Time" value={shiftEnd} onChange={setShiftEnd} mode="time" />
+                        <div>
+                          <TimeDurationPickerField
+                            label="End Time"
+                            value={shiftEnd}
+                            onChange={(val) => { setShiftEnd(val); setFormInteracted(true); }}
+                            mode="time"
+                          />
                         </div>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Duration Settings */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <button
-                  type="button"
-                  onClick={() => setIsDurationSettingsOpen(!isDurationSettingsOpen)}
-                  className="flex w-full items-center justify-between"
-                >
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                    <FaClock className="h-4 w-4 text-indigo-500" />
-                    Duration Settings
-                  </label>
-                  {isDurationSettingsOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
-                </button>
-                <AnimatePresence>
-                  {isDurationSettingsOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                      animate={{ height: "auto", opacity: 1, marginTop: 12 }}
-                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 mt-3">
+                      <div className="grid grid-cols-2 gap-3 mb-4">
                         <TimeDurationPickerField label="Break Minutes" value={breakMinutes} onChange={setBreakMinutes} mode="duration" />
                         <TimeDurationPickerField label="Grace Minutes" value={graceMinutes} onChange={setGraceMinutes} mode="duration" />
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
 
-              {/* Weekends */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <button
-                  type="button"
-                  onClick={() => setIsWeekendsOpen(!isWeekendsOpen)}
-                  className="flex w-full items-center justify-between"
-                >
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                    <FaCalendarAlt className="h-4 w-4 text-indigo-500" />
-                    Weekends
-                    {weekends.length > 0 && (
-                      <span className="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-600">
-                        {weekends.length} Selected
-                      </span>
-                    )}
-                  </label>
-                  {isWeekendsOpen ? (
-                    <FaChevronUp className="h-3 w-3 text-slate-400" />
-                  ) : (
-                    <FaChevronDown className="h-3 w-3 text-slate-400" />
-                  )}
-                </button>
-
-                <AnimatePresence>
-                  {isWeekendsOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                      animate={{ height: "auto", opacity: 1, marginTop: 12 }}
-                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="flex flex-col gap-2 pt-1">
+                      {/* Weekends – compact grid */}
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Weekends</label>
+                      <div className="flex flex-wrap gap-2">
                         {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => {
                           const isSelected = weekends.includes(day);
                           return (
-                            <div
+                            <button
                               key={day}
-                              className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/50 p-2"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => toggleWeekend(day)}
-                                className={`flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isSelected
-                                  ? "bg-indigo-600 text-white shadow-md"
+                              type="button"
+                              onClick={() => toggleWeekend(day)}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                                isSelected
+                                  ? "bg-indigo-600 text-white shadow-sm"
                                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-                                  }`}
-                              >
-                                <div
-                                  className={`w-3.5 h-3.5 rounded-md flex items-center justify-center border ${isSelected ? "bg-white border-white" : "bg-slate-100 border-slate-200"
-                                    }`}
-                                >
-                                  {isSelected && <FaCheck className="w-2.5 h-2.5 text-indigo-600" />}
-                                </div>
-                                {day.charAt(0).toUpperCase() + day.slice(1)}
-                              </button>
-                            </div>
+                              }`}
+                            >
+                              <span className={`w-3 h-3 rounded flex items-center justify-center ${isSelected ? "bg-white/20" : "bg-slate-100"}`}>
+                                {isSelected && <FaCheck className="w-2 h-2 text-white" />}
+                              </span>
+                              {day.charAt(0).toUpperCase() + day.slice(1)}
+                            </button>
                           );
                         })}
                       </div>
