@@ -126,7 +126,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
   const [baseAmount, setBaseAmount] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [effectiveTo, setEffectiveTo] = useState("");
-  const [joiningDate, setJoiningDate] = useState(""); // NEW
+  const [joiningDate, setJoiningDate] = useState("");
   const [salaryComponents, setSalaryComponents] = useState([]);
   const [availableSalaryComponents, setAvailableSalaryComponents] = useState([]);
   const [isLoadingSalaryComponents, setIsLoadingSalaryComponents] = useState(false);
@@ -137,16 +137,18 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
   const [invitePackages, setInvitePackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [isLoadingPackages, setIsLoadingPackages] = useState(false);
-  const [isWeekendsOpen, setIsWeekendsOpen] = useState(false);
-  const [isSalaryComponentsOpen, setIsSalaryComponentsOpen] = useState(false);
 
+  // Collapsible states matching AddStaffModal
   const [isInvitePackageOpen, setIsInvitePackageOpen] = useState(false);
-  const [isRoleFieldsOpen, setIsRoleFieldsOpen] = useState(false);
+  const [isRoleFieldsOpen, setIsRoleFieldsOpen] = useState(true);
   const [isSalaryDetailsOpen, setIsSalaryDetailsOpen] = useState(false);
-  const [isAttendanceMethodsOpen, setIsAttendanceMethodsOpen] = useState(false);
-  const [isAttendanceSettingsOpen, setIsAttendanceSettingsOpen] = useState(false);
-  const [isShiftTimingsOpen, setIsShiftTimingsOpen] = useState(false);
-  const [isDurationSettingsOpen, setIsDurationSettingsOpen] = useState(false);
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [isShiftOpen, setIsShiftOpen] = useState(false);
+  const [isSalaryComponentDropdownOpen, setIsSalaryComponentDropdownOpen] = useState(false);
+
+  // Interaction state for error display (like AddStaffModal)
+  const [formInteracted, setFormInteracted] = useState(false);
+
   const [isSearchingUser, setIsSearchingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
@@ -248,7 +250,275 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
 
   useEffect(() => {
     if (!isOpen) return;
-  }, [isOpen]);
+    loadStaffData();
+  }, [isOpen, staffData]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (staffData?.user?.email) {
+      setEmailQuery(staffData.user.email);
+    }
+  }, [isOpen, staffData]);
+
+  // Interaction aware select styles (red only after formInteracted and value missing)
+  const getSelectStyles = (value) => ({
+    ...customSelectStyles,
+    control: (base, state) => ({
+      ...customSelectStyles.control(base, state),
+      borderColor: formInteracted && !value ? '#f87171' : state.isFocused ? '#6366f1' : '#e2e8f0',
+      backgroundColor: formInteracted && !value ? '#fef2f2' : '#f9fafb',
+      boxShadow: formInteracted && !value
+        ? '0 0 0 1px rgba(248, 113, 113, 0.5)'
+        : state.isFocused
+        ? '0 0 0 4px rgba(99, 102, 241, 0.1)'
+        : 'none',
+      '&:hover': {
+        borderColor: formInteracted && !value ? '#f87171' : '#cbd5e1'
+      }
+    })
+  });
+
+  // Interaction aware input class
+  const getInputClass = (value, defaultClasses) => {
+    const isInvalid = !value || String(value).trim() === '';
+    return `${defaultClasses} ${
+      formInteracted && isInvalid
+        ? 'border-red-400 bg-red-50/10 ring-1 ring-red-400/50 focus:border-red-500 focus:ring-red-500/20'
+        : 'border-slate-200 bg-white focus:border-indigo-500 focus:ring-indigo-500/10'
+    }`;
+  };
+
+  // Section red border helper (matching AddStaffModal)
+  const hasRoleError = !designation || !selectedPermissionPackage || !employmentType || !staffType;
+  const hasSalaryError = !baseAmount || !effectiveFrom;
+  const hasAttendanceError = selectedAttendanceMethods.length === 0;
+  const hasShiftError = !shiftStart || !shiftEnd;
+
+  const sectionClass = (section, baseClasses = "rounded-xl border bg-white p-4") => {
+    const error =
+      (section === "role" && hasRoleError) ||
+      (section === "salary" && hasSalaryError) ||
+      (section === "attendance" && hasAttendanceError) ||
+      (section === "shift" && hasShiftError);
+    return `${baseClasses} ${formInteracted && error ? "border-red-400 ring-1 ring-red-400" : "border-slate-200"}`;
+  };
+
+  const toggleAttendanceMethod = (method) => {
+    setSelectedAttendanceMethods((prev) =>
+      prev.includes(method) ? prev.filter((item) => item !== method) : [...prev, method]
+    );
+    setFormInteracted(true);
+  };
+
+  const toggleWeekend = (day) => {
+    setWeekends((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+    setFormInteracted(true);
+  };
+
+  const fetchAllConstants = async () => {
+    if ((employmentTypes.length && designations.length && salaryTypes.length) || isLoadingConstants || constantsRequestRef.current) return;
+    constantsRequestRef.current = true;
+    setIsLoadingConstants(true);
+    try {
+      const company = JSON.parse(localStorage.getItem("company"));
+      const res = await apiCall("/constants/", "GET", null, company?.id);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "Failed to fetch configuration data");
+      if (data.data.employment_types) {
+        setEmploymentTypes(
+          data.data.employment_types.map((item) => ({
+            value: item.value.value,
+            key: item.key,
+            label: item.value.label,
+            description: item.value.description,
+            icon: getIconForType(item.key),
+          }))
+        );
+      }
+      if (data.data.designations) {
+        setDesignations(
+          data.data.designations.map((item) => ({
+            value: item.value.value,
+            key: item.key,
+            label: item.value.label,
+            description: item.value.description,
+            icon: getIconForType(item.key),
+          }))
+        );
+      }
+      if (data.data.salary_types) {
+        setSalaryTypes(
+          data.data.salary_types.map((item) => ({
+            value: item.value.value,
+            key: item.key,
+            label: item.value.label,
+            description: item.value.description,
+            icon: getIconForType(item.key),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error("Failed to fetch constants", err);
+      toast.error(err.message || "Failed to fetch configuration data");
+    } finally {
+      constantsRequestRef.current = false;
+      setIsLoadingConstants(false);
+    }
+  };
+
+  const fetchPermissionPackages = async () => {
+    if (permissionPackages.length || isLoadingPermissions || permissionPackagesRequestRef.current) return;
+    permissionPackagesRequestRef.current = true;
+    setIsLoadingPermissions(true);
+    try {
+      const company = JSON.parse(localStorage.getItem("company"));
+      const response = await apiCall("/permissions/permission-packages", "GET", null, company?.id);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.message || "Failed to fetch permission packages");
+      const packages = result.data?.packages || [];
+      setPermissionPackages(
+        packages.map((pkg) => ({
+          value: pkg.id,
+          label: pkg.package_name,
+          description: pkg.description,
+          groupCode: pkg.group_code,
+          permissions: pkg.permissions?.filter((p) => p.is_active === 1) || [],
+          isActive: pkg.is_active === 1,
+        }))
+      );
+    } catch (err) {
+      console.error("Permission packages error", err);
+      toast.error(err.message || "Failed to fetch permission packages");
+    } finally {
+      permissionPackagesRequestRef.current = false;
+      setIsLoadingPermissions(false);
+    }
+  };
+
+  const resolveUserPayload = (result) => {
+    const direct = result?.data;
+    if (Array.isArray(direct)) return direct[0] || null;
+    if (direct?.data) return direct.data;
+    if (direct?.user) return direct.user;
+    if (result?.user) return result.user;
+    return direct || null;
+  };
+
+  const getResolvedUserId = (user) => user?.id ?? user?.user_id ?? user?.userId ?? user?.staff_id ?? user?.staffId ?? null;
+  const getResolvedUserName = (user) =>
+    user?.name ||
+    user?.full_name ||
+    user?.fullName ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
+    user?.email ||
+    "No Name";
+
+  const loadStaffData = () => {
+    if (!staffData) return;
+    setIsLoadingStaff(true);
+    try {
+      if (staffData.user) {
+        setSelectedUser({
+          id: getResolvedUserId(staffData.user),
+          full_name: getResolvedUserName(staffData.user),
+          email: staffData.user.email,
+          phone: staffData.user.phone || null,
+          profile_picture: staffData.user.profile_picture || null,
+          is_active: staffData.user.is_active,
+          created_at: staffData.user.created_at || null,
+        });
+      } else if (staffData.user_id) {
+        setSelectedUser({
+          id: staffData.user_id,
+          full_name: staffData.user_name || staffData.name || `User #${staffData.user_id}`,
+          email: staffData.email || "",
+          phone: staffData.phone || null,
+          profile_picture: staffData.profile_picture || null,
+          is_active: staffData.is_active,
+          created_at: staffData.created_at || null,
+        });
+      }
+
+      const designationValue = getOptionValue(staffData.designation);
+      if (designationValue) {
+        const found = designations.find((d) => d.value === designationValue);
+        setDesignation(
+          found || {
+            value: designationValue,
+            label: getOptionLabel(staffData.designation) || formatDisplay(designationValue),
+          }
+        );
+      }
+
+      const employmentTypeValue = getOptionValue(staffData.employment_type);
+      if (employmentTypeValue) {
+        const found = employmentTypes.find((e) => e.value === employmentTypeValue);
+        setEmploymentType(
+          found || {
+            value: employmentTypeValue,
+            label: getOptionLabel(staffData.employment_type) || formatDisplay(employmentTypeValue),
+          }
+        );
+      }
+
+      const salaryTypeValue = getOptionValue(staffData.salary_type);
+      if (salaryTypeValue) {
+        const found = salaryTypes.find((s) => s.value === salaryTypeValue);
+        setStaffType(
+          found || {
+            value: salaryTypeValue,
+            label: getOptionLabel(staffData.salary_type) || formatDisplay(salaryTypeValue),
+          }
+        );
+      }
+
+      const permissionPackageId = staffData.permission_package?.id ?? staffData.permission_package_id ?? null;
+      if (permissionPackageId) {
+        const found = permissionPackages.find((p) => p.value === permissionPackageId);
+        setSelectedPermissionPackage(
+          found || {
+            value: permissionPackageId,
+            label: staffData.permission_package?.name || staffData.permission_package_name || `Package ${permissionPackageId}`,
+          }
+        );
+      }
+
+      if (Array.isArray(staffData.attendance_methods)) {
+        setSelectedAttendanceMethods(normalizeAttendanceMethods(staffData.attendance_methods));
+      }
+
+      if (typeof staffData.auto_approve !== "undefined") {
+        setAutoApprove(Boolean(staffData.auto_approve));
+      } else {
+        setAutoApprove(false);
+      }
+      setEnableOvertime(staffData.enable_overtime !== undefined ? Boolean(staffData.enable_overtime) : true);
+      setEnableDeduction(staffData.enable_deduction !== undefined ? Boolean(staffData.enable_deduction) : true);
+
+      setShiftStart(staffData.shift_start || DEFAULT_SHIFT_START);
+      setShiftEnd(staffData.shift_end || DEFAULT_SHIFT_END);
+      setBreakMinutes(normalizeDuration(staffData.break_minutes));
+      setGraceMinutes(normalizeDuration(staffData.grace_minutes));
+      setWeekends(normalizeWeekends(staffData.weekends));
+      setBaseAmount(staffData.base_amount === null || typeof staffData.base_amount === "undefined" ? "" : String(staffData.base_amount));
+      setEffectiveFrom(normalizeDate(staffData.effective_from));
+      setEffectiveTo(normalizeDate(staffData.effective_to));
+      setJoiningDate(normalizeDate(staffData.joining_date));
+      setSalaryComponents(normalizeSalaryComponents(staffData.salary_components || staffData.components || []));
+      setSelectedSalaryPackageId("");
+
+      // Open relevant sections if data present (similar to Add)
+      setIsRoleFieldsOpen(true);
+      setIsSalaryDetailsOpen(staffData.base_amount || staffData.effective_from || (Array.isArray(staffData.salary_components) && staffData.salary_components.length > 0));
+      setIsAttendanceOpen(Array.isArray(staffData.attendance_methods) && staffData.attendance_methods.length > 0);
+      setIsShiftOpen(staffData.shift_start || staffData.shift_end || Array.isArray(staffData.weekends) && staffData.weekends.length > 0);
+    } catch (err) {
+      console.error("Error loading staff data:", err);
+      toast.error("Failed to load staff data");
+    } finally {
+      setIsLoadingStaff(false);
+    }
+  };
 
   const normalizeSalaryComponents = (components = []) =>
     components
@@ -382,13 +652,12 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
 
     if (Array.isArray(pkg.weekends)) {
       setWeekends(pkg.weekends.map((w) => (typeof w === "object" ? w.day : w)));
-      if (pkg.weekends.length > 0) setIsWeekendsOpen(true);
     }
 
     if (typeof pkg.base_amount !== "undefined") setBaseAmount(String(pkg.base_amount || ""));
     if (pkg.effective_from) setEffectiveFrom(normalizeDate(pkg.effective_from));
     if (typeof pkg.effective_to !== "undefined") setEffectiveTo(normalizeDate(pkg.effective_to));
-    if (typeof pkg.joining_date !== "undefined") setJoiningDate(normalizeDate(pkg.joining_date)); // NEW
+    if (typeof pkg.joining_date !== "undefined") setJoiningDate(normalizeDate(pkg.joining_date));
 
     const packageComponents = pkg.salary_components || pkg.components || [];
     if (Array.isArray(packageComponents)) {
@@ -397,237 +666,6 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     }
 
     toast.info(`Applied details from ${pkg.name}`);
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-    loadStaffData();
-  }, [isOpen, staffData]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    if (staffData?.user?.email) {
-      setEmailQuery(staffData.user.email);
-    }
-  }, [isOpen, staffData]);
-
-  const toggleAttendanceMethod = (method) => {
-    setSelectedAttendanceMethods((prev) =>
-      prev.includes(method) ? prev.filter((item) => item !== method) : [...prev, method]
-    );
-  };
-
-  const toggleWeekend = (day) => {
-    setWeekends((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
-  };
-
-  const fetchAllConstants = async () => {
-    if ((employmentTypes.length && designations.length && salaryTypes.length) || isLoadingConstants || constantsRequestRef.current) return;
-    constantsRequestRef.current = true;
-    setIsLoadingConstants(true);
-    try {
-      const company = JSON.parse(localStorage.getItem("company"));
-      const res = await apiCall("/constants/", "GET", null, company?.id);
-      const data = await res.json();
-
-      if (!data.success) throw new Error(data.message || "Failed to fetch configuration data");
-
-      if (data.data.employment_types) {
-        setEmploymentTypes(
-          data.data.employment_types.map((item) => ({
-            value: item.value.value,
-            key: item.key,
-            label: item.value.label,
-            description: item.value.description,
-            icon: getIconForType(item.key),
-          }))
-        );
-      }
-
-      if (data.data.designations) {
-        setDesignations(
-          data.data.designations.map((item) => ({
-            value: item.value.value,
-            key: item.key,
-            label: item.value.label,
-            description: item.value.description,
-            icon: getIconForType(item.key),
-          }))
-        );
-      }
-
-      if (data.data.salary_types) {
-        setSalaryTypes(
-          data.data.salary_types.map((item) => ({
-            value: item.value.value,
-            key: item.key,
-            label: item.value.label,
-            description: item.value.description,
-            icon: getIconForType(item.key),
-          }))
-        );
-      }
-    } catch (err) {
-      console.error("Failed to fetch constants", err);
-      toast.error(err.message || "Failed to fetch configuration data");
-    } finally {
-      constantsRequestRef.current = false;
-      setIsLoadingConstants(false);
-    }
-  };
-
-  const fetchPermissionPackages = async () => {
-    if (permissionPackages.length || isLoadingPermissions || permissionPackagesRequestRef.current) return;
-    permissionPackagesRequestRef.current = true;
-    setIsLoadingPermissions(true);
-    try {
-      const company = JSON.parse(localStorage.getItem("company"));
-      const response = await apiCall("/permissions/permission-packages", "GET", null, company?.id);
-      const result = await response.json();
-
-      if (!response.ok) throw new Error(result?.message || "Failed to fetch permission packages");
-
-      const packages = result.data?.packages || [];
-      setPermissionPackages(
-        packages.map((pkg) => ({
-          value: pkg.id,
-          label: pkg.package_name,
-          description: pkg.description,
-          groupCode: pkg.group_code,
-          permissions: pkg.permissions?.filter((p) => p.is_active === 1) || [],
-          isActive: pkg.is_active === 1,
-        }))
-      );
-    } catch (err) {
-      console.error("Permission packages error", err);
-      toast.error(err.message || "Failed to fetch permission packages");
-    } finally {
-      permissionPackagesRequestRef.current = false;
-      setIsLoadingPermissions(false);
-    }
-  };
-
-  const resolveUserPayload = (result) => {
-    const direct = result?.data;
-    if (Array.isArray(direct)) return direct[0] || null;
-    if (direct?.data) return direct.data;
-    if (direct?.user) return direct.user;
-    if (result?.user) return result.user;
-    return direct || null;
-  };
-
-  const getResolvedUserId = (user) => user?.id ?? user?.user_id ?? user?.userId ?? user?.staff_id ?? user?.staffId ?? null;
-  const getResolvedUserName = (user) =>
-    user?.name ||
-    user?.full_name ||
-    user?.fullName ||
-    [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
-    user?.email ||
-    "No Name";
-
-  const loadStaffData = () => {
-    if (!staffData) return;
-
-    setIsLoadingStaff(true);
-    try {
-      if (staffData.user) {
-        setSelectedUser({
-          id: getResolvedUserId(staffData.user),
-          full_name: getResolvedUserName(staffData.user),
-          email: staffData.user.email,
-          phone: staffData.user.phone || null,
-          profile_picture: staffData.user.profile_picture || null,
-          is_active: staffData.user.is_active,
-          created_at: staffData.user.created_at || null,
-        });
-      } else if (staffData.user_id) {
-        setSelectedUser({
-          id: staffData.user_id,
-          full_name: staffData.user_name || staffData.name || `User #${staffData.user_id}`,
-          email: staffData.email || "",
-          phone: staffData.phone || null,
-          profile_picture: staffData.profile_picture || null,
-          is_active: staffData.is_active,
-          created_at: staffData.created_at || null,
-        });
-      }
-
-      const designationValue = getOptionValue(staffData.designation);
-      if (designationValue) {
-        const found = designations.find((d) => d.value === designationValue);
-        setDesignation(
-          found || {
-            value: designationValue,
-            label: getOptionLabel(staffData.designation) || formatDisplay(designationValue),
-          }
-        );
-      }
-
-      const employmentTypeValue = getOptionValue(staffData.employment_type);
-      if (employmentTypeValue) {
-        const found = employmentTypes.find((e) => e.value === employmentTypeValue);
-        setEmploymentType(
-          found || {
-            value: employmentTypeValue,
-            label: getOptionLabel(staffData.employment_type) || formatDisplay(employmentTypeValue),
-          }
-        );
-      }
-
-      const salaryTypeValue = getOptionValue(staffData.salary_type);
-      if (salaryTypeValue) {
-        const found = salaryTypes.find((s) => s.value === salaryTypeValue);
-        setStaffType(
-          found || {
-            value: salaryTypeValue,
-            label: getOptionLabel(staffData.salary_type) || formatDisplay(salaryTypeValue),
-          }
-        );
-      }
-
-      const permissionPackageId = staffData.permission_package?.id ?? staffData.permission_package_id ?? null;
-      if (permissionPackageId) {
-        const found = permissionPackages.find((p) => p.value === permissionPackageId);
-        setSelectedPermissionPackage(
-          found || {
-            value: permissionPackageId,
-            label: staffData.permission_package?.name || staffData.permission_package_name || `Package ${permissionPackageId}`,
-          }
-        );
-      }
-
-      if (Array.isArray(staffData.attendance_methods)) {
-        setSelectedAttendanceMethods(normalizeAttendanceMethods(staffData.attendance_methods));
-      }
-
-      if (typeof staffData.auto_approve !== "undefined") {
-        setAutoApprove(Boolean(staffData.auto_approve));
-      } else {
-        setAutoApprove(false);
-      }
-      setEnableOvertime(staffData.enable_overtime !== undefined ? Boolean(staffData.enable_overtime) : true);
-      setEnableDeduction(staffData.enable_deduction !== undefined ? Boolean(staffData.enable_deduction) : true);
-
-      setShiftStart(staffData.shift_start || DEFAULT_SHIFT_START);
-      setShiftEnd(staffData.shift_end || DEFAULT_SHIFT_END);
-      setBreakMinutes(normalizeDuration(staffData.break_minutes));
-      setGraceMinutes(normalizeDuration(staffData.grace_minutes));
-      setWeekends(normalizeWeekends(staffData.weekends));
-      setBaseAmount(staffData.base_amount === null || typeof staffData.base_amount === "undefined" ? "" : String(staffData.base_amount));
-      setEffectiveFrom(normalizeDate(staffData.effective_from));
-      setEffectiveTo(normalizeDate(staffData.effective_to));
-      setJoiningDate(normalizeDate(staffData.joining_date)); // NEW
-      setSalaryComponents(normalizeSalaryComponents(staffData.salary_components || staffData.components || []));
-      setSelectedSalaryPackageId("");
-      if (Array.isArray(staffData.weekends) && staffData.weekends.length > 0) {
-        setIsWeekendsOpen(true);
-      }
-    } catch (err) {
-      console.error("Error loading staff data:", err);
-      toast.error("Failed to load staff data");
-    } finally {
-      setIsLoadingStaff(false);
-    }
   };
 
   const methodBadges = companyAttendanceMethodList.length
@@ -665,7 +703,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       baseAmount: staffData?.base_amount === null || typeof staffData?.base_amount === "undefined" ? "" : String(staffData.base_amount),
       effectiveFrom: normalizeDate(staffData?.effective_from),
       effectiveTo: normalizeDate(staffData?.effective_to),
-      joiningDate: normalizeDate(staffData?.joining_date) || "", // NEW
+      joiningDate: normalizeDate(staffData?.joining_date) || "",
       components: normalizeSalaryComponents(staffData?.salary_components || staffData?.components || []).sort((a, b) => String(a.component_id).localeCompare(String(b.component_id))),
     };
   }, [staffData]);
@@ -687,8 +725,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       (staffType?.value ?? null) !== initialInviteState.salaryType ||
       currentPermissionPackageId !== initialInviteState.permissionPackageId ||
       autoApprove !== initialInviteState.autoApprove ||
-      enableOvertime !== initialInviteState.enableOvertime || // NEW
-      enableDeduction !== initialInviteState.enableDeduction || // NEW
+      enableOvertime !== initialInviteState.enableOvertime ||
+      enableDeduction !== initialInviteState.enableDeduction ||
       shiftStart !== initialInviteState.shiftStart ||
       shiftEnd !== initialInviteState.shiftEnd ||
       breakMinutes !== initialInviteState.breakMinutes ||
@@ -696,7 +734,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       baseAmount !== initialInviteState.baseAmount ||
       effectiveFrom !== initialInviteState.effectiveFrom ||
       effectiveTo !== initialInviteState.effectiveTo ||
-      joiningDate !== initialInviteState.joiningDate || // NEW
+      joiningDate !== initialInviteState.joiningDate ||
       JSON.stringify(currentSalaryComponents) !== JSON.stringify(initialInviteState.components) ||
       JSON.stringify([...weekends].sort()) !== JSON.stringify(initialInviteState.weekends) ||
       JSON.stringify(currentAttendanceMethods) !== JSON.stringify(initialInviteState.attendanceMethods)
@@ -723,41 +761,6 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     weekends,
     initialInviteState,
   ]);
-
-  const getInputClass = (value, defaultClasses) => {
-    const isInvalid = !value || String(value).trim() === '';
-    return `${defaultClasses} ${isInvalid ? 'border-red-400 bg-red-50/10 ring-1 ring-red-400/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 bg-white focus:border-indigo-500 focus:ring-indigo-500/10'}`;
-  };
-
-  const getSelectStyles = (value) => ({
-    ...customSelectStyles,
-    control: (base, state) => ({
-      ...customSelectStyles.control(base, state),
-      borderColor: !value ? '#f87171' : state.isFocused ? '#6366f1' : '#e2e8f0',
-      backgroundColor: !value ? '#fef2f2' : '#f9fafb',
-      boxShadow: !value ? '0 0 0 1px rgba(248, 113, 113, 0.5)' : state.isFocused ? '0 0 0 4px rgba(99, 102, 241, 0.1)' : 'none',
-      '&:hover': {
-        borderColor: !value ? '#f87171' : '#cbd5e1'
-      }
-    })
-  });
-
-  const canUpdateInvite =
-    Boolean(selectedUser) &&
-    Boolean(designation) &&
-    Boolean(staffType) &&
-    Boolean(employmentType) &&
-    Boolean(selectedPermissionPackage) &&
-    Boolean(shiftStart) &&
-    Boolean(shiftEnd) &&
-    selectedAttendanceMethods.length > 0 &&
-    Boolean(baseAmount) &&
-    Boolean(effectiveFrom) &&
-    isUpdateDirty &&
-    !isSubmitting &&
-    !isLoadingConstants &&
-    !isLoadingStaff &&
-    !submitDisabled;
 
   const handleBaseAmountChange = (value) => {
     const nextValue = value.replace(/[^0-9.]/g, "");
@@ -786,6 +789,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
       ...prev,
       {
         component_id: component.id,
+        component_name: component.name || "",
+        component_code: component.code || "",
         calc_type: component.calc_type || "percentage",
         calc_value: component.calc_value === null || typeof component.calc_value === "undefined" ? "" : String(component.calc_value),
         effective_from: effectiveFrom,
@@ -793,8 +798,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
         reason: "",
       },
     ]);
-    setSelectedSalaryPackageId("");
-    setIsSalaryComponentsOpen(false);
+    setIsSalaryComponentDropdownOpen(false);
   };
 
   const handleInvitePackageMenuOpen = () => {
@@ -812,8 +816,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
   };
 
   const handleSalaryComponentsToggle = () => {
-    if (!isSalaryComponentsOpen) fetchSalaryComponents();
-    setIsSalaryComponentsOpen((prev) => !prev);
+    fetchSalaryComponents();
+    setIsSalaryComponentDropdownOpen((prev) => !prev);
   };
 
   const handleSalaryPackageChange = (option) => {
@@ -827,6 +831,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     setSalaryComponents(
       (salaryPackage.items || []).map((item) => ({
         component_id: item.component_id,
+        component_name: item.component_name || "",
+        component_code: item.component_code || "",
         calc_type: item.calc_type || "percentage",
         calc_value: parseFloat(item.calc_value || 0).toFixed(2),
         effective_from: effectiveFrom || "",
@@ -862,7 +868,26 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     [salaryPackageOptions, selectedSalaryPackageId]
   );
 
+  const canUpdateInvite =
+    Boolean(selectedUser) &&
+    Boolean(designation) &&
+    Boolean(staffType) &&
+    Boolean(employmentType) &&
+    Boolean(selectedPermissionPackage) &&
+    Boolean(shiftStart) &&
+    Boolean(shiftEnd) &&
+    selectedAttendanceMethods.length > 0 &&
+    Boolean(baseAmount) &&
+    Boolean(effectiveFrom) &&
+    isUpdateDirty &&
+    !isSubmitting &&
+    !isLoadingConstants &&
+    !isLoadingStaff &&
+    !submitDisabled;
+
   const handleSubmit = async () => {
+    setFormInteracted(true); // show all errors on submit attempt
+
     if (!selectedUser?.id) {
       toast.warning("Please search and select a user first");
       return;
@@ -915,7 +940,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
         auto_approve: autoApprove,
         enable_overtime: enableOvertime,
         enable_deduction: enableDeduction,
-        joining_date: joiningDate || null, // NEW
+        joining_date: joiningDate || null,
         shift_start: shiftStart,
         shift_end: shiftEnd,
         break_minutes: normalizeDuration(breakMinutes),
@@ -969,11 +994,18 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
     setBaseAmount("");
     setEffectiveFrom("");
     setEffectiveTo("");
-    setJoiningDate(""); // reset
+    setJoiningDate("");
     setSalaryComponents([]);
     setSelectedSalaryPackageId("");
     setSelectedPackage(null);
     setIsSubmitting(false);
+    setFormInteracted(false);
+    setIsRoleFieldsOpen(true);
+    setIsSalaryDetailsOpen(false);
+    setIsAttendanceOpen(false);
+    setIsShiftOpen(false);
+    setIsInvitePackageOpen(false);
+    setIsSalaryComponentDropdownOpen(false);
     onClose();
   };
 
@@ -1005,6 +1037,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                         : !isUpdateDirty
                           ? 'No changes made yet'
                           : '';
+
+  const onFieldBlur = () => setFormInteracted(true);
 
   return (
     <Modal
@@ -1128,8 +1162,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
           >
             {showInviteFields ? (
               <>
-                {/* Role Fields */}
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                {/* ========== ROLE & EMPLOYMENT (collapsible) ========== */}
+                <div className={sectionClass("role")}>
                   <button
                     type="button"
                     onClick={() => setIsRoleFieldsOpen(!isRoleFieldsOpen)}
@@ -1137,13 +1171,9 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   >
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                       <FaBriefcase className="h-4 w-4 text-indigo-500" />
-                      Role Fields
+                      Role & Employment
                     </label>
-                    {isRoleFieldsOpen ? (
-                      <FaChevronUp className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <FaChevronDown className="h-3 w-3 text-slate-400" />
-                    )}
+                    {isRoleFieldsOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                   </button>
                   <AnimatePresence>
                     {isRoleFieldsOpen && (
@@ -1154,15 +1184,13 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                         className="overflow-hidden"
                       >
                         <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-3">
-                            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                              <FaBriefcase className="h-4 w-4 text-indigo-500" />
-                              Designation
-                            </label>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Designation *</label>
                             <Select
                               options={designations}
                               value={designation}
-                              onChange={setDesignation}
+                              onChange={(val) => { setDesignation(val); setFormInteracted(true); }}
+                              onBlur={onFieldBlur}
                               onMenuOpen={fetchAllConstants}
                               onFocus={fetchAllConstants}
                               placeholder="Select designation"
@@ -1170,16 +1198,13 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                               styles={getSelectStyles(designation)}
                             />
                           </div>
-
-                          <div className="space-y-3">
-                            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                              <FaShieldAlt className="h-4 w-4 text-indigo-500" />
-                              Permission Package
-                            </label>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Permission Package *</label>
                             <Select
                               options={permissionPackages}
                               value={selectedPermissionPackage}
-                              onChange={setSelectedPermissionPackage}
+                              onChange={(val) => { setSelectedPermissionPackage(val); setFormInteracted(true); }}
+                              onBlur={onFieldBlur}
                               onMenuOpen={fetchPermissionPackages}
                               onFocus={fetchPermissionPackages}
                               placeholder={isLoadingPermissions ? "Loading..." : "Select permission package"}
@@ -1188,16 +1213,13 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                               styles={getSelectStyles(selectedPermissionPackage)}
                             />
                           </div>
-
-                          <div className="space-y-3">
-                            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                              <FaUserTie className="h-4 w-4 text-indigo-500" />
-                              Employment Type
-                            </label>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Employment Type *</label>
                             <Select
                               options={employmentTypes}
                               value={employmentType}
-                              onChange={setEmploymentType}
+                              onChange={(val) => { setEmploymentType(val); setFormInteracted(true); }}
+                              onBlur={onFieldBlur}
                               onMenuOpen={fetchAllConstants}
                               onFocus={fetchAllConstants}
                               placeholder="Select employment type"
@@ -1205,16 +1227,13 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                               styles={getSelectStyles(employmentType)}
                             />
                           </div>
-
-                          <div className="space-y-3">
-                            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                              <FaClock className="h-4 w-4 text-indigo-500" />
-                              Salary Type
-                            </label>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Salary Type *</label>
                             <Select
                               options={salaryTypes}
                               value={staffType}
-                              onChange={setStaffType}
+                              onChange={(val) => { setStaffType(val); setFormInteracted(true); }}
+                              onBlur={onFieldBlur}
                               onMenuOpen={fetchAllConstants}
                               onFocus={fetchAllConstants}
                               placeholder="Select salary type"
@@ -1228,25 +1247,22 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   </AnimatePresence>
                 </div>
 
-                {/* Salary Details */}
-                <div className="order-last rounded-xl border border-slate-200 bg-white p-4">
+                {/* ========== SALARY DETAILS (collapsible) ========== */}
+                <div className={sectionClass("salary")}>
                   <button
                     type="button"
                     onClick={() => setIsSalaryDetailsOpen(!isSalaryDetailsOpen)}
                     className="flex w-full items-center justify-between"
+                    onBlur={onFieldBlur}
                   >
                     <div className="flex items-center gap-3">
                       <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                        <CurrencyIcon className="h-3 w-3 text-indigo-500" size={12} />
+                        <CurrencyIcon className="h-4 w-4 text-indigo-500" size={14} />
                         Salary Details
                       </label>
                       <span className="text-xs text-slate-500">Required for invite payroll setup</span>
                     </div>
-                    {isSalaryDetailsOpen ? (
-                      <FaChevronUp className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <FaChevronDown className="h-3 w-3 text-slate-400" />
-                    )}
+                    {isSalaryDetailsOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                   </button>
                   <AnimatePresence>
                     {isSalaryDetailsOpen && (
@@ -1256,15 +1272,16 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                         exit={{ height: 0, opacity: 0, marginTop: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-4 md:grid-cols-4">
                           <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Effective From</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Effective From *</label>
                             <AdvancedDateFilter
                               tabOptions={["month"]}
                               value={getMonthYearValue(effectiveFrom)}
                               onChange={(value) => setEffectiveFrom(monthYearToDate(value))}
                               placeholder="Select month"
                               buttonClassName={getInputClass(effectiveFrom, "w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition")}
+                              onBlur={onFieldBlur}
                             />
                           </div>
                           <div className="space-y-2">
@@ -1278,12 +1295,13 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Base Amount</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Base Amount *</label>
                             <input
                               type="text"
                               inputMode="decimal"
                               value={baseAmount}
                               onChange={(e) => handleBaseAmountChange(e.target.value)}
+                              onBlur={onFieldBlur}
                               placeholder="Enter amount"
                               className={getInputClass(baseAmount, "w-full rounded-xl border px-4 py-2.5 text-sm font-semibold outline-none transition")}
                             />
@@ -1306,18 +1324,19 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                               styles={{ ...customSelectStyles, menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
                             />
                           </div>
-                          {/* NEW: Joining Date */}
                           <div className="space-y-2">
                             <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Joining Date</label>
                             <input
                               type="date"
                               value={joiningDate}
                               onChange={(e) => setJoiningDate(e.target.value)}
+                              onBlur={onFieldBlur}
                               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
                             />
                           </div>
                         </div>
 
+                        {/* Salary Components */}
                         <div className="mt-5 border-t border-slate-100 pt-4">
                           <div className="mb-3 flex items-center justify-between">
                             <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Salary Components</label>
@@ -1331,7 +1350,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                             </button>
                           </div>
 
-                          {isSalaryComponentsOpen && (
+                          {isSalaryComponentDropdownOpen && (
                             <div className="mb-4 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-3">
                               <Select
                                 value={null}
@@ -1354,8 +1373,8 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                             <div className="space-y-3">
                               {salaryComponents.map((component, index) => {
                                 const componentData = availableSalaryComponents.find((item) => String(item.id) === String(component.component_id));
-                                const componentName = componentData?.name || component.component_name || `Component ${component.component_id}`;
-                                const componentCode = componentData?.code || component.component_code || "";
+                                const componentName = component.component_name || componentData?.name || `Component ${component.component_id}`;
+                                const componentCode = component.component_code || componentData?.code || "";
                                 return (
                                   <div key={`${component.component_id}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                                     <div className="grid gap-3 md:grid-cols-12">
@@ -1391,6 +1410,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                                             const value = e.target.value.replace(/[^0-9.]/g, "");
                                             if (value === "" || /^\d*\.?\d*$/.test(value)) updateSalaryComponent(index, "calc_value", value);
                                           }}
+                                          onBlur={onFieldBlur}
                                           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
                                         />
                                       </div>
@@ -1410,6 +1430,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                                           type="text"
                                           value={component.reason || ""}
                                           onChange={(e) => updateSalaryComponent(index, "reason", e.target.value)}
+                                          onBlur={onFieldBlur}
                                           placeholder="Reason for this component value"
                                           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm italic text-slate-600 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
                                         />
@@ -1430,28 +1451,25 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   </AnimatePresence>
                 </div>
 
-                {/* Attendance Methods */}
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                {/* ========== ATTENDANCE (collapsible) ========== */}
+                <div className={sectionClass("attendance")}>
                   <button
                     type="button"
-                    onClick={() => setIsAttendanceMethodsOpen(!isAttendanceMethodsOpen)}
+                    onClick={() => setIsAttendanceOpen(!isAttendanceOpen)}
                     className="flex w-full items-center justify-between"
+                    onBlur={onFieldBlur}
                   >
                     <div className="flex items-center gap-3">
                       <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                         <FaFingerprint className="h-4 w-4 text-indigo-500" />
-                        Attendance Methods
+                        Attendance
                       </label>
                       <span className="text-xs text-slate-500">Choose from company methods</span>
                     </div>
-                    {isAttendanceMethodsOpen ? (
-                      <FaChevronUp className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <FaChevronDown className="h-3 w-3 text-slate-400" />
-                    )}
+                    {isAttendanceOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                   </button>
                   <AnimatePresence>
-                    {isAttendanceMethodsOpen && (
+                    {isAttendanceOpen && (
                       <motion.div
                         initial={{ height: 0, opacity: 0, marginTop: 0 }}
                         animate={{ height: "auto", opacity: 1, marginTop: 16 }}
@@ -1459,7 +1477,7 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                         className="overflow-hidden"
                       >
                         {methodBadges.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 mb-4">
                             {methodBadges.map((method) => {
                               const active = selectedAttendanceMethods.includes(method.key);
                               return (
@@ -1480,66 +1498,21 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                             })}
                           </div>
                         ) : (
-                          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500 mb-4">
                             No attendance methods available for this company.
                           </div>
                         )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Attendance Settings (now includes Overtime & Deduction toggles) */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsAttendanceSettingsOpen(!isAttendanceSettingsOpen)}
-                    className="flex w-full items-center justify-between"
-                  >
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                      <FaCheck className="h-4 w-4 text-indigo-500" />
-                      Attendance Settings
-                    </label>
-                    {isAttendanceSettingsOpen ? (
-                      <FaChevronUp className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <FaChevronDown className="h-3 w-3 text-slate-400" />
-                    )}
-                  </button>
-                  <AnimatePresence>
-                    {isAttendanceSettingsOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                        animate={{ height: "auto", opacity: 1, marginTop: 12 }}
-                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                        className="overflow-hidden"
-                      >
                         <div className="flex flex-col gap-3">
                           <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={autoApprove}
-                              onChange={(e) => setAutoApprove(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            />
+                            <input type="checkbox" checked={autoApprove} onChange={(e) => setAutoApprove(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                             <span className="text-sm text-slate-700">Auto approve Attendance</span>
                           </label>
                           <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={enableOvertime}
-                              onChange={(e) => setEnableOvertime(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            />
+                            <input type="checkbox" checked={enableOvertime} onChange={(e) => setEnableOvertime(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                             <span className="text-sm text-slate-700">Enable Overtime</span>
                           </label>
                           <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={enableDeduction}
-                              onChange={(e) => setEnableDeduction(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            />
+                            <input type="checkbox" checked={enableDeduction} onChange={(e) => setEnableDeduction(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                             <span className="text-sm text-slate-700">Enable Deduction</span>
                           </label>
                         </div>
@@ -1548,126 +1521,72 @@ function EditStaffModal({ isOpen, onClose, onSuccess, staffData, submitDisabled 
                   </AnimatePresence>
                 </div>
 
-                {/* Shift Timings */}
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                {/* ========== SHIFT & SCHEDULE (collapsible) ========== */}
+                <div className={sectionClass("shift")}>
                   <button
                     type="button"
-                    onClick={() => setIsShiftTimingsOpen(!isShiftTimingsOpen)}
+                    onClick={() => setIsShiftOpen(!isShiftOpen)}
                     className="flex w-full items-center justify-between"
+                    onBlur={onFieldBlur}
                   >
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                       <FaClock className="h-4 w-4 text-indigo-500" />
-                      Shift Timings
+                      Shift & Schedule
                     </label>
-                    {isShiftTimingsOpen ? (
-                      <FaChevronUp className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <FaChevronDown className="h-3 w-3 text-slate-400" />
-                    )}
+                    {isShiftOpen ? <FaChevronUp className="h-3 w-3 text-slate-400" /> : <FaChevronDown className="h-3 w-3 text-slate-400" />}
                   </button>
                   <AnimatePresence>
-                    {isShiftTimingsOpen && (
+                    {isShiftOpen && (
                       <motion.div
                         initial={{ height: 0, opacity: 0, marginTop: 0 }}
                         animate={{ height: "auto", opacity: 1, marginTop: 12 }}
                         exit={{ height: 0, opacity: 0, marginTop: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                          <div className={!shiftStart ? "rounded-xl ring-2 ring-red-400 p-2" : ""}>
-                            <TimeDurationPickerField label="Start Time" value={shiftStart} onChange={setShiftStart} mode="time" />
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          <div>
+                            <TimeDurationPickerField
+                              label="Start Time"
+                              value={shiftStart}
+                              onChange={(val) => { setShiftStart(val); setFormInteracted(true); }}
+                              mode="time"
+                            />
                           </div>
-                          <div className={!shiftEnd ? "rounded-xl ring-2 ring-red-400 p-2" : ""}>
-                            <TimeDurationPickerField label="End Time" value={shiftEnd} onChange={setShiftEnd} mode="time" />
+                          <div>
+                            <TimeDurationPickerField
+                              label="End Time"
+                              value={shiftEnd}
+                              onChange={(val) => { setShiftEnd(val); setFormInteracted(true); }}
+                              mode="time"
+                            />
                           </div>
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Duration Settings */}
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsDurationSettingsOpen(!isDurationSettingsOpen)}
-                    className="flex w-full items-center justify-between"
-                  >
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                      <FaClock className="h-4 w-4 text-indigo-500" />
-                      Duration Settings
-                    </label>
-                    {isDurationSettingsOpen ? (
-                      <FaChevronUp className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <FaChevronDown className="h-3 w-3 text-slate-400" />
-                    )}
-                  </button>
-                  <AnimatePresence>
-                    {isDurationSettingsOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                        animate={{ height: "auto", opacity: 1, marginTop: 12 }}
-                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 mt-3">
+                        <div className="grid grid-cols-2 gap-3 mb-4">
                           <TimeDurationPickerField label="Break Minutes" value={breakMinutes} onChange={setBreakMinutes} mode="duration" />
                           <TimeDurationPickerField label="Grace Minutes" value={graceMinutes} onChange={setGraceMinutes} mode="duration" />
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
 
-                {/* Weekends */}
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsWeekendsOpen(!isWeekendsOpen)}
-                    className="flex w-full items-center justify-between"
-                  >
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                      <FaCalendarAlt className="h-4 w-4 text-indigo-500" />
-                      Weekends
-                      {weekends.length > 0 && (
-                        <span className="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-600">
-                          {weekends.length} Selected
-                        </span>
-                      )}
-                    </label>
-                    {isWeekendsOpen ? (
-                      <FaChevronUp className="h-3 w-3 text-slate-400" />
-                    ) : (
-                      <FaChevronDown className="h-3 w-3 text-slate-400" />
-                    )}
-                  </button>
-                  <AnimatePresence>
-                    {isWeekendsOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                        animate={{ height: "auto", opacity: 1, marginTop: 12 }}
-                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="flex flex-col gap-2 pt-1">
+                        {/* Weekends – compact grid */}
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Weekends</label>
+                        <div className="flex flex-wrap gap-2">
                           {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => {
                             const isSelected = weekends.includes(day);
                             return (
-                              <div key={day} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/50 p-2">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleWeekend(day)}
-                                  className={`flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                                    isSelected ? "bg-indigo-600 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-                                  }`}
-                                >
-                                  <div className={`w-3.5 h-3.5 rounded-md flex items-center justify-center border ${isSelected ? "bg-white border-white" : "bg-slate-100 border-slate-200"}`}>
-                                    {isSelected && <FaCheck className="w-2.5 h-2.5 text-indigo-600" />}
-                                  </div>
-                                  {day.charAt(0).toUpperCase() + day.slice(1)}
-                                </button>
-                              </div>
+                              <button
+                                key={day}
+                                type="button"
+                                onClick={() => toggleWeekend(day)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                                  isSelected
+                                    ? "bg-indigo-600 text-white shadow-sm"
+                                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                                }`}
+                              >
+                                <span className={`w-3 h-3 rounded flex items-center justify-center ${isSelected ? "bg-white/20" : "bg-slate-100"}`}>
+                                  {isSelected && <FaCheck className="w-2 h-2 text-white" />}
+                                </span>
+                                {day.charAt(0).toUpperCase() + day.slice(1)}
+                              </button>
                             );
                           })}
                         </div>

@@ -4,7 +4,8 @@ import {
   FaUserTie, FaClock, FaExclamationCircle, FaSpinner,
   FaEye, FaEdit, FaBan, FaCheckCircle, FaTimesCircle, FaEnvelope,
   FaPhone, FaCalendarAlt, FaBriefcase, FaTag,
-  FaSearch, FaTimes, FaShieldAlt, FaUserCircle, FaPlus, FaChevronDown, FaUserCheck, FaCog
+  FaSearch, FaTimes, FaShieldAlt, FaUserCircle, FaPlus, FaChevronDown, FaUserCheck, FaCog,
+  FaFingerprint, FaFilter
 } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import apiCall from "../utils/api";
@@ -21,6 +22,45 @@ import { RefreshButton } from "../components/common";
 import ProfileAvatar from "../components/common/ProfileAvatar";
 import CurrencyIcon from "../components/common/CurrencyIcon";
 import AdvancedDateFilter from '../components/AdvancedDateFilter';
+import Select from '../components/SelectField';
+
+
+const customSelectStyles = {
+  control: (base, state) => ({
+    ...base,
+    minHeight: '48px',
+    backgroundColor: '#f9fafb',
+    fontSize: '0.875rem',
+    borderColor: state.isFocused ? '#6366f1' : '#e2e8f0',
+    boxShadow: state.isFocused ? '0 0 0 4px rgba(99,102,241,0.10)' : 'none',
+    '&:hover': { borderColor: '#cbd5e1' },
+    borderRadius: '0.75rem',
+    padding: '0 0.5rem',
+  }),
+  valueContainer: (base) => ({ ...base, padding: '0 14px', fontSize: '0.875rem' }),
+  input: (base) => ({ ...base, margin: 0, padding: 0, fontSize: '0.875rem' }),
+  placeholder: (base) => ({ ...base, color: '#94a3b8', fontWeight: 500, fontSize: '0.875rem' }),
+  singleValue: (base) => ({ ...base, color: '#334155', fontWeight: 500, fontSize: '0.875rem' }),
+  option: (base, state) => ({
+    ...base,
+    fontSize: '0.875rem',
+    backgroundColor: state.isSelected ? '#6366f1' : state.isFocused ? '#f1f5f9' : 'white',
+    color: state.isSelected ? 'white' : '#1e293b',
+    '&:active': { backgroundColor: '#6366f1' },
+  }),
+  // Hide the vertical separator bar (the "|")
+  indicatorSeparator: (base) => ({ ...base, display: 'none' }),
+  // Style the dropdown arrow (optional)
+  dropdownIndicator: (base) => ({ ...base, color: '#6366f1' }),
+};
+
+// ─── Status filter options ─────────────────────────────────────────────────
+const INVITE_STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -112,11 +152,10 @@ const formatWeekendDay = (weekend) => {
   return "N/A";
 };
 
-// Normalise invite record – guarantees a unique token for React keys & ActionMenu
 const normalizeInviteRecord = (invite) => ({
   ...invite,
   id: invite.invite_id,
-  token: invite.invite_token || `inv-${invite.invite_id}`, // fallback ensures never empty
+  token: invite.token,
   user_id: invite?.user?.id ?? invite?.user_id ?? null,
   permission_package_id: invite?.permission_package?.id ?? invite?.permission_package_id ?? null,
   break_minutes: normalizeDuration(invite?.break_minutes, "00:30"),
@@ -153,17 +192,21 @@ export default function CompanyInvites() {
   const [activeActionMenu, setActiveActionMenu] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [dateFilter, setDateFilter] = useState(null);   // NEW: { date?, month?, year?, from_date?, to_date? }
+  const [dateFilter, setDateFilter] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("pending");
   const [viewMode, setViewMode] = useState("table");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingInvite, setEditingInvite] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [openCreateInviteModal, setOpenCreateInviteModal] = useState(false);
+
+  // Collapsible sections in view modal
+  const [showSalaryDetails, setShowSalaryDetails] = useState(false);
+  const [showAttendanceDetails, setShowAttendanceDetails] = useState(false);
+  const [showShiftSchedule, setShowShiftSchedule] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
-  const [showAttendance, setShowAttendance] = useState(false);
-  const [showWeekends, setShowWeekends] = useState(false);
-  const [showWorkSchedule, setShowWorkSchedule] = useState(true);
-  const [showSalaryComponents, setShowSalaryComponents] = useState(true);
+  const [showSalaryComponents, setShowSalaryComponents] = useState(false);
+
   const fetchInProgress = useRef(false);
 
   const MODAL_TYPES = {
@@ -197,20 +240,18 @@ export default function CompanyInvites() {
         const params = new URLSearchParams({ page: page.toString(), limit: pagination.limit.toString() });
         if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
 
+        if (statusFilter && statusFilter !== "all") {
+          params.append("status", statusFilter);
+        }
+
         if (dateFilter) {
           if (dateFilter.date) {
             params.append("from_date", dateFilter.date);
             params.append("to_date", dateFilter.date);
           } else {
-            if (dateFilter.from_date) {
-              params.append("from_date", dateFilter.from_date);
-            }
-
-            if (dateFilter.to_date) {
-              params.append("to_date", dateFilter.to_date);
-            }
+            if (dateFilter.from_date) params.append("from_date", dateFilter.from_date);
+            if (dateFilter.to_date) params.append("to_date", dateFilter.to_date);
           }
-
           if (dateFilter.month && dateFilter.year) {
             params.append("month", dateFilter.month);
             params.append("year", dateFilter.year);
@@ -251,7 +292,7 @@ export default function CompanyInvites() {
         fetchInProgress.current = false;
       }
     },
-    [company_id, pagination.limit, updatePagination, debouncedSearchTerm, dateFilter]
+    [company_id, pagination.limit, updatePagination, debouncedSearchTerm, dateFilter, statusFilter]
   );
 
   const handlePageChange = useCallback(
@@ -263,14 +304,14 @@ export default function CompanyInvites() {
     if (!isInitialLoad && !fetchInProgress.current) {
       fetchInvites(pagination.page, true);
     }
-  }, [pagination.page, pagination.limit, debouncedSearchTerm, dateFilter]);
+  }, [pagination.page, pagination.limit, debouncedSearchTerm, dateFilter, statusFilter]);
 
   useEffect(() => {
     if (!isInitialLoad) {
       if (pagination.page !== 1) goToPage(1);
       else fetchInvites(1, true);
     }
-  }, [debouncedSearchTerm, dateFilter]);
+  }, [debouncedSearchTerm, dateFilter, statusFilter]);
 
   useEffect(() => {
     if (company_id && isInitialLoad) {
@@ -344,20 +385,21 @@ export default function CompanyInvites() {
     setSelectedInvite(invite);
     setModalType(type);
     setActiveActionMenu(null);
+    setShowSalaryDetails(false);
+    setShowAttendanceDetails(false);
+    setShowShiftSchedule(false);
     setShowPermissions(false);
-    setShowAttendance(false);
-    setShowWeekends(false);
-    setShowWorkSchedule(true);
-    setShowSalaryComponents(true);
+    setShowSalaryComponents(false);
   };
+
   const closeModal = () => {
     setSelectedInvite(null);
     setModalType(null);
+    setShowSalaryDetails(false);
+    setShowAttendanceDetails(false);
+    setShowShiftSchedule(false);
     setShowPermissions(false);
-    setShowAttendance(false);
-    setShowWeekends(false);
-    setShowWorkSchedule(true);
-    setShowSalaryComponents(true);
+    setShowSalaryComponents(false);
   };
 
   // ─── Responsive columns ─────────────────────────────────────────────────
@@ -400,7 +442,6 @@ export default function CompanyInvites() {
   return (
     <div className="min-h-screen">
       <div className="max-w-[1600px] mx-auto">
-
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -414,26 +455,21 @@ export default function CompanyInvites() {
                 Invite management
               </div>
               <div>
-                <h1 className="mt-1 text-lg font-bold text-slate-900 md:text-xl">
-                  Company Invitations
-                </h1>
+                <h1 className="mt-1 text-lg font-bold text-slate-900 md:text-xl">Company Invitations</h1>
                 <p className="mt-1 max-w-2xl text-sm text-slate-500">
                   Manage and track invitations sent to prospective employees and staff members.
                 </p>
               </div>
             </div>
-
             <div className="flex flex-row sm:items-center gap-3 justify-end flex-wrap">
               <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm shadow-sm">
                 <FaUserCheck className="h-4 w-4 text-blue-500" />
                 <span className="font-medium text-gray-700">{invites.length}</span>
                 <span className="text-gray-500">invites</span>
               </div>
-
               <RefreshButton loading={loading} onClick={() => fetchInvites(pagination.page, true)}>
                 Refresh
               </RefreshButton>
-
               <motion.button
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
@@ -447,7 +483,6 @@ export default function CompanyInvites() {
               </motion.button>
             </div>
           </div>
-
           <CreateInviteModal
             isOpen={openCreateInviteModal}
             onClose={() => setOpenCreateInviteModal(false)}
@@ -483,20 +518,25 @@ export default function CompanyInvites() {
                 </button>
               )}
             </div>
-
-            {/* NEW: Advanced Date Filter */}
             <div className="w-full sm:w-auto min-w-[220px]">
               <AdvancedDateFilter
                 value={dateFilter}
-                onChange={(filter) => {
-                  setDateFilter(filter);
-                  // fetch will be triggered by useEffect due to dateFilter dependency
-                }}
+                onChange={(filter) => setDateFilter(filter)}
                 placeholder="Filter by date"
                 buttonClassName="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 min-h-[42px] text-gray-700"
               />
             </div>
-
+            {/* Status Filter – now without the pipe icon */}
+            <div className="w-full sm:w-auto md:w-44">
+              <Select
+                options={INVITE_STATUS_FILTER_OPTIONS}
+                value={INVITE_STATUS_FILTER_OPTIONS.find(option => option.value === statusFilter)}
+                onChange={(option) => setStatusFilter(option?.value || 'pending')}
+                placeholder="Status"
+                isClearable={false}
+                styles={customSelectStyles}
+              />
+            </div>
             <div className="hidden lg:block h-8 w-px bg-gray-200 mx-1"></div>
             <div>
               <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="blue" />
@@ -506,7 +546,6 @@ export default function CompanyInvites() {
 
         {/* Loading / Empty */}
         {loading && !invites.length && <Skeleton />}
-
         {!loading && invites.length === 0 && (
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16 bg-white rounded-xl shadow-xl">
             <FaEnvelope className="text-8xl text-gray-300 mx-auto mb-4" />
@@ -517,6 +556,7 @@ export default function CompanyInvites() {
           </motion.div>
         )}
 
+        {/* Table / Cards */}
         {!loading && invites.length > 0 && (
           <>
             {viewMode === "table" && (
@@ -570,9 +610,7 @@ export default function CompanyInvites() {
                             )}
                             {visibleColumns.showDesignation && (
                               <td className="px-6 py-4">
-                                <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium truncate max-w-[120px] inline-block">
-                                  {formatDisplay(invite.designation)}
-                                </span>
+                                <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium truncate max-w-[120px] inline-block">{formatDisplay(invite.designation)}</span>
                               </td>
                             )}
                             {visibleColumns.showEmployment && (
@@ -580,11 +618,6 @@ export default function CompanyInvites() {
                                 <div className="flex flex-wrap gap-1">
                                   <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs font-medium">{formatDisplay(invite.employment_type)}</span>
                                   <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-xs font-medium">{formatDisplay(invite.salary_type)}</span>
-                                </div>
-                                <div className="mt-2 space-y-1 text-[11px] text-gray-500">
-                                  <div className="flex items-center gap-1.5"><FaClock className="text-indigo-400" /><span>Shift: {invite.shift_start || "N/A"} - {invite.shift_end || "N/A"}</span></div>
-                                  <div className="flex items-center gap-1.5"><FaClock className="text-amber-400" /><span>Break: {formatDurationDisplay(invite.break_minutes)}</span></div>
-                                  <div className="flex items-center gap-1.5"><FaClock className="text-rose-400" /><span>Grace: {formatDurationDisplay(invite.grace_minutes)}</span></div>
                                 </div>
                               </td>
                             )}
@@ -640,7 +673,6 @@ export default function CompanyInvites() {
                 </div>
               </motion.div>
             )}
-
             {viewMode === "card" && (
               <ManagementGrid viewMode={viewMode}>
                 {invites.map((invite, index) => {
@@ -678,14 +710,8 @@ export default function CompanyInvites() {
                               <div className="flex items-center gap-1.5"><FaClock className="text-amber-400" /><span>Break: {formatDurationDisplay(invite.break_minutes)}</span></div>
                               <div className="flex items-center gap-1.5"><FaClock className="text-rose-400" /><span>Grace: {formatDurationDisplay(invite.grace_minutes)}</span></div>
                               <div className="flex items-center gap-1.5"><FaCalendarAlt className="text-teal-400" /><span>Joining: {formatDateSimple(invite.joining_date)}</span></div>
-                              <div className="flex items-center gap-1.5">
-                                <FaTag className="text-indigo-400" />
-                                <span>OT: {invite.enable_overtime ? 'Yes' : 'No'}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <FaTag className="text-rose-400" />
-                                <span>Deduction: {invite.enable_deduction ? 'Yes' : 'No'}</span>
-                              </div>
+                              <div className="flex items-center gap-1.5"><FaTag className="text-indigo-400" /><span>OT: {invite.enable_overtime ? 'Yes' : 'No'}</span></div>
+                              <div className="flex items-center gap-1.5"><FaTag className="text-rose-400" /><span>Deduction: {invite.enable_deduction ? 'Yes' : 'No'}</span></div>
                             </div>
                             <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                               <span className="text-xs text-gray-500"><FaClock className="inline text-yellow-500 mr-1" />Expires: {formatDateSimple(invite.expires_at)}</span>
@@ -707,7 +733,6 @@ export default function CompanyInvites() {
                 })}
               </ManagementGrid>
             )}
-
             <Pagination
               currentPage={pagination.page}
               totalItems={pagination.total || invites.length}
@@ -763,166 +788,249 @@ export default function CompanyInvites() {
             >
               {selectedInvite && (
                 <div className="space-y-4">
-                  {/* Profile Section */}
-                  <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-                    <ProfileAvatar record={selectedInvite.user} name={selectedInvite.user?.name || selectedInvite.user?.email} className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg flex items-center justify-center shrink-0 overflow-hidden"><FaUserCircle className="text-white text-md" /></ProfileAvatar>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-800">{selectedInvite.user?.name || "No name"}</h3>
-                      <div className="flex flex-wrap gap-3 mt-1.5">
-                        <p className="text-sm text-slate-500 flex items-center gap-2"><FaEnvelope className="text-blue-500" size={14} />{selectedInvite.user?.email}</p>
-                        {selectedInvite.user?.phone && <p className="text-sm text-slate-500 flex items-center gap-2"><FaPhone className="text-green-500" size={14} />{selectedInvite.user.phone}</p>}
+                  {/* Profile Section – User + Inviter */}
+                  <div className="flex flex-col sm:flex-row items-start gap-4 pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <ProfileAvatar
+                        record={selectedInvite.user}
+                        name={selectedInvite.user?.name || selectedInvite.user?.email}
+                        className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg flex items-center justify-center shrink-0 overflow-hidden"
+                      >
+                        <FaUserCircle className="text-white text-md" />
+                      </ProfileAvatar>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-slate-800 truncate">
+                          {selectedInvite.user?.name || "No name"}
+                        </h3>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
+                          <p className="text-sm text-slate-500 flex items-center gap-2">
+                            <FaEnvelope className="text-blue-500 shrink-0" size={14} />
+                            {selectedInvite.user?.email}
+                          </p>
+                          {selectedInvite.user?.phone && (
+                            <p className="text-sm text-slate-500 flex items-center gap-2">
+                              <FaPhone className="text-green-500 shrink-0" size={14} />
+                              {selectedInvite.user.phone}
+                            </p>
+                          )}
+                        </div>
+                        {selectedInvite.invited_by && (
+                          <div className="flex items-center gap-1.5 mt-2">
+                            <span className="text-xs text-slate-500">Invited by</span>
+                            <ProfileAvatar
+                              record={selectedInvite.invited_by}
+                              name={selectedInvite.invited_by.name}
+                              className="w-5 h-5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full text-white text-[8px] font-bold overflow-hidden"
+                            >
+                              {selectedInvite.invited_by.name?.charAt(0)?.toUpperCase() || "?"}
+                            </ProfileAvatar>
+                            <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
+                              {selectedInvite.invited_by.name}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Info Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <InfoItem icon={<FaBriefcase className="text-blue-500" />} label="Designation" value={formatDisplay(selectedInvite.designation)} />
-                    <InfoItem icon={<FaUserTie className="text-purple-500" />} label="Employment Type" value={formatDisplay(selectedInvite.employment_type)} />
-                    <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Salary Type" value={formatDisplay(selectedInvite.salary_type)} />
-                    <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Base Amount" value={formatCurrency(selectedInvite.base_amount)} />
-                    <InfoItem icon={<FaShieldAlt className="text-indigo-500" />} label="Permission Package" value={selectedInvite.permission_package?.name || selectedInvite.permission_package_name || "N/A"} />
-                    <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective From" value={formatDateSimple(selectedInvite.effective_from)} />
-                    <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective To" value={formatDateSimple(selectedInvite.effective_to)} />
-                    <InfoItem icon={<FaCalendarAlt className="text-teal-500" />} label="Joining Date" value={formatDateSimple(selectedInvite.joining_date)} />
-                    <InfoItem icon={<FaTag className="text-indigo-500" />} label="Overtime" value={formatBoolean(selectedInvite.enable_overtime)} />
-                    <InfoItem icon={<FaTag className="text-rose-500" />} label="Deduction" value={formatBoolean(selectedInvite.enable_deduction)} />
-                    <InfoItem icon={<FaCalendarAlt className="text-rose-500" />} label="Sent Date" value={formatDate(selectedInvite.created_at)} />
-                    <InfoItem icon={<FaClock className="text-yellow-500" />} label="Expires At" value={formatDate(selectedInvite.expires_at)} />
-                    <InfoItem icon={<FaTag className="text-orange-500" />} label="Status"
-                      value={<span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(selectedInvite.status, selectedInvite.expires_at).className}`}>{getStatusBadge(selectedInvite.status, selectedInvite.expires_at).text}</span>} />
+                  {/* Overview */}
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2 mb-3">
+                      <FaBriefcase className="text-blue-500" /> Overview
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      <InfoItem icon={<FaBriefcase className="text-blue-500" />} label="Designation" value={formatDisplay(selectedInvite.designation)} />
+                      <InfoItem icon={<FaUserTie className="text-purple-500" />} label="Employment Type" value={formatDisplay(selectedInvite.employment_type)} />
+                      <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Salary Type" value={formatDisplay(selectedInvite.salary_type)} />
+                      <InfoItem icon={<FaShieldAlt className="text-indigo-500" />} label="Permission Package" value={selectedInvite.permission_package?.name || selectedInvite.permission_package_name || "N/A"} />
+                      <InfoItem icon={<FaCalendarAlt className="text-rose-500" />} label="Sent Date" value={formatDate(selectedInvite.created_at)} />
+                      <InfoItem icon={<FaClock className="text-yellow-500" />} label="Expires At" value={formatDate(selectedInvite.expires_at)} />
+                      <InfoItem icon={<FaTag className="text-orange-500" />} label="Status"
+                        value={
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(selectedInvite.status, selectedInvite.expires_at).className}`}>
+                            {getStatusBadge(selectedInvite.status, selectedInvite.expires_at).text}
+                          </span>
+                        }
+                      />
+                    </div>
                   </div>
 
-                  {/* Collapsible Work Schedule */}
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden shadow-sm">
-                    <button onClick={() => setShowWorkSchedule(!showWorkSchedule)} className="w-full flex items-center justify-between p-4 hover:bg-indigo-50/50 transition-colors">
-                      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaClock className="text-indigo-500" /> Work Schedule</h4>
-                      <motion.div animate={{ rotate: showWorkSchedule ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
+                  {/* Salary Details */}
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 overflow-hidden shadow-sm">
+                    <button onClick={() => setShowSalaryDetails(!showSalaryDetails)} className="w-full flex items-center justify-between p-4 hover:bg-emerald-50/50 transition-colors">
+                      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                        <CurrencyIcon className="text-emerald-500" size={12} /> Salary Details
+                      </h4>
+                      <motion.div animate={{ rotate: showSalaryDetails ? 180 : 0 }}>
+                        <FaChevronDown className="w-3 h-3 text-slate-400" />
+                      </motion.div>
                     </button>
                     <AnimatePresence>
-                      {showWorkSchedule && (
-                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-indigo-50">
-                          <div className="p-3 flex flex-wrap gap-2">
-                            <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] text-slate-400 font-bold uppercase">Shift</span><span className="text-xs font-bold text-slate-700 block">{selectedInvite.shift_start || 'N/A'} - {selectedInvite.shift_end || 'N/A'}</span></div>
-                            <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] text-slate-400 font-bold uppercase">Break</span><span className="text-xs font-bold text-slate-700 block">{formatDurationDisplay(selectedInvite.break_minutes)}</span></div>
-                            <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm"><span className="text-[9px] text-slate-400 font-bold uppercase">Grace</span><span className="text-xs font-bold text-slate-700 block">{formatDurationDisplay(selectedInvite.grace_minutes)}</span></div>
+                      {showSalaryDetails && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-emerald-50">
+                          <div className="p-4 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                              <InfoItem icon={<CurrencyIcon className="text-emerald-500" size={12} />} label="Base Amount" value={formatCurrency(selectedInvite.base_amount)} />
+                              <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective From" value={formatDateSimple(selectedInvite.effective_from)} />
+                              <InfoItem icon={<FaCalendarAlt className="text-cyan-500" />} label="Effective To" value={formatDateSimple(selectedInvite.effective_to)} />
+                              <InfoItem icon={<FaCalendarAlt className="text-teal-500" />} label="Joining Date" value={formatDateSimple(selectedInvite.joining_date)} />
+                            </div>
+                            {selectedInvite.salary_components?.length > 0 && (
+                              <div className="pt-2 border-t border-slate-100">
+                                <button
+                                  onClick={() => setShowSalaryComponents(!showSalaryComponents)}
+                                  className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 transition-colors"
+                                >
+                                  Salary Components ({selectedInvite.salary_components.length})
+                                  <FaChevronDown className={`w-3 h-3 transition-transform ${showSalaryComponents ? 'rotate-180' : ''}`} />
+                                </button>
+                                <AnimatePresence>
+                                  {showSalaryComponents && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                                      animate={{ height: "auto", opacity: 1, marginTop: 12 }}
+                                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                                      className="overflow-hidden grid gap-2 sm:grid-cols-2 mt-2"
+                                    >
+                                      {selectedInvite.salary_components.map((component, idx) => (
+                                        <div key={component.id ?? component.component_id ?? `comp-${idx}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3 shadow-sm">
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                              <p className="truncate text-[11px] font-bold text-slate-700">{component.component_name || component.name || `Component ${component.component_id}`}</p>
+                                              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{component.component_code || component.code || "N/A"}</p>
+                                            </div>
+                                            <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[10px] font-bold uppercase text-slate-600 ring-1 ring-slate-200">{component.calc_type || "N/A"}</span>
+                                          </div>
+                                          <p className="mt-2 text-sm font-bold text-emerald-700">{component.calc_type === "percentage" ? `${component.calc_value}%` : formatCurrency(component.calc_value)}</p>
+                                        </div>
+                                      ))}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            )}
                           </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
                   </div>
 
-                  {/* Collapsible Sections: Permissions, Attendance, Weekends, Salary Components */}
-                  <div className="space-y-3">
-                    {/* Permissions */}
-                    {selectedInvite.permissions?.length > 0 && (
-                      <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden shadow-sm">
-                        <button onClick={() => setShowPermissions(!showPermissions)} className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 transition-colors">
-                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaShieldAlt className="text-blue-500" /> Assigned Permissions</h4>
-                          <div className="flex items-center gap-3">
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700 font-bold">{selectedInvite.permissions.length}</span>
-                            <motion.div animate={{ rotate: showPermissions ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
-                          </div>
-                        </button>
-                        <AnimatePresence>
-                          {showPermissions && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-blue-50">
-                              <div className="p-3 flex flex-wrap gap-2">
-                                {selectedInvite.permissions.map((perm, idx) => (
-                                  <span key={perm.id || `perm-${idx}`} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-100 shadow-sm">{perm.name}</span>
-                                ))}
+                  {/* Attendance */}
+                  <div className="rounded-xl border border-purple-100 bg-purple-50/30 overflow-hidden shadow-sm">
+                    <button onClick={() => setShowAttendanceDetails(!showAttendanceDetails)} className="w-full flex items-center justify-between p-4 hover:bg-purple-50/50 transition-colors">
+                      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                        <FaFingerprint className="text-purple-500" /> Attendance
+                      </h4>
+                      <motion.div animate={{ rotate: showAttendanceDetails ? 180 : 0 }}>
+                        <FaChevronDown className="w-3 h-3 text-slate-400" />
+                      </motion.div>
+                    </button>
+                    <AnimatePresence>
+                      {showAttendanceDetails && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-purple-50">
+                          <div className="p-4 space-y-3">
+                            <div className="flex flex-wrap gap-4">
+                              <InfoItem icon={<FaCheckCircle className="text-emerald-500" />} label="Auto Approve" value={formatBoolean(selectedInvite.auto_approve)} />
+                              <InfoItem icon={<FaTag className="text-indigo-500" />} label="Overtime" value={formatBoolean(selectedInvite.enable_overtime)} />
+                              <InfoItem icon={<FaTag className="text-rose-500" />} label="Deduction" value={formatBoolean(selectedInvite.enable_deduction)} />
+                            </div>
+                            {selectedInvite.attendance_methods?.length > 0 && (
+                              <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Methods</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedInvite.attendance_methods.map((method, idx) => (
+                                    <span key={`att-${idx}`} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-700 text-[11px] font-semibold rounded-full border border-slate-100 shadow-sm capitalize">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+                                      {formatAttendanceMethod(method)}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
-
-                    {/* Attendance Methods */}
-                    {selectedInvite.attendance_methods?.length > 0 && (
-                      <div className="rounded-xl border border-purple-100 bg-purple-50/30 overflow-hidden shadow-sm">
-                        <button onClick={() => setShowAttendance(!showAttendance)} className="w-full flex items-center justify-between p-4 hover:bg-purple-50/50 transition-colors">
-                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaUserCheck className="text-purple-500" /> Attendance Methods</h4>
-                          <div className="flex items-center gap-3">
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-purple-100 text-purple-700 font-bold">{selectedInvite.attendance_methods.length}</span>
-                            <motion.div animate={{ rotate: showAttendance ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
+                            )}
                           </div>
-                        </button>
-                        <AnimatePresence>
-                          {showAttendance && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-purple-50">
-                              <div className="p-3 flex flex-wrap gap-2">
-                                {selectedInvite.attendance_methods.map((method, idx) => (
-                                  <span key={`att-${idx}`} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-700 text-[11px] font-semibold rounded-full border border-slate-100 shadow-sm capitalize"><div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>{formatAttendanceMethod(method)}</span>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
-
-                    {/* Weekends */}
-                    {selectedInvite.weekends?.length > 0 && (
-                      <div className="rounded-xl border border-rose-100 bg-rose-50/30 overflow-hidden shadow-sm">
-                        <button onClick={() => setShowWeekends(!showWeekends)} className="w-full flex items-center justify-between p-4 hover:bg-rose-50/50 transition-colors">
-                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FaCalendarAlt className="text-rose-500" /> Weekend Policy</h4>
-                          <div className="flex items-center gap-3">
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-rose-100 text-rose-700 font-bold">{selectedInvite.weekends.length}</span>
-                            <motion.div animate={{ rotate: showWeekends ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
-                          </div>
-                        </button>
-                        <AnimatePresence>
-                          {showWeekends && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-rose-50">
-                              <div className="p-3 flex flex-wrap gap-2">
-                                {selectedInvite.weekends.map((weekend, idx) => (
-                                  <div key={`weekend-${idx}`} className="text-center px-3 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-slate-100 shadow-sm min-w-[120px]"><span className="text-sm text-light-500 capitalize">{formatWeekendDay(weekend)}</span></div>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
-
-                    {/* Salary Components */}
-                    {selectedInvite.salary_components?.length > 0 && (
-                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 overflow-hidden shadow-sm">
-                        <button onClick={() => setShowSalaryComponents(!showSalaryComponents)} className="w-full flex items-center justify-between p-4 hover:bg-emerald-50/50 transition-colors">
-                          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><CurrencyIcon className="text-emerald-500" size={12} /> Salary Components</h4>
-                          <div className="flex items-center gap-3">
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-emerald-100 text-emerald-700 font-bold">{selectedInvite.salary_components.length}</span>
-                            <motion.div animate={{ rotate: showSalaryComponents ? 180 : 0 }}><FaChevronDown className="w-3 h-3 text-slate-400" /></motion.div>
-                          </div>
-                        </button>
-                        <AnimatePresence>
-                          {showSalaryComponents && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-emerald-50">
-                              <div className="p-3 grid gap-2 sm:grid-cols-2">
-                                {selectedInvite.salary_components.map((component, idx) => (
-                                  <div key={component.id ?? component.component_id ?? `comp-${idx}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3 shadow-sm">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <p className="truncate text-[11px] font-bold text-slate-700">{component.component_name || component.name || `Component ${component.component_id}`}</p>
-                                        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{component.component_code || component.code || "N/A"}</p>
-                                      </div>
-                                      <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[10px] font-bold uppercase text-slate-600 ring-1 ring-slate-200">{component.calc_type || "N/A"}</span>
-                                    </div>
-                                    <p className="mt-2 text-sm font-bold text-emerald-700">{component.calc_type === "percentage" ? `${component.calc_value}%` : formatCurrency(component.calc_value)}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
+
+                  {/* Shift & Schedule */}
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden shadow-sm">
+                    <button onClick={() => setShowShiftSchedule(!showShiftSchedule)} className="w-full flex items-center justify-between p-4 hover:bg-indigo-50/50 transition-colors">
+                      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                        <FaClock className="text-indigo-500" /> Shift & Schedule
+                      </h4>
+                      <motion.div animate={{ rotate: showShiftSchedule ? 180 : 0 }}>
+                        <FaChevronDown className="w-3 h-3 text-slate-400" />
+                      </motion.div>
+                    </button>
+                    <AnimatePresence>
+                      {showShiftSchedule && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-indigo-50">
+                          <div className="p-4 space-y-3">
+                            <div className="flex flex-wrap gap-3">
+                              <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
+                                <span className="text-[9px] text-slate-400 font-bold uppercase">Shift</span>
+                                <span className="text-xs font-bold text-slate-700 block">{selectedInvite.shift_start || 'N/A'} - {selectedInvite.shift_end || 'N/A'}</span>
+                              </div>
+                              <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
+                                <span className="text-[9px] text-slate-400 font-bold uppercase">Break</span>
+                                <span className="text-xs font-bold text-slate-700 block">{formatDurationDisplay(selectedInvite.break_minutes)}</span>
+                              </div>
+                              <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
+                                <span className="text-[9px] text-slate-400 font-bold uppercase">Grace</span>
+                                <span className="text-xs font-bold text-slate-700 block">{formatDurationDisplay(selectedInvite.grace_minutes)}</span>
+                              </div>
+                            </div>
+                            {selectedInvite.weekends?.length > 0 && (
+                              <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Weekends</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedInvite.weekends.map((weekend, idx) => (
+                                    <div key={`weekend-${idx}`} className="text-center px-3 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-slate-100 shadow-sm min-w-[120px]">
+                                      <span className="text-sm text-light-500 capitalize">{formatWeekendDay(weekend)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Permissions */}
+                  {selectedInvite.permissions?.length > 0 && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden shadow-sm">
+                      <button onClick={() => setShowPermissions(!showPermissions)} className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 transition-colors">
+                        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                          <FaShieldAlt className="text-blue-500" /> Assigned Permissions
+                        </h4>
+                        <div className="flex items-center gap-3">
+                          <span className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700 font-bold">{selectedInvite.permissions.length}</span>
+                          <motion.div animate={{ rotate: showPermissions ? 180 : 0 }}>
+                            <FaChevronDown className="w-3 h-3 text-slate-400" />
+                          </motion.div>
+                        </div>
+                      </button>
+                      <AnimatePresence>
+                        {showPermissions && (
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-blue-50">
+                            <div className="p-3 flex flex-wrap gap-2">
+                              {selectedInvite.permissions.map((perm, idx) => (
+                                <span key={perm.id || `perm-${idx}`} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-100 shadow-sm">{perm.name}</span>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </div>
               )}
             </Modal>
           )}
+
           {modalType === MODAL_TYPES.CANCEL && selectedInvite && (
             <Modal
               key="cancel-modal"
