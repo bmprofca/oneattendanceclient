@@ -133,15 +133,14 @@ const PackageFormBody = ({
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
-                <FaCode className="text-purple-500" /> Group Code <span className="text-red-500">*</span>
+                <FaCode className="text-purple-500" /> Group Code <span className="text-xs text-slate-400 font-normal">(optional, auto‑generated if empty)</span>
               </label>
               <input
                 type="text"
                 name="group_code"
                 value={formData.group_code}
                 onChange={onInputChange}
-                required
-                placeholder="e.g. HR_MGR"
+                placeholder="Leave blank to auto‑generate"
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 outline-none transition-all bg-white text-sm uppercase"
               />
             </div>
@@ -417,7 +416,7 @@ const PermissionManagement = () => {
       const company = JSON.parse(localStorage.getItem('company'));
       const res = await apiCall('/permissions/create-package', 'POST', {
         package_name: data.package_name,
-        group_code: data.group_code,
+        ...(data.group_code ? { group_code: data.group_code } : {}),
         description: data.description,
         permissions: data.permissions
       }, company?.id);
