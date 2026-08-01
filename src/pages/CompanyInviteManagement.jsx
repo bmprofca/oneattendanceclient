@@ -24,7 +24,6 @@ import CurrencyIcon from "../components/common/CurrencyIcon";
 import AdvancedDateFilter from '../components/AdvancedDateFilter';
 import Select from '../components/SelectField';
 
-
 const customSelectStyles = {
   control: (base, state) => ({
     ...base,
@@ -48,22 +47,19 @@ const customSelectStyles = {
     color: state.isSelected ? 'white' : '#1e293b',
     '&:active': { backgroundColor: '#6366f1' },
   }),
-  // Hide the vertical separator bar (the "|")
   indicatorSeparator: (base) => ({ ...base, display: 'none' }),
-  // Style the dropdown arrow (optional)
   dropdownIndicator: (base) => ({ ...base, color: '#6366f1' }),
 };
 
-// ─── Status filter options ─────────────────────────────────────────────────
 const INVITE_STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'pending', label: 'Pending' },
   { value: 'accepted', label: 'Accepted' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'expired', label: 'Expired' },
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
+/* ---------- Helpers ---------- */
 const isExpired = (date) => new Date(date) < new Date();
 
 const getStatusBadge = (status, expiresAt) => {
@@ -75,7 +71,7 @@ const getStatusBadge = (status, expiresAt) => {
     case "pending":
       return { icon: FaClock, text: "Pending", className: "bg-yellow-100 text-yellow-800 border border-yellow-200" };
     case "cancelled":
-      return { icon: FaBan, text: "Cancelled", className: "bg-gray-100 text-gray-800 border border-gray-200" };
+      return { icon: FaBan, text: "Cancelled", className: "bg-rose-100 text-rose-800 border border-rose-200" };
     default:
       return { icon: FaExclamationCircle, text: status, className: "bg-gray-100 text-gray-800 border border-gray-200" };
   }
@@ -164,8 +160,7 @@ const normalizeInviteRecord = (invite) => ({
   enable_deduction: Boolean(invite?.enable_deduction),
 });
 
-// ─── InfoItem ────────────────────────────────────────────────────────────────
-
+/* ---------- InfoItem Component ---------- */
 const InfoItem = ({ icon, label, value, className = "" }) => (
   <div className={`flex items-start gap-2 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 px-3 py-2 ${className}`}>
     <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/80 border border-gray-200">
@@ -180,8 +175,7 @@ const InfoItem = ({ icon, label, value, className = "" }) => (
   </div>
 );
 
-// ─── Main Component ─────────────────────────────────────────────────────────
-
+/* ---------- Main Component ---------- */
 export default function CompanyInvites() {
   const { checkActionAccess, getAccessMessage } = usePermissionAccess();
   const [invites, setInvites] = useState([]);
@@ -222,13 +216,13 @@ export default function CompanyInvites() {
 
   const company_id = JSON.parse(localStorage.getItem("company"))?.id;
 
-  // ── Debounce search ──────────────────────────────────────────────────────
+  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 500);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // ── Fetch invites ────────────────────────────────────────────────────────
+  /* ---------- Fetch Invites ---------- */
   const fetchInvites = useCallback(
     async (page = pagination.page, resetLoading = true) => {
       if (fetchInProgress.current) return;
@@ -237,25 +231,16 @@ export default function CompanyInvites() {
 
       try {
         const company = JSON.parse(localStorage.getItem("company"));
-        const params = new URLSearchParams({ page: page.toString(), limit: pagination.limit.toString() });
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: pagination.limit.toString()
+        });
         if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
 
-        if (statusFilter && statusFilter !== "all") {
-          params.append("status", statusFilter);
-        }
-
-        if (dateFilter) {
-          if (dateFilter.date) {
-            params.append("from_date", dateFilter.date);
-            params.append("to_date", dateFilter.date);
-          } else {
-            if (dateFilter.from_date) params.append("from_date", dateFilter.from_date);
-            if (dateFilter.to_date) params.append("to_date", dateFilter.to_date);
-          }
-          if (dateFilter.month && dateFilter.year) {
-            params.append("month", dateFilter.month);
-            params.append("year", dateFilter.year);
-          }
+        // Align status filter with backend capabilities
+        const apiStatus = statusFilter === "expired" ? "expired" : statusFilter;
+        if (apiStatus && apiStatus !== "all") {
+          params.append("status", apiStatus);
         }
 
         const response = await apiCall(`/company/invites/list?${params.toString()}`, 'GET', null, company?.id);
@@ -263,16 +248,18 @@ export default function CompanyInvites() {
 
         const result = await response.json();
         if (result.success) {
-          setInvites((result.data || []).map(normalizeInviteRecord));
+          const allData = (result.data || []).map(normalizeInviteRecord);
+          setInvites(allData);
           const currentPage = Number(result.current_page ?? result.page ?? result.meta?.page ?? page);
           const perPage = Number(result.per_page ?? result.limit ?? result.meta?.limit ?? pagination.limit);
-          const total = Number(result.total ?? result.meta?.total ?? result.data?.length ?? 0);
+          const total = Number(result.total ?? result.meta?.total ?? allData.length);
           const totalPages = Number(
             result.last_page ??
             result.total_pages ??
             result.meta?.total_pages ??
             Math.max(1, Math.ceil(total / perPage))
           );
+
           updatePagination({
             page: currentPage,
             limit: perPage,
@@ -284,8 +271,8 @@ export default function CompanyInvites() {
           throw new Error(result.message || "Failed to fetch invites");
         }
       } catch (err) {
-        toast.error(err.message || "Failed to load invitations.");
         console.error("Error fetching invites:", err);
+        toast.error(err.message || "Failed to load invitations");
       } finally {
         setLoading(false);
         setIsInitialLoad(false);
@@ -323,7 +310,7 @@ export default function CompanyInvites() {
     }
   }, [company_id]);
 
-  // ── Cancel invite ────────────────────────────────────────────────────────
+  /* ---------- Cancel Invite ---------- */
   const handleCancelInvite = async (inviteId) => {
     try {
       setProcessingId(inviteId);
@@ -345,7 +332,7 @@ export default function CompanyInvites() {
     }
   };
 
-  // ── Resend invite ────────────────────────────────────────────────────────
+  /* ---------- Resend Invite ---------- */
   const handleResendInvite = async (invite) => {
     const inviteId = invite.id;
     if (!inviteId) return toast.error("Invite ID not found.");
@@ -366,7 +353,7 @@ export default function CompanyInvites() {
     }
   };
 
-  // ── Edit invite ──────────────────────────────────────────────────────────
+  /* ---------- Edit Invite ---------- */
   const handleEditClick = (invite) => {
     if (updateInviteAccess.disabled) return;
     setEditingInvite(normalizeInviteRecord(invite));
@@ -402,7 +389,7 @@ export default function CompanyInvites() {
     setShowSalaryComponents(false);
   };
 
-  // ─── Responsive columns ─────────────────────────────────────────────────
+  /* ---------- Responsive columns ---------- */
   const getEffectiveWidth = () => {
     const width = window.innerWidth;
     const offset = width >= 1024 ? 280 : (width >= 768 ? 80 : 0);
@@ -435,10 +422,9 @@ export default function CompanyInvites() {
     return () => { clearTimeout(t); window.removeEventListener("resize", onResize); };
   }, [getVisibleColumns]);
 
-  // ── Early return ─────────────────────────────────────────────────────────
   if (isInitialLoad && loading) return <Skeleton />;
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  /* ---------- Render ---------- */
   return (
     <div className="min-h-screen">
       <div className="max-w-[1600px] mx-auto">
@@ -526,7 +512,6 @@ export default function CompanyInvites() {
                 buttonClassName="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 min-h-[42px] text-gray-700"
               />
             </div>
-            {/* Status Filter – now without the pipe icon */}
             <div className="w-full sm:w-auto md:w-44">
               <Select
                 options={INVITE_STATUS_FILTER_OPTIONS}
@@ -826,6 +811,7 @@ export default function CompanyInvites() {
                             </ProfileAvatar>
                             <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
                               {selectedInvite.invited_by.name}
+                              {selectedInvite.invited_by.email && ` (${selectedInvite.invited_by.email})`}
                             </span>
                           </div>
                         )}

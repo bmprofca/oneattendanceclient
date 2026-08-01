@@ -24,7 +24,8 @@ import {
   FaChevronDown,
   FaChevronUp,
   FaPlus,
-  FaPhone 
+  FaPhone,
+  FaEnvelope,
 } from "react-icons/fa";
 import ModalScrollLock from "../ModalScrollLock";
 import TimeDurationPickerField from "../TimeDurationPicker";
@@ -51,9 +52,9 @@ const normalizeDate = (value) => (value ? String(value).split("T")[0] : "");
 const getMonthYearValue = (value) =>
   value
     ? {
-        month: parseInt(String(value).split("-")[1], 10),
-        year: parseInt(String(value).split("-")[0], 10),
-      }
+      month: parseInt(String(value).split("-")[1], 10),
+      year: parseInt(String(value).split("-")[0], 10),
+    }
     : null;
 
 const monthYearToDate = (value) =>
@@ -87,8 +88,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const [employmentTypes, setEmploymentTypes] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [salaryTypes, setSalaryTypes] = useState([]);
-
-  const [emailQuery, setEmailQuery] = useState("");
+  const [identifierQuery, setIdentifierQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [designation, setDesignation] = useState(null);
   const [selectedPermissionPackage, setSelectedPermissionPackage] = useState(null);
@@ -114,8 +114,6 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const [invitePackages, setInvitePackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [isLoadingPackages, setIsLoadingPackages] = useState(false);
-
-  // NEW: single flag for any interaction
   const [formInteracted, setFormInteracted] = useState(false);
 
   // Collapsible section visibility
@@ -158,9 +156,9 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
 
   const methodBadges = companyAttendanceMethodList.length
     ? companyAttendanceMethodList.map((method) => ({
-        key: method,
-        label: ATTENDANCE_LABELS[method] || method.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-      }))
+      key: method,
+      label: ATTENDANCE_LABELS[method] || method.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+    }))
     : [];
 
   // ---------------------------
@@ -183,7 +181,6 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     [shiftStart, shiftEnd]
   );
 
-  // Helper for section class – red border if form has been interacted with and error exists
   const sectionClass = (section, baseClasses = "rounded-xl border bg-white p-4") => {
     const error =
       (section === "role" && hasRoleError) ||
@@ -194,7 +191,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   };
 
   // ---------------------------
-  // Normalization (preserving component_name & component_code)
+  // Normalization
   // ---------------------------
   const normalizeSalaryComponents = (components = []) =>
     components
@@ -214,7 +211,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       .filter((component) => component.component_id);
 
   // ---------------------------
-  // Data fetching functions (same as before)
+  // Data fetching functions
   // ---------------------------
   const fetchSalaryComponents = async () => {
     if (availableSalaryComponents.length || isLoadingSalaryComponents || salaryComponentsRequestRef.current) return;
@@ -429,27 +426,35 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     "No Name";
 
   const handleSearchUser = async () => {
-    const email = emailQuery.trim();
-    if (!email) {
-      toast.warning("Please enter a full email address");
+    const identifier = identifierQuery.trim();
+    if (!identifier) {
+      toast.warning("Please enter an email or mobile number");
       return;
     }
     setIsSearchingUser(true);
     try {
       const company = JSON.parse(localStorage.getItem("company"));
-      const encodedEmail = encodeURIComponent(email);
-      const endpoint = `/company/users/available?email=${encodedEmail}`;
+      const encodedIdentifier = encodeURIComponent(identifier);
+      const endpoint = `/company/users/available?identifier=${encodedIdentifier}`;
       const res = await apiCall(endpoint, "GET", null, company?.id);
       const result = await res.json();
       if (!res.ok) throw new Error(result?.message || "Failed to search user");
       if (result.success) {
         const found = resolveUserPayload(result);
         if (found) {
+          const id = getResolvedUserId(found);
+          const full_name = getResolvedUserName(found);
+          const lookup_type = found.lookup_type; // 'email' or 'mobile'
+          // Store the masked complementary field from response
+          const masked_email = lookup_type === 'mobile' ? found.email : null;
+          const masked_phone = lookup_type === 'email' ? found.phone : null;
+
           setSelectedUser({
-            id: getResolvedUserId(found),
-            full_name: getResolvedUserName(found),
-            email: found.email,
-            phone: found.phone || null,
+            id,
+            full_name,
+            lookup_type,
+            masked_email,
+            masked_phone,
             profile_picture: found.profile_picture || null,
             is_active: found.is_active,
             created_at: found.created_at || null,
@@ -471,7 +476,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   };
 
   const handleSubmit = async () => {
-    setFormInteracted(true); // force all errors to appear
+    setFormInteracted(true);
 
     if (!selectedUser?.id) { toast.warning("Please search and select a user first"); return; }
     if (!designation) { toast.warning("Please select designation"); return; }
@@ -533,8 +538,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   };
 
   const handleClose = () => {
-    // full reset
-    setEmailQuery("");
+    setIdentifierQuery("");
     setSelectedUser(null);
     setDesignation(null);
     setStaffType(null);
@@ -570,8 +574,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   useEffect(() => {
     if (isOpen && !initialResetDone.current) {
       initialResetDone.current = true;
-      // same reset as handleClose but without calling onClose
-      setEmailQuery("");
+      setIdentifierQuery("");
       setSelectedUser(null);
       setDesignation(null);
       setSelectedPermissionPackage(null);
@@ -654,7 +657,6 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
     }),
   };
 
-  // Select styles with error (using formInteracted instead of sectionTouched)
   const getSelectStyles = (value) => ({
     ...customSelectStyles,
     control: (base, state) => ({
@@ -664,8 +666,8 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       boxShadow: formInteracted && !value
         ? '0 0 0 1px rgba(248, 113, 113, 0.5)'
         : state.isFocused
-        ? '0 0 0 4px rgba(99, 102, 241, 0.1)'
-        : 'none',
+          ? '0 0 0 4px rgba(99, 102, 241, 0.1)'
+          : 'none',
       '&:hover': {
         borderColor: formInteracted && !value ? '#f87171' : '#cbd5e1'
       }
@@ -674,11 +676,10 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
 
   const getInputClass = (value, defaultClasses) => {
     const isInvalid = !value || String(value).trim() === '';
-    return `${defaultClasses} ${
-      formInteracted && isInvalid
-        ? 'border-red-400 bg-red-50/10 ring-1 ring-red-400/50 focus:border-red-500 focus:ring-red-500/20'
-        : 'border-slate-200 bg-white focus:border-indigo-500 focus:ring-indigo-500/10'
-    }`;
+    return `${defaultClasses} ${formInteracted && isInvalid
+      ? 'border-red-400 bg-red-50/10 ring-1 ring-red-400/50 focus:border-red-500 focus:ring-red-500/20'
+      : 'border-slate-200 bg-white focus:border-indigo-500 focus:ring-indigo-500/10'
+      }`;
   };
 
   const toggleAttendanceMethod = (method) => {
@@ -762,28 +763,27 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
   const inviteDisabledReason = submitDisabled
     ? submitTitle
     : !selectedUser
-    ? "Search and verify a user first"
-    : !designation
-    ? "Select a designation"
-    : !selectedPermissionPackage
-    ? "Select a permission package"
-    : !employmentType
-    ? "Select an employment type"
-    : !staffType
-    ? "Select a salary type"
-    : !shiftStart
-    ? "Set shift start time"
-    : !shiftEnd
-    ? "Set shift end time"
-    : selectedAttendanceMethods.length === 0
-    ? "Select at least one attendance method"
-    : !effectiveFrom
-    ? "Select salary effective from date"
-    : !baseAmount
-    ? "Enter base salary amount"
-    : "";
+      ? "Search and verify a user first"
+      : !designation
+        ? "Select a designation"
+        : !selectedPermissionPackage
+          ? "Select a permission package"
+          : !employmentType
+            ? "Select an employment type"
+            : !staffType
+              ? "Select a salary type"
+              : !shiftStart
+                ? "Set shift start time"
+                : !shiftEnd
+                  ? "Set shift end time"
+                  : selectedAttendanceMethods.length === 0
+                    ? "Select at least one attendance method"
+                    : !effectiveFrom
+                      ? "Select salary effective from date"
+                      : !baseAmount
+                        ? "Enter base salary amount"
+                        : "";
 
-  // Shared blur handler to mark form as interacted
   const onFieldBlur = () => {
     setFormInteracted(true);
   };
@@ -793,7 +793,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
       isOpen={isOpen}
       onClose={handleClose}
       title="Add New Staff Member"
-      subtitle="Search user by email, then configure invite details"
+      subtitle="Search user by email or mobile, then configure invite details"
       icon={<FaUserPlus className="h-6 w-6" />}
       size="4xl"
       footer={
@@ -831,16 +831,16 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
           </label>
           <div className="flex items-center gap-3 flex-row">
             <input
-              type="email"
-              value={emailQuery}
-              onChange={(e) => setEmailQuery(e.target.value)}
+              type="text"
+              value={identifierQuery}
+              onChange={(e) => setIdentifierQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   handleSearchUser();
                 }
               }}
-              placeholder="Enter user's email address..."
+              placeholder="Enter email address or mobile number..."
               className="flex-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
             />
             <button
@@ -863,7 +863,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
               exit={{ opacity: 0, y: 10 }}
               className="flex flex-col gap-6"
             >
-              {/* User Found */}
+              {/* User Found (masked fields) */}
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -880,17 +880,29 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 <div className="flex items-start gap-4">
                   <ProfileAvatar
                     record={selectedUser}
-                    name={selectedUser.full_name || selectedUser.email}
+                    name={selectedUser.full_name || "User"}
                     className="flex h-14 w-14 items-center justify-center rounded-xl bg-white text-lg font-bold text-emerald-700 border border-emerald-200 overflow-hidden"
                   >
                     {selectedUser.full_name?.charAt(0)?.toUpperCase() || "U"}
                   </ProfileAvatar>
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="font-semibold text-slate-900">{selectedUser.full_name}</p>
-                    <p className="flex items-center gap-2 text-sm text-slate-600">
-                      <FaPhone  className="h-3.5 w-3.5 text-slate-400" />
-                      {selectedUser.phone}
-                    </p>
+                    {/* Display masked contact based on lookup type */}
+                    {selectedUser.lookup_type === 'mobile' && selectedUser.masked_email && (
+                      <p className="flex items-center gap-2 text-sm text-slate-600">
+                        <FaEnvelope className="h-3.5 w-3.5 text-slate-400" />
+                        {selectedUser.masked_email}
+                      </p>
+                    )}
+                    {selectedUser.lookup_type === 'email' && selectedUser.masked_phone && (
+                      <p className="flex items-center gap-2 text-sm text-slate-600">
+                        <FaPhone className="h-3.5 w-3.5 text-slate-400" />
+                        {selectedUser.masked_phone}
+                      </p>
+                    )}
+                    {!selectedUser.masked_email && !selectedUser.masked_phone && (
+                      <p className="text-sm text-slate-500 italic">No contact details available</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -932,7 +944,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* ========== ROLE & EMPLOYMENT (collapsible) ========== */}
+              {/* ROLE & EMPLOYMENT */}
               <div className={sectionClass("role")}>
                 <button
                   type="button"
@@ -1017,7 +1029,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* ========== SALARY DETAILS (collapsible) ========== */}
+              {/* SALARY DETAILS */}
               <div className={sectionClass("salary")}>
                 <button
                   type="button"
@@ -1206,7 +1218,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* ========== ATTENDANCE (collapsible) ========== */}
+              {/* ATTENDANCE */}
               <div className={sectionClass("attendance")}>
                 <button
                   type="button"
@@ -1240,11 +1252,10 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                                 key={method.key}
                                 type="button"
                                 onClick={() => toggleAttendanceMethod(method.key)}
-                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                                  active
-                                    ? "border-indigo-300 bg-indigo-600 text-white shadow-sm"
-                                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50"
-                                }`}
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${active
+                                  ? "border-indigo-300 bg-indigo-600 text-white shadow-sm"
+                                  : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50"
+                                  }`}
                               >
                                 {active && <FaCheck className="h-3 w-3" />}
                                 {method.label}
@@ -1276,7 +1287,7 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                 </AnimatePresence>
               </div>
 
-              {/* ========== SHIFT & SCHEDULE (collapsible) ========== */}
+              {/* SHIFT & SCHEDULE */}
               <div className={sectionClass("shift")}>
                 <button
                   type="button"
@@ -1321,7 +1332,6 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                         <TimeDurationPickerField label="Grace Minutes" value={graceMinutes} onChange={setGraceMinutes} mode="duration" />
                       </div>
 
-                      {/* Weekends – compact grid */}
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Weekends</label>
                       <div className="flex flex-wrap gap-2">
                         {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => {
@@ -1331,11 +1341,10 @@ function AddStaffModal({ isOpen, onClose, onSuccess, submitDisabled = false, sub
                               key={day}
                               type="button"
                               onClick={() => toggleWeekend(day)}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                                isSelected
-                                  ? "bg-indigo-600 text-white shadow-sm"
-                                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-                              }`}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isSelected
+                                ? "bg-indigo-600 text-white shadow-sm"
+                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                                }`}
                             >
                               <span className={`w-3 h-3 rounded flex items-center justify-center ${isSelected ? "bg-white/20" : "bg-slate-100"}`}>
                                 {isSelected && <FaCheck className="w-2 h-2 text-white" />}
