@@ -234,13 +234,6 @@ const EMPTY_FORM = {
   account_number: '',
   ifsc_code: '',
   branch_name: '',
-  address: '',
-  city: '',
-  district: '',
-  state: '',
-  micr: '',
-  contact: '',
-  upi: false,
   upi_id: '',
   is_primary: false,
   status: 'active',
@@ -249,12 +242,6 @@ const EMPTY_FORM = {
 const EMPTY_AUTO_LOCKED_FIELDS = {
   bank_name: false,
   branch_name: false,
-  address: false,
-  city: false,
-  district: false,
-  state: false,
-  micr: false,
-  contact: false,
 };
 
 const BankAccountManagement = () => {
@@ -273,10 +260,11 @@ const BankAccountManagement = () => {
   const [viewMode, setViewMode] = useState('table');
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [ifscLookupState, setIfscLookupState] = useState({ loading: false, error: '' });
-  const [autoLockedFields, setAutoLockedFields] = useState(EMPTY_AUTO_LOCKED_FIELDS);
+  const [autoLockedFields, setAutoLockedFields] = useState({ ...EMPTY_AUTO_LOCKED_FIELDS });
   const ifscLookupRequestRef = useRef(0);
   const ifscLookupTimerRef = useRef(null);
   const lastIfscLookupRef = useRef('');
+
   const getEffectiveWidth = () => {
     const width = window.innerWidth;
     const offset = width >= 1024 ? 280 : (width >= 768 ? 80 : 0);
@@ -424,13 +412,6 @@ const BankAccountManagement = () => {
         account_number: account.account_number || '',
         ifsc_code: account.ifsc_code || '',
         branch_name: account.branch_name || '',
-        address: account.address || '',
-        city: account.city || '',
-        district: account.district || '',
-        state: account.state || '',
-        micr: account.micr || '',
-        contact: account.contact || '',
-        upi: account.upi ?? false,
         upi_id: account.upi_id || '',
         is_primary: account.is_primary || false,
         status: account.status || 'active',
@@ -445,7 +426,7 @@ const BankAccountManagement = () => {
     }
     lastIfscLookupRef.current = '';
     setIfscLookupState({ loading: false, error: '' });
-    setAutoLockedFields(EMPTY_AUTO_LOCKED_FIELDS);
+    setAutoLockedFields({ ...EMPTY_AUTO_LOCKED_FIELDS });
     setShowModal(true);
   };
 
@@ -460,7 +441,7 @@ const BankAccountManagement = () => {
     }
     lastIfscLookupRef.current = '';
     setIfscLookupState({ loading: false, error: '' });
-    setAutoLockedFields(EMPTY_AUTO_LOCKED_FIELDS);
+    setAutoLockedFields({ ...EMPTY_AUTO_LOCKED_FIELDS });
   };
 
   const handleIfscChange = (value) => {
@@ -478,20 +459,12 @@ const BankAccountManagement = () => {
         ifsc_code: nextIfsc,
         bank_name: '',
         branch_name: '',
-        address: '',
-        city: '',
-        district: '',
-        state: '',
-        micr: '',
-        contact: '',
-        upi: false,
       };
     });
     resetIfscLookupState();
   };
 
   const lockedInputClass = (locked) => `${inputCls} ${locked ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`;
-  const lockedTextareaClass = (locked) => `${inputCls} resize-none ${locked ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`;
 
   const applyIfscLookup = useCallback(async (ifscValue, { silent = false } = {}) => {
     const ifsc = String(ifscValue || '').trim().toUpperCase();
@@ -517,25 +490,12 @@ const BankAccountManagement = () => {
       setAutoLockedFields({
         bank_name: !!details.bank_name,
         branch_name: !!details.branch_name,
-        address: !!details.address,
-        city: !!details.city,
-        district: !!details.district,
-        state: !!details.state,
-        micr: !!details.micr,
-        contact: !!details.contact,
       });
       setFormData((prev) => ({
         ...prev,
         ifsc_code: ifsc,
         bank_name: details.bank_name || prev.bank_name,
         branch_name: details.branch_name || prev.branch_name,
-        address: details.address || prev.address,
-        city: details.city || prev.city,
-        district: details.district || prev.district,
-        state: details.state || prev.state,
-        micr: details.micr || prev.micr,
-        contact: details.contact || prev.contact,
-        upi: typeof details.upi === 'boolean' ? details.upi : prev.upi,
       }));
       return true;
     } catch (error) {
@@ -599,7 +559,7 @@ const BankAccountManagement = () => {
   const handleAction = async () => {
     if (modalMode !== 'delete') {
       if (!formData.account_holder_name.trim()) { toast.error('Account holder name is required'); return; }
-      if (isBankAccount(formData.account_type)) {
+      if (isBankType) {
         if (!formData.bank_name.trim()) { toast.error('Bank name is required'); return; }
         if (!formData.account_number.trim()) { toast.error('Account number is required'); return; }
         if (!formData.ifsc_code.trim()) { toast.error('IFSC code is required'); return; }
@@ -616,7 +576,6 @@ const BankAccountManagement = () => {
 
       if (modalMode === 'create') {
         const payload = {
-          company_id: companyId,
           bank_owner_type: 'company',
           account_type: formData.account_type,
           account_holder_name: formData.account_holder_name,
@@ -626,13 +585,6 @@ const BankAccountManagement = () => {
             account_number: formData.account_number,
             ifsc_code: formData.ifsc_code,
             branch_name: formData.branch_name,
-            address: formData.address,
-            city: formData.city,
-            district: formData.district,
-            state: formData.state,
-            micr: formData.micr,
-            contact: formData.contact,
-            upi: formData.upi,
           }),
           ...(isUpiType && {
             upi_id: formData.upi_id,
@@ -649,13 +601,6 @@ const BankAccountManagement = () => {
           account_number: formData.account_number,
           ifsc_code: formData.ifsc_code,
           branch_name: formData.branch_name,
-          address: formData.address,
-          city: formData.city,
-          district: formData.district,
-          state: formData.state,
-          micr: formData.micr,
-          contact: formData.contact,
-          upi: formData.upi,
           upi_id: formData.upi_id,
           is_primary: formData.is_primary,
           status: formData.status,
@@ -1023,25 +968,32 @@ const BankAccountManagement = () => {
         ) : (
           <div className="space-y-5">
             <FormField label="Account Type">
-              <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-                {ACCOUNT_TYPES.map((type) => {
-                  const isActive = formData.account_type === type;
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setFormData((p) => ({ ...p, account_type: type }))}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${isActive
-                        ? 'bg-white text-violet-600 shadow-sm border border-violet-100 ring-4 ring-violet-500/5'
-                        : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
-                        }`}
-                    >
-                      {type === 'cash' ? <FaMoneyBillWave size={12} /> : type === 'upi' ? <FaQrcode size={12} /> : <FaUniversity size={12} />}
-                      {type}
-                    </button>
-                  );
-                })}
-              </div>
+              {modalMode === 'edit' ? (
+                <div className="flex items-center gap-2">
+                  <AccountTypeBadge type={formData.account_type} />
+                  <span className="text-xs text-slate-400">(cannot be changed)</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                  {ACCOUNT_TYPES.map((type) => {
+                    const isActive = formData.account_type === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setFormData((p) => ({ ...p, account_type: type }))}
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${isActive
+                          ? 'bg-white text-violet-600 shadow-sm border border-violet-100 ring-4 ring-violet-500/5'
+                          : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
+                          }`}
+                      >
+                        {type === 'cash' ? <FaMoneyBillWave size={12} /> : type === 'upi' ? <FaQrcode size={12} /> : <FaUniversity size={12} />}
+                        {type}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </FormField>
 
             <FormField label="Account Holder Name *">
