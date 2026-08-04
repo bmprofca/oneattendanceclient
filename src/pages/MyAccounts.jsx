@@ -641,6 +641,7 @@ const EmployeeBankAccountManagement = () => {
 
   const isBankType = isBankAccount(formData.account_type);
   const isUpiType = formData.account_type === 'upi';
+  const isEdit = modalMode === 'edit';
 
   // ── Table columns ──────────────────────────────────────────────────────────
 
@@ -760,7 +761,6 @@ const EmployeeBankAccountManagement = () => {
           return (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
               <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-violet-600 via-indigo-600 to-indigo-800 p-6 text-white shadow-xl shadow-violet-200">
-                {/* Decorative circles */}
                 <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/5" />
                 <div className="pointer-events-none absolute -bottom-6 right-16 h-28 w-28 rounded-full bg-white/5" />
 
@@ -789,14 +789,13 @@ const EmployeeBankAccountManagement = () => {
           );
         })()}
 
-        {/* ─── Consolidated Filter & View Bar ─── */}
+        {/* ── Consolidated Filter & View Bar ─── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="flex flex-col lg:flex-row lg:items-center md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-2"
         >
-          {/* Left Section: Search */}
           <div className="relative flex-1">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -807,8 +806,6 @@ const EmployeeBankAccountManagement = () => {
               className="w-full pl-11 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all text-sm min-h-[42px]"
             />
           </div>
-
-          {/* Right Section: View Switcher */}
           <div className="flex items-center justify-end">
             <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="violet" />
           </div>
@@ -847,8 +844,8 @@ const EmployeeBankAccountManagement = () => {
                 onEdit={(r) => openModal('edit', r)}
                 onDelete={(r) => openModal('delete', r)}
                 onView={(r) => setViewModal({ open: true, account: r })}
-                editDisabled={updateAccess.disabled}    // ✅ fixed
-                deleteDisabled={deleteAccess.disabled}  // ✅ fixed
+                editDisabled={updateAccess.disabled}
+                deleteDisabled={deleteAccess.disabled}
                 editMessage={updateMessage}
                 deleteMessage={deleteMessage}
               />
@@ -906,14 +903,12 @@ const EmployeeBankAccountManagement = () => {
         }
       >
         <div className="space-y-6">
-          {/* Badges */}
           <div className="flex flex-wrap gap-2">
             <AccountTypeBadge type={viewModal.account?.account_type} />
             <StatusBadge status={viewModal.account?.status} />
             {viewModal.account?.is_primary && <PrimaryBadge />}
           </div>
 
-          {/* Card visual */}
           {(viewModal.account?.account_type === 'bank' || viewModal.account?.account_type === 'upi') && (
             <div className={`relative overflow-hidden rounded-xl p-6 text-white shadow-lg bg-gradient-to-br ${viewModal.account?.account_type === 'upi' ? 'from-emerald-600 via-teal-600 to-emerald-800' : 'from-violet-600 via-indigo-600 to-indigo-800'}`}>
               <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/5" />
@@ -934,7 +929,6 @@ const EmployeeBankAccountManagement = () => {
             </div>
           )}
 
-          {/* Details grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               { label: 'IFSC Code', value: viewModal.account?.ifsc_code || '—' },
@@ -949,7 +943,6 @@ const EmployeeBankAccountManagement = () => {
             ))}
           </div>
 
-          {/* Security note */}
           <div className="flex items-center gap-3 p-4 bg-violet-50/60 border border-violet-100 rounded-xl">
             <FaShieldAlt className="text-violet-400 shrink-0" size={16} />
             <p className="text-xs text-violet-600 font-medium">Your account details are encrypted and stored securely.</p>
@@ -1022,6 +1015,7 @@ const EmployeeBankAccountManagement = () => {
                   saving ||
                   !formData.account_holder_name.trim() ||
                   (isBankType && (!formData.bank_name.trim() || !formData.account_number.trim() || !formData.ifsc_code.trim())) ||
+                  (isUpiType && !formData.upi_id.trim()) ||
                   (modalMode === 'create' ? createAccess.disabled : updateAccess.disabled)
                 }
                 title={modalMode === 'create' ? (createAccess.disabled ? createMessage : '') : (updateAccess.disabled ? updateMessage : '')}
@@ -1035,27 +1029,39 @@ const EmployeeBankAccountManagement = () => {
           }
         >
           <div className="space-y-5">
-            <FormField label="Account Type">
-              <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-                {ACCOUNT_TYPES.map((type) => {
-                  const isActive = formData.account_type === type;
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setFormData(p => ({ ...p, account_type: type }))}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${isActive
-                        ? 'bg-white text-violet-600 shadow-sm border border-violet-100 ring-4 ring-violet-500/5'
-                        : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
-                        }`}
-                    >
-                      {type === 'upi' ? <FaQrcode size={12} /> : <FaUniversity size={12} />}
-                      {type}
-                    </button>
-                  );
-                })}
-              </div>
-            </FormField>
+            {/* Account Type — only shows full selector in Create mode, otherwise a static badge */}
+            {isEdit ? (
+              <FormField label="Account Type">
+                <div className="flex items-center gap-3">
+                  <AccountTypeBadge type={formData.account_type} />
+                  <span className="text-sm font-semibold text-slate-700">
+                    {formData.account_type === 'upi' ? 'UPI' : 'Bank Account'}
+                  </span>
+                </div>
+              </FormField>
+            ) : (
+              <FormField label="Account Type">
+                <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                  {ACCOUNT_TYPES.map((type) => {
+                    const isActive = formData.account_type === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setFormData(p => ({ ...p, account_type: type }))}
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${isActive
+                          ? 'bg-white text-violet-600 shadow-sm border border-violet-100 ring-4 ring-violet-500/5'
+                          : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
+                          }`}
+                      >
+                        {type === 'upi' ? <FaQrcode size={12} /> : <FaUniversity size={12} />}
+                        {type}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FormField>
+            )}
 
             {/* Holder name */}
             <FormField label="Account Holder Name" required>
@@ -1134,13 +1140,11 @@ const EmployeeBankAccountManagement = () => {
                     className={lockedInputClass(autoLockedFields.branch_name)}
                   />
                 </FormField>
-
-
               </div>
             )}
 
             {/* Status — edit only */}
-            {modalMode === 'edit' && (
+            {isEdit && (
               <FormField label="Status">
                 <div className="relative">
                   <select value={formData.status} onChange={(e) => setFormData(p => ({ ...p, status: e.target.value }))} className={selectCls}>
