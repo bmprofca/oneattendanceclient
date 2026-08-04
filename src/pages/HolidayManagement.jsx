@@ -55,7 +55,6 @@ const Icon = {
       <polyline points="20 6 9 17 4 12" />
     </svg>
   ),
-  // Small star symbol used for master/national holiday indicators
   Star: () => (
     <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
       <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
@@ -64,6 +63,16 @@ const Icon = {
   Info: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
       <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  ),
+  Eye: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  Building: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <rect x="4" y="2" width="16" height="20" rx="2" ry="2" /><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01" />
     </svg>
   ),
 };
@@ -181,8 +190,6 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ─── Holiday display configs ───────────────────────────────────────────────
-// Only company holidays get full card treatment.
-// Master holidays are indicator-only (no config needed for bg/badge).
 const COMPANY_HOLIDAY_CONFIG = {
   mandatory: {
     bg: 'bg-red-50',
@@ -193,23 +200,22 @@ const COMPANY_HOLIDAY_CONFIG = {
     badge: 'Mandatory',
   },
   optional: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    dot: 'bg-red-500',
-    text: 'text-red-700',
+    bg: 'bg-yellow-50',
+    border: 'border-yellow-200',
+    dot: 'bg-yellow-500',
+    text: 'text-yellow-700',
     badgeBg: 'bg-yellow-100 text-yellow-800',
     badge: 'Optional',
   },
 };
 
-// Returns config only for company holidays; null for master (indicator only)
 const getCompanyHolidayConfig = (holiday) => {
   if (!holiday || holiday.source !== 'company') return null;
   return holiday.is_optional === 1 ? COMPANY_HOLIDAY_CONFIG.optional : COMPANY_HOLIDAY_CONFIG.mandatory;
 };
 
 // ==================== CREATE HOLIDAY MODAL ====================
-const CreateHolidayModal = ({ selectedDates, onClose, onCreateSuccess, initialName, masterHoliday, submitDisabled = false, submitTitle = '' }) => {
+const CreateHolidayModal = ({ selectedDates, onClose, onCreateSuccess, initialName, masterHolidays = [], submitDisabled = false, submitTitle = '' }) => {
   const [name, setName] = useState(initialName || '');
   const [isOptional, setIsOptional] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -256,32 +262,6 @@ const CreateHolidayModal = ({ selectedDates, onClose, onCreateSuccess, initialNa
       }
     >
       <form id="create-holiday-form" onSubmit={handleSubmit} className="space-y-5">
-
-        {/* Master holiday hint — shown when the selected date has a national/observance holiday */}
-        {masterHoliday && (
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-100">
-            <span className="mt-0.5 flex-shrink-0 text-blue-400">
-              <Icon.Info />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-blue-700 leading-snug">
-                National holiday on this date
-              </p>
-              <p className="text-xs text-blue-600 mt-0.5">
-                <span className="font-bold">{masterHoliday.name}</span>
-                {masterHoliday.type === 'Observance' && <span className="ml-1.5 opacity-70">(Observance)</span>}
-              </p>
-              <button
-                type="button"
-                onClick={() => setName(masterHoliday.name)}
-                className="mt-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
-              >
-                Use this name →
-              </button>
-            </div>
-          </div>
-        )}
-
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Holiday Name</label>
           <input
@@ -294,7 +274,28 @@ const CreateHolidayModal = ({ selectedDates, onClose, onCreateSuccess, initialNa
           />
         </div>
 
-        {/* Optional toggle */}
+        {/* Quick‑fill pills – now below the input */}
+        {masterHolidays.length > 0 && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+              Quick Fill (National Holidays)
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {masterHolidays.map((mh, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setName(mh.name)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                  title={`${mh.name}${mh.type ? ' – ' + mh.type : ''}`}
+                >
+                  {mh.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <label className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-gray-50 cursor-pointer hover:bg-yellow-50 hover:border-yellow-200 transition-all group">
           <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${isOptional ? 'bg-yellow-400 border-yellow-400' : 'border-gray-300 group-hover:border-yellow-400'}`}>
             {isOptional && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12" /></svg>}
@@ -440,8 +441,87 @@ const DeleteModal = ({ holiday, onClose, onDeleteSuccess, submitDisabled = false
   );
 };
 
+// ==================== VIEW DATE HOLIDAYS MODAL ====================
+const ViewDateHolidaysModal = ({ date, holidays, onClose, onEdit, onDelete, editDisabled, deleteDisabled, editMessage, deleteMessage }) => {
+  const companyHolidays = holidays.filter(h => h.source === 'company');
+  const masterHolidays = holidays.filter(h => h.source === 'master');
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={formatDate(date)}
+      subtitle={`${holidays.length} holiday${holidays.length !== 1 ? 's' : ''}`}
+      icon={<Icon.Eye />}
+      size="md"
+      footer={
+        <button onClick={onClose} className="px-6 py-2.5 rounded-xl font-semibold text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 active:scale-[0.98] transition-all">
+          Close
+        </button>
+      }
+    >
+      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+        {companyHolidays.length > 0 && (
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
+              <Icon.Building /> Company Holidays
+            </h4>
+            {companyHolidays.map(hol => {
+              const config = getCompanyHolidayConfig(hol);
+              return (
+                <div key={hol.id} className={`flex items-center gap-3 p-3 rounded-xl border mb-2 ${config.bg} ${config.border}`}>
+                  <div className={`w-2 h-2 rounded-full ${config.dot} flex-shrink-0`} />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-bold ${config.text}`}>{hol.name}</p>
+                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${config.badgeBg}`}>{config.badge}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => { onClose(); onEdit(hol); }}
+                      disabled={editDisabled}
+                      title={editDisabled ? editMessage : 'Edit'}
+                      className="p-1.5 rounded-lg hover:bg-white/60 text-gray-500 disabled:opacity-40"
+                    >
+                      <Icon.Edit />
+                    </button>
+                    <button
+                      onClick={() => { onClose(); onDelete(hol); }}
+                      disabled={deleteDisabled}
+                      title={deleteDisabled ? deleteMessage : 'Delete'}
+                      className="p-1.5 rounded-lg hover:bg-white/60 text-red-500 disabled:opacity-40"
+                    >
+                      <Icon.Trash />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {masterHolidays.length > 0 && (
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
+              <Icon.Star /> National Holidays
+            </h4>
+            {masterHolidays.map((hol, idx) => (
+              <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-blue-50/50 mb-1">
+                <Icon.Star />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-blue-800">{hol.name}</p>
+                  {hol.type && <p className="text-[10px] text-blue-500">{hol.type}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 // ==================== ACTION MENU ====================
-const ActionMenu = ({ date, holidayInfo, onAction, onClose, createDisabled, updateDisabled, deleteDisabled, createMessage, updateMessage, deleteMessage }) => {
+const ActionMenu = ({ date, holidays, companyHoliday, onAction, onClose, onView, createDisabled, updateDisabled, deleteDisabled, createMessage, updateMessage, deleteMessage }) => {
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -450,9 +530,8 @@ const ActionMenu = ({ date, holidayInfo, onAction, onClose, createDisabled, upda
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
-  // Can create a company holiday when there's no company holiday yet on this date
-  const canCreate = !holidayInfo || holidayInfo.source === 'master';
-  const isCompany = holidayInfo?.source === 'company';
+  const canCreate = !companyHoliday;
+  const isCompany = !!companyHoliday;
 
   return (
     <motion.div
@@ -464,9 +543,20 @@ const ActionMenu = ({ date, holidayInfo, onAction, onClose, createDisabled, upda
       className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden py-1"
       onClick={e => e.stopPropagation()}
     >
+      {holidays.length > 0 && (
+        <button
+          onClick={() => { onView(date, holidays); onClose(); }}
+          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition-colors"
+        >
+          <span className="w-7 h-7 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center flex-shrink-0">
+            <Icon.Eye />
+          </span>
+          View Details
+        </button>
+      )}
       {canCreate && (
         <button
-          onClick={() => { onAction(date, holidayInfo, 'create'); onClose(); }}
+          onClick={() => { onAction(date, holidays, 'create'); onClose(); }}
           disabled={createDisabled}
           title={createDisabled ? createMessage : ''}
           className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -480,7 +570,7 @@ const ActionMenu = ({ date, holidayInfo, onAction, onClose, createDisabled, upda
       {isCompany && (
         <>
           <button
-            onClick={() => { onAction(date, holidayInfo, 'update'); onClose(); }}
+            onClick={() => { onAction(date, companyHoliday, 'update'); onClose(); }}
             disabled={updateDisabled}
             title={updateDisabled ? updateMessage : ''}
             className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -492,7 +582,7 @@ const ActionMenu = ({ date, holidayInfo, onAction, onClose, createDisabled, upda
           </button>
           <div className="mx-3 h-px bg-gray-100" />
           <button
-            onClick={() => { onAction(date, holidayInfo, 'delete'); onClose(); }}
+            onClick={() => { onAction(date, companyHoliday, 'delete'); onClose(); }}
             disabled={deleteDisabled}
             title={deleteDisabled ? deleteMessage : ''}
             className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -509,17 +599,9 @@ const ActionMenu = ({ date, holidayInfo, onAction, onClose, createDisabled, upda
 };
 
 // ==================== MASTER HOLIDAY INDICATOR ====================
-// Shown for national/observance holidays — small star + truncated name, no card bg
 const MasterHolidayIndicator = ({ holiday }) => {
   const isObservance = holiday.type === 'Observance';
-  const isOptionalMaster = holiday.is_optional === 1;
-
-  // Color the indicator based on master holiday sub-type
-  const color = isObservance
-    ? 'text-amber-500'
-    : isOptionalMaster
-    ? 'text-teal-500'
-    : 'text-blue-400';
+  const color = isObservance ? 'text-amber-500' : 'text-blue-400';
 
   return (
     <div className={`flex items-center gap-1 mt-1 ${color}`} title={`${holiday.name}${isObservance ? ' (Observance)' : ''}`}>
@@ -534,28 +616,33 @@ const MasterHolidayIndicator = ({ holiday }) => {
 // ==================== CALENDAR CELL ====================
 const CalendarCell = ({
   date, dayNumber, isCurrentMonth, isToday,
-  holidayInfo, onAction, onMonthNavigate,
+  holidays, onAction, onMonthNavigate, onViewDate,
   createDisabled, updateDisabled, deleteDisabled,
   createMessage, updateMessage, deleteMessage,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const isCompany = holidayInfo?.source === 'company';
-  const isMaster = holidayInfo?.source === 'master';
-  const config = isCompany ? getCompanyHolidayConfig(holidayInfo) : null;
+
+  const companyHoliday = holidays.find(h => h.source === 'company') || null;
+  const primaryHoliday = companyHoliday || holidays[0]; // company first
+  const config = companyHoliday ? getCompanyHolidayConfig(companyHoliday) : null;
+  const extraCount = holidays.length - 1;
 
   const handleCellClick = () => {
-    if (!isCurrentMonth) onMonthNavigate(date);
+    if (isCurrentMonth && holidays.length > 0) {
+      onViewDate(date, holidays);
+    } else if (!isCurrentMonth) {
+      onMonthNavigate(date);
+    }
   };
 
   return (
     <div
       onClick={handleCellClick}
       className={[
-        'relative min-h-[80px] sm:min-h-[100px] p-2 sm:p-2.5 flex flex-col border-r border-b border-gray-100 transition-colors',
-        !isCurrentMonth ? 'bg-gray-50/60 cursor-pointer' : 'bg-white',
+        'relative min-h-[80px] sm:min-h-[100px] p-2 sm:p-2.5 flex flex-col border-r border-b border-gray-100 transition-colors cursor-pointer group',
+        !isCurrentMonth ? 'bg-gray-50/60' : 'bg-white',
         isToday ? 'ring-2 ring-inset ring-violet-400 z-10' : '',
-        // Only company holidays color the cell background
-        isCompany && isCurrentMonth ? config.bg : '',
+        companyHoliday && isCurrentMonth ? config.bg : '',
       ].filter(Boolean).join(' ')}
     >
       {/* Row: day number + action trigger */}
@@ -572,8 +659,8 @@ const CalendarCell = ({
           <div className="relative">
             <button
               onClick={e => { e.stopPropagation(); setMenuOpen(p => !p); }}
-              className={`p-1 rounded-lg transition-colors text-gray-400 hover:text-gray-600 ${menuOpen ? 'bg-gray-200 opacity-100' : 'opacity-0 hover:opacity-100 focus:opacity-100 hover:bg-gray-100/80'}`}
-              style={{ opacity: menuOpen ? 1 : undefined }}
+              className={`p-1 rounded-lg transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100/80
+                ${menuOpen ? 'opacity-100 bg-gray-200' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
             >
               <Icon.Dots />
             </button>
@@ -581,8 +668,10 @@ const CalendarCell = ({
               {menuOpen && (
                 <ActionMenu
                   date={date}
-                  holidayInfo={holidayInfo}
+                  holidays={holidays}
+                  companyHoliday={companyHoliday}
                   onAction={onAction}
+                  onView={onViewDate}
                   onClose={() => setMenuOpen(false)}
                   createDisabled={createDisabled}
                   updateDisabled={updateDisabled}
@@ -597,30 +686,41 @@ const CalendarCell = ({
         )}
       </div>
 
-      {/* ── Company holiday card ── full display with badge */}
-      {isCompany && isCurrentMonth && (
-        <div className="flex-1 mt-1.5">
-          <div className="flex items-start gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-[3px] ${config.dot}`} />
-            <div className="min-w-0">
-              <p className={`text-[10px] sm:text-xs font-bold leading-snug truncate ${config.text}`}>
-                {holidayInfo.name}
-              </p>
-              <span className={`inline-block text-[9px] font-bold uppercase tracking-wider mt-0.5 px-1.5 py-0.5 rounded-full ${config.badgeBg}`}>
-                {config.badge}
-              </span>
+      {/* ── Primary holiday display ── */}
+      {primaryHoliday && isCurrentMonth && (
+        <>
+          {companyHoliday ? (
+            <div className="flex-1 mt-1.5">
+              <div className="flex items-start gap-1.5">
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-[3px] ${config.dot}`} />
+                <div className="min-w-0">
+                  <p className={`text-[10px] sm:text-xs font-bold leading-snug truncate ${config.text}`}>
+                    {primaryHoliday.name}
+                  </p>
+                  <span className={`inline-block text-[9px] font-bold uppercase tracking-wider mt-0.5 px-1.5 py-0.5 rounded-full ${config.badgeBg}`}>
+                    {config.badge}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <MasterHolidayIndicator holiday={primaryHoliday} />
+          )}
+        </>
+      )}
+
+      {/* ── Extra holidays indicator ── */}
+      {extraCount > 0 && isCurrentMonth && (
+        <div
+          className="mt-1 text-[9px] font-bold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5 inline-flex items-center gap-1 w-fit hover:bg-violet-100 transition-colors"
+          onClick={e => { e.stopPropagation(); onViewDate(date, holidays); }}
+        >
+          +{extraCount} more
         </div>
       )}
 
-      {/* ── Master holiday indicator ── symbol + name only, no bg change */}
-      {isMaster && isCurrentMonth && (
-        <MasterHolidayIndicator holiday={holidayInfo} />
-      )}
-
       {/* Dim dot for out-of-month holidays */}
-      {holidayInfo && !isCurrentMonth && (
+      {holidays.length > 0 && !isCurrentMonth && (
         <div className="w-1 h-1 rounded-full bg-gray-300 mt-1" />
       )}
     </div>
@@ -633,8 +733,9 @@ const HolidayManagementCalendar = () => {
   const [currentDate, setCurrentDate] = useState(() => toCalendarDate(new Date()) || new Date());
   const [allHolidays, setAllHolidays] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); // 'create' | 'update' | 'delete'
+  const [activeModal, setActiveModal] = useState(null); // 'create' | 'update' | 'delete' | 'view'
   const [modalData, setModalData] = useState(null);
+  const [viewModalData, setViewModalData] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const fetchLock = useRef(null);
 
@@ -665,15 +766,19 @@ const HolidayManagementCalendar = () => {
           holidayService.getCompanyHolidays(company?.id)
         ]);
         const map = {};
-        // Master holidays go in first (lower priority)
-        masterData.forEach(h => { map[h.date] = { ...h, source: 'master' }; });
-        // Company holidays override/add for the current month
+        masterData.forEach(h => {
+          if (!map[h.date]) map[h.date] = [];
+          map[h.date].push({ ...h, source: 'master' });
+        });
         companyData.forEach(h => {
           const d = new Date(h.date);
           if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
-            map[h.date] = { ...h, source: 'company' };
+            const dateStr = formatDate(d);
+            if (!map[dateStr]) map[dateStr] = [];
+            map[dateStr].push({ ...h, source: 'company' });
           }
         });
+        Object.values(map).forEach(arr => arr.sort((a, b) => a.source === 'company' ? -1 : b.source === 'company' ? 1 : 0));
         return map;
       })();
       fetchLock.current = { key, promise: activePromise };
@@ -688,31 +793,38 @@ const HolidayManagementCalendar = () => {
     return () => { active = false; };
   }, [currentYear, currentMonth, refreshKey]);
 
-  const getHolidayForDate = useCallback((date) => {
+  const getHolidaysForDate = useCallback((date) => {
     const key = `${currentYear}-${currentMonth}`;
-    return (allHolidays[key] || {})[formatDate(date)] || null;
+    return (allHolidays[key] || {})[formatDate(date)] || [];
   }, [allHolidays, currentYear, currentMonth]);
 
-  const handleAction = useCallback((date, holiday, action) => {
+  // Updated handleAction: for 'create' we receive the full holidays array
+  const handleAction = useCallback((date, data, action) => {
     if (action === 'create' && createAccess.disabled) return;
     if (action === 'update' && updateAccess.disabled) return;
     if (action === 'delete' && deleteAccess.disabled) return;
 
     if (action === 'create') {
-      // Pass master holiday as hint for the create modal
-      const masterHoliday = holiday?.source === 'master' ? holiday : null;
-      setModalData({ dates: [date], initialName: '', masterHoliday });
+      // data is the full holidays array
+      const masterHolidays = Array.isArray(data) ? data.filter(h => h.source === 'master') : [];
+      setModalData({ dates: [date], initialName: '', masterHolidays });
       setActiveModal('create');
     } else if (action === 'update') {
-      setModalData(holiday);
+      // data is the company holiday object
+      setModalData(data);
       setActiveModal('update');
     } else if (action === 'delete') {
-      setModalData(holiday);
+      setModalData(data);
       setActiveModal('delete');
     }
   }, [createAccess.disabled, updateAccess.disabled, deleteAccess.disabled]);
 
-  const closeModal = useCallback(() => { setActiveModal(null); setModalData(null); }, []);
+  const handleViewDate = useCallback((date, holidays) => {
+    setViewModalData({ date, holidays });
+    setActiveModal('view');
+  }, []);
+
+  const closeModal = useCallback(() => { setActiveModal(null); setModalData(null); setViewModalData(null); }, []);
 
   const handleRefresh = useCallback(() => {
     clearAllHolidayCaches();
@@ -724,7 +836,6 @@ const HolidayManagementCalendar = () => {
     setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + delta, 1));
   };
 
-  // Build grid
   const grid = useMemo(() => {
     const daysInMonth = getDaysInMonth(currentYear, currentMonth);
     const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
@@ -747,28 +858,30 @@ const HolidayManagementCalendar = () => {
         date = new Date(currentYear, currentMonth, dayNumber);
         isCurrentMonth = true;
       }
-      cells.push({ date, dayNumber, isCurrentMonth, isToday: isSameDay(date, today), holidayInfo: getHolidayForDate(date) });
+      cells.push({ date, dayNumber, isCurrentMonth, isToday: isSameDay(date, today), holidays: getHolidaysForDate(date) });
     }
     return cells;
-  }, [currentYear, currentMonth, today, getHolidayForDate]);
+  }, [currentYear, currentMonth, today, getHolidaysForDate]);
 
   const handleMonthNavigate = useCallback((date) => {
     const d = toCalendarDate(date);
     if (d) setCurrentDate(new Date(d.getFullYear(), d.getMonth(), 1));
   }, []);
 
-  // Stats — only count company holidays for the primary stats
   const stats = useMemo(() => {
     const key = `${currentYear}-${currentMonth}`;
     const map = allHolidays[key] || {};
-    const vals = Object.values(map);
-    const company = vals.filter(h => h.source === 'company');
-    return {
-      total: company.length,
-      mandatory: company.filter(h => h.is_optional !== 1).length,
-      optional: company.filter(h => h.is_optional === 1).length,
-      national: vals.filter(h => h.source === 'master').length,
-    };
+    let companyCount = 0, mandatoryCount = 0, optionalCount = 0, nationalCount = 0;
+    Object.values(map).flat().forEach(h => {
+      if (h.source === 'company') {
+        companyCount++;
+        if (h.is_optional === 1) optionalCount++;
+        else mandatoryCount++;
+      } else if (h.source === 'master') {
+        nationalCount++;
+      }
+    });
+    return { total: companyCount, mandatory: mandatoryCount, optional: optionalCount, national: nationalCount };
   }, [allHolidays, currentYear, currentMonth]);
 
   const isCurrentMonthToday = currentYear === today.getFullYear() && currentMonth === today.getMonth();
@@ -783,16 +896,19 @@ const HolidayManagementCalendar = () => {
     >
       <div className="space-y-4 p-2 lg:p-0">
 
-        {/* ── Stats Row ── */}
+        {/* ── Stats Row (enhanced with icons) ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           {[
-            { label: 'Total Added', value: stats.total, color: 'text-gray-700', bg: 'bg-white', border: 'border-gray-200' },
-            { label: 'Mandatory', value: stats.mandatory, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' },
-            { label: 'Optional', value: stats.optional, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100' },
-            { label: 'National (★)', value: stats.national, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100' },
+            { label: 'Total Added', value: stats.total, icon: <Icon.Calendar />, color: 'text-gray-700', bg: 'bg-white', border: 'border-gray-200' },
+            { label: 'Mandatory', value: stats.mandatory, icon: <Icon.Check />, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' },
+            { label: 'Optional', value: stats.optional, icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100' },
+            { label: 'National (★)', value: stats.national, icon: <Icon.Star />, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100' },
           ].map(s => (
             <div key={s.label} className={`${s.bg} rounded-xl p-2.5 sm:p-4 border ${s.border} shadow-sm`}>
-              <p className={`text-lg sm:text-2xl font-bold ${s.color} leading-none`}>{s.value}</p>
+              <div className="flex items-center gap-2">
+                <span className={s.color}>{s.icon}</span>
+                <p className={`text-lg sm:text-2xl font-bold ${s.color} leading-none`}>{s.value}</p>
+              </div>
               <p className="text-[9px] sm:text-xs text-gray-500 mt-1 font-medium">{s.label}</p>
             </div>
           ))}
@@ -839,7 +955,6 @@ const HolidayManagementCalendar = () => {
 
         {/* ── Calendar Grid ── */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Weekday headers */}
           <div className="grid grid-cols-7 border-b border-gray-100">
             {WEEK_DAYS.map(d => (
               <div key={d} className="py-2.5 text-center text-[11px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -850,13 +965,15 @@ const HolidayManagementCalendar = () => {
           </div>
 
           <div className="relative">
-            <div className="grid grid-cols-7 group">
+            {/* NO group on the grid container */}
+            <div className="grid grid-cols-7">
               {grid.map((cell, i) => (
                 <CalendarCell
                   key={i}
                   {...cell}
                   onAction={handleAction}
                   onMonthNavigate={handleMonthNavigate}
+                  onViewDate={handleViewDate}
                   createDisabled={createAccess.disabled}
                   updateDisabled={updateAccess.disabled}
                   deleteDisabled={deleteAccess.disabled}
@@ -867,7 +984,6 @@ const HolidayManagementCalendar = () => {
               ))}
             </div>
 
-            {/* Loading overlay */}
             <AnimatePresence>
               {isLoading && (
                 <motion.div
@@ -886,7 +1002,6 @@ const HolidayManagementCalendar = () => {
           </div>
         </div>
 
-        {/* ── Legend ── */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 justify-center pb-4">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-red-500" />
@@ -908,7 +1023,7 @@ const HolidayManagementCalendar = () => {
         <CreateHolidayModal
           selectedDates={modalData.dates}
           initialName={modalData.initialName}
-          masterHoliday={modalData.masterHoliday}
+          masterHolidays={modalData.masterHolidays || []}
           onClose={closeModal}
           onCreateSuccess={handleRefresh}
           submitDisabled={createAccess.disabled}
@@ -931,6 +1046,19 @@ const HolidayManagementCalendar = () => {
           onDeleteSuccess={handleRefresh}
           submitDisabled={deleteAccess.disabled}
           submitTitle={deleteAccess.disabled ? deleteMessage : ''}
+        />
+      )}
+      {activeModal === 'view' && viewModalData && (
+        <ViewDateHolidaysModal
+          date={viewModalData.date}
+          holidays={viewModalData.holidays}
+          onClose={closeModal}
+          onEdit={(holiday) => { setModalData(holiday); setActiveModal('update'); }}
+          onDelete={(holiday) => { setModalData(holiday); setActiveModal('delete'); }}
+          editDisabled={updateAccess.disabled}
+          deleteDisabled={deleteAccess.disabled}
+          editMessage={updateMessage}
+          deleteMessage={deleteMessage}
         />
       )}
     </ManagementHub>
