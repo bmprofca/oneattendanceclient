@@ -125,7 +125,7 @@ const formatDurationDisplay = (value) => normalizeDuration(value, 'N/A');
 const normalizeEmployeeRecord = (employee) => ({
     ...employee,
     profile_picture: employee?.profile_picture ?? employee?.user?.profile_picture ?? null,
-    permission_package_id: employee?.permission_package_id ?? employee?.package_id ?? null,
+    permission_package_id: employee?.permission_package_id ?? employee?.package?.id ?? employee?.package_id ?? null,
     break_minutes: normalizeDuration(employee?.break_minutes, DEFAULT_DURATION),
     grace_minutes: normalizeDuration(employee?.grace_minutes, DEFAULT_DURATION),
 });
@@ -712,9 +712,8 @@ const ManualCreateEmployeeModal = ({
                     </button>
                     <button type="button" onClick={handleResendOtp}
                         disabled={otpLoading || createLoading || constantsLoading || permissionsLoading || resendTimer > 0}
-                        className={`inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-5 py-2.5 text-sm font-semibold transition hover:bg-indigo-50 disabled:opacity-50 ${
-                            resendTimer > 0 ? 'text-slate-400' : 'text-indigo-600'
-                        }`}>
+                        className={`inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-5 py-2.5 text-sm font-semibold transition hover:bg-indigo-50 disabled:opacity-50 ${resendTimer > 0 ? 'text-slate-400' : 'text-indigo-600'
+                            }`}>
                         {otpLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaEnvelope className="h-4 w-4" />}
                         {resendTimer > 0 ? `Resend in ${resendTimer}s` : (otpRequested ? 'Resend OTP' : 'Send OTP')}
                     </button>
@@ -1198,6 +1197,7 @@ const EmployeeManagement = () => {
         employment_status: [], attendance_methods: [],
     });
     const [permissionPackages, setPermissionPackages] = useState([]);
+    const permissionPackagesRef = useRef([]);
     const [onboardingPackages, setOnboardingPackages] = useState([]);
     const [loading, setLoading] = useState(false);
     const [permissionsLoading, setPermissionsLoading] = useState(false);
@@ -1266,6 +1266,12 @@ const EmployeeManagement = () => {
         }
     }, [debouncedSearchTerm, employeeStatusFilter]);
 
+    // Pre‑fetch on mount
+    useEffect(() => {
+        fetchConstants();
+        fetchPermissionPackages();
+    }, []);
+
     // ─── API Calls ────────────────────────────────────────────────────────────
 
     const fetchConstants = useCallback(async () => {
@@ -1314,7 +1320,7 @@ const EmployeeManagement = () => {
     }, []);
 
     const fetchPermissionPackages = useCallback(async () => {
-        if (permissionsFetched.current) return;
+        if (permissionsFetched.current) return permissionPackagesRef.current;
         setPermissionsLoading(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
@@ -1322,8 +1328,9 @@ const EmployeeManagement = () => {
 
             if (permissionPackagesRequestCache.companyId === companyId && permissionPackagesRequestCache.data) {
                 setPermissionPackages(permissionPackagesRequestCache.data);
+                permissionPackagesRef.current = permissionPackagesRequestCache.data;
                 permissionsFetched.current = true;
-                return;
+                return permissionPackagesRequestCache.data;
             }
             if (permissionPackagesRequestCache.companyId !== companyId) {
                 permissionPackagesRequestCache = { companyId, promise: null, data: null };
@@ -1345,10 +1352,13 @@ const EmployeeManagement = () => {
             }
             const packages = await permissionPackagesRequestCache.promise;
             setPermissionPackages(packages);
+            permissionPackagesRef.current = packages;
             permissionsFetched.current = true;
+            return packages;
         } catch (e) {
             console.error(e);
             toast.error('Failed to load permission packages');
+            return [];
         } finally { setPermissionsLoading(false); }
     }, []);
 
@@ -1621,7 +1631,6 @@ const EmployeeManagement = () => {
         try {
             if (!constantsFetched.current) await fetchConstants();
             if (!permissionsFetched.current) await fetchPermissionPackages();
-            // Ensure salary components are loaded
             await fetchSalaryComponents();
             setCreateFormData(getDefaultCreateFormData());
             setCreateOtpRequested(false);
@@ -1649,6 +1658,16 @@ const EmployeeManagement = () => {
             const norm = normalizeEmployeeRecord(employee);
             setSelectedEmployee(norm);
 
+            // Build the initial selected package from the employee's own package data
+            const selectedPackage = norm.permission_package_id
+                ? {
+                    value: norm.permission_package_id,
+                    label:
+                        norm.package?.package_name ||
+                        `Package #${norm.permission_package_id}`,
+                }
+                : null;
+
             const initialConfig = {};
             constants.attendance_methods.forEach(m => {
                 initialConfig[m.id] = { enabled: false, available: m.available };
@@ -1661,7 +1680,6 @@ const EmployeeManagement = () => {
             }
             setAttendanceMethodsConfig(initialConfig);
 
-            const selectedPackage = permissionPackages.find(p => p.value === (norm.permission_package_id || norm.package_id));
             const rawWeekends = norm.weekends;
             const normalizedWeekends = Array.isArray(rawWeekends)
                 ? rawWeekends.map(w => (typeof w === 'string' ? w : w?.day)).filter(Boolean)
@@ -1677,8 +1695,8 @@ const EmployeeManagement = () => {
                 salary_type: typeof norm.salary_type === 'object' ? norm.salary_type?.value : (norm.salary_type || ''),
                 joining_date: norm.joining_date ? new Date(norm.joining_date).toISOString().split('T')[0] : '',
                 status: typeof norm.status === 'object' ? norm.status?.value : (norm.status || ''),
-                permission_package_id: norm.permission_package_id || norm.package_id || null,
-                selectedPackage: selectedPackage || null,
+                permission_package_id: norm.permission_package_id,
+                selectedPackage: selectedPackage,          // no lag anymore
                 auto_approve: norm.auto_approve ?? false,
                 shift_start: norm.shift_start || DEFAULT_SHIFT_START,
                 shift_end: norm.shift_end || DEFAULT_SHIFT_END,
@@ -2280,7 +2298,7 @@ const EmployeeManagement = () => {
                             </div>
 
                             {/* Permission Package (collapsible) */}
-                            {selectedEmployee.package_name && (
+                            {selectedEmployee.package && (
                                 <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden">
                                     <button onClick={() => setShowPermissions(!showPermissions)}
                                         className="w-full flex items-center justify-between p-4 hover:bg-indigo-50/50 transition-colors">
@@ -2299,10 +2317,12 @@ const EmployeeManagement = () => {
                                                 <div className="px-4 pb-4">
                                                     <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm">
                                                         <div className="flex items-center justify-between mb-2">
-                                                            <span className="text-sm font-bold text-slate-700">{selectedEmployee.package_name}</span>
-                                                            {selectedEmployee.group_code && (
+                                                            <span className="text-sm font-bold text-slate-700">
+                                                                {selectedEmployee.package.package_name}
+                                                            </span>
+                                                            {selectedEmployee.package.group_code && (
                                                                 <span className="text-[10px] font-mono font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg">
-                                                                    {selectedEmployee.group_code}
+                                                                    {selectedEmployee.package.group_code}
                                                                 </span>
                                                             )}
                                                         </div>

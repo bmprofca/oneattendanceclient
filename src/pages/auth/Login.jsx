@@ -26,7 +26,7 @@ import FacebookAuthButton from "../../components/FacebookAuthButton";
 const Login = () => {
   const { user, login, selectCompany, companies, mustSelectCompany, showCompanySelection, setShowCompanySelection } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("phone"); // default to "phone"
+  const [activeTab, setActiveTab] = useState("phone");
   const [isTabLocked, setIsTabLocked] = useState(false);
   const [countryCode, setCountryCode] = useState("91");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,7 +50,6 @@ const Login = () => {
       setUserCompanies(companies);
       setShowCompanySelection(true);
     } else if (user && !mustSelectCompany) {
-      // User has company selected, redirect to home
       navigate("/home", { replace: true });
     }
   }, [user, mustSelectCompany, companies, navigate, setShowCompanySelection]);
@@ -59,13 +58,11 @@ const Login = () => {
   useEffect(() => {
     if (showCompanySelection) {
       window.history.pushState(null, "", window.location.href);
-
       const handlePopState = (e) => {
         e.preventDefault();
         window.history.pushState(null, "", window.location.href);
         toast.warning("Please select a company to continue");
       };
-
       window.addEventListener("popstate", handlePopState);
       return () => window.removeEventListener("popstate", handlePopState);
     }
@@ -84,11 +81,9 @@ const Login = () => {
 
   useEffect(() => {
     if (!otpSent || isLoading) return;
-
     const focusTimer = window.setTimeout(() => {
       firstOtpInputRef.current?.focus();
     }, 0);
-
     return () => window.clearTimeout(focusTimer);
   }, [otpSent, isLoading]);
 
@@ -126,11 +121,27 @@ const Login = () => {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
       document.getElementById(`otp-${index - 1}`).focus();
     }
+    // Trigger verify on Enter
+    if (e.key === "Enter" && !isLoading) {
+      e.preventDefault();
+      handleVerifyOtp();
+    }
+  };
+
+  // Generic Enter handler for login fields
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !isLoading) {
+      e.preventDefault();
+      if (!otpSent) {
+        handleRequestOtp();
+      } else {
+        handleVerifyOtp();
+      }
+    }
   };
 
   const handleRequestOtp = async () => {
     if (isLoading) return;
-
     if (activeTab === "phone") {
       if (!mobile || !password) {
         toast.error("Please enter both phone number and password");
@@ -184,8 +195,6 @@ const Login = () => {
 
     try {
       setLoadingAction("verify-otp");
-
-      // Fetch precise location if possible
       toast.info("Capturing precise location...", { autoClose: 1500 });
 
       let locationData = null;
@@ -225,7 +234,6 @@ const Login = () => {
 
   const handleResendOtp = async () => {
     if (resendTimer > 0 || isLoading) return;
-
     if (activeTab === "phone") {
       if (!mobile || !password) {
         toast.error("Please enter both phone number and password");
@@ -430,6 +438,7 @@ const Login = () => {
                                 disabled={isLoading}
                                 maxLength={10}
                                 inputMode="numeric"
+                                onKeyDown={handleKeyPress}
                                 className="w-full pl-11 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-gray-50 text-sm disabled:opacity-60"
                               />
                             </div>
@@ -445,6 +454,7 @@ const Login = () => {
                               onFocus={() => setFocusedField('email')}
                               onBlur={() => setFocusedField(null)}
                               disabled={isLoading}
+                              onKeyDown={handleKeyPress}
                               className="w-full pl-11 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-gray-50 text-sm disabled:opacity-60"
                             />
                           </div>
@@ -452,7 +462,17 @@ const Login = () => {
 
                         <div className="relative">
                           <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-                          <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onFocus={() => setFocusedField('password')} onBlur={() => setFocusedField(null)} disabled={isLoading} className="w-full pl-11 pr-11 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-gray-50 text-sm disabled:opacity-60" />
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            onFocus={() => setFocusedField('password')}
+                            onBlur={() => setFocusedField(null)}
+                            disabled={isLoading}
+                            onKeyDown={handleKeyPress}
+                            className="w-full pl-11 pr-11 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-gray-50 text-sm disabled:opacity-60"
+                          />
                           <button type="button" onClick={() => setShowPassword(!showPassword)} disabled={isLoading} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 disabled:opacity-50">{showPassword ? "👁️" : "👁️‍🗨️"}</button>
                         </div>
                         <div className="flex items-center justify-end -mt-1.5">
@@ -472,7 +492,18 @@ const Login = () => {
                       <div className="space-y-4 p-1 lg:p-0">
                         <div className="flex justify-center gap-2">
                           {otp.map((digit, index) => (
-                            <input key={index} ref={index === 0 ? firstOtpInputRef : null} id={`otp-${index}`} type="text" maxLength="1" value={digit} onChange={(e) => handleOtpChange(index, e.target.value)} onKeyDown={(e) => handleOtpKeyDown(index, e)} disabled={isLoading} className="w-10 h-12 text-center text-xl font-bold border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-gray-50 disabled:opacity-60" />
+                            <input
+                              key={index}
+                              ref={index === 0 ? firstOtpInputRef : null}
+                              id={`otp-${index}`}
+                              type="text"
+                              maxLength="1"
+                              value={digit}
+                              onChange={(e) => handleOtpChange(index, e.target.value)}
+                              onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                              disabled={isLoading}
+                              className="w-10 h-12 text-center text-xl font-bold border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-gray-50 disabled:opacity-60"
+                            />
                           ))}
                         </div>
                         <div className="flex items-center justify-between text-xs">
