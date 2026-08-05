@@ -33,22 +33,10 @@ const getCompanyId = () => {
 };
 
 const STAT_STYLES = {
-  violet: {
-    iconWrap: 'bg-violet-50 text-violet-600',
-    glow: 'bg-violet-100/70',
-  },
-  orange: {
-    iconWrap: 'bg-orange-50 text-orange-600',
-    glow: 'bg-orange-100/70',
-  },
-  emerald: {
-    iconWrap: 'bg-emerald-50 text-emerald-600',
-    glow: 'bg-emerald-100/70',
-  },
-  indigo: {
-    iconWrap: 'bg-indigo-50 text-indigo-600',
-    glow: 'bg-indigo-100/70',
-  },
+  violet: { iconWrap: 'bg-violet-50 text-violet-600', glow: 'bg-violet-100/70' },
+  orange: { iconWrap: 'bg-orange-50 text-orange-600', glow: 'bg-orange-100/70' },
+  emerald: { iconWrap: 'bg-emerald-50 text-emerald-600', glow: 'bg-emerald-100/70' },
+  indigo: { iconWrap: 'bg-indigo-50 text-indigo-600', glow: 'bg-indigo-100/70' },
 };
 
 const formatDays = (value) => {
@@ -131,6 +119,7 @@ const fetchEmployeeBalanceRows = async (year, companyId) => {
 const SearchableSelect = ({
   value, onChange, options, onSearch, placeholder, label,
   loading = false, disabled = false, renderOption, getOptionLabel, getOptionValue,
+  allOptions,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -138,7 +127,8 @@ const SearchableSelect = ({
   const inputRef = useRef(null);
   const searchTimeoutRef = useRef(null);
 
-  const selectedOption = options.find(opt => String(getOptionValue(opt)) === String(value));
+  const lookupList = allOptions || options;
+  const selectedOption = lookupList.find(opt => String(getOptionValue(opt)) === String(value));
 
   useEffect(() => {
     const handler = (event) => {
@@ -150,10 +140,22 @@ const SearchableSelect = ({
 
   useEffect(() => {
     if (!isOpen) return undefined;
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => { onSearch?.(searchTerm); }, 300);
-    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+    if (onSearch) {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = setTimeout(() => { onSearch(searchTerm); }, 300);
+      return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+    }
   }, [isOpen, searchTerm, onSearch]);
+
+  const displayedOptions = useMemo(() => {
+    if (onSearch) return options;
+    if (!searchTerm.trim()) return options;
+    const term = searchTerm.toLowerCase().trim();
+    return options.filter(opt => {
+      const labelText = getOptionLabel ? getOptionLabel(opt) : String(opt);
+      return labelText.toLowerCase().includes(term);
+    });
+  }, [options, searchTerm, onSearch, getOptionLabel]);
 
   const handleSelect = (option) => {
     onChange(getOptionValue(option));
@@ -195,10 +197,10 @@ const SearchableSelect = ({
             <div className="max-h-64 overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-8"><FaSpinner className="text-violet-500 animate-spin" size={20} /></div>
-              ) : options.length === 0 ? (
+              ) : displayedOptions.length === 0 ? (
                 <div className="py-8 text-center text-sm text-slate-400">No results found</div>
               ) : (
-                options.map((option) => (
+                displayedOptions.map((option) => (
                   <button key={getOptionValue(option)} type="button" onClick={() => handleSelect(option)}
                     className="w-full px-4 py-3 text-left transition hover:bg-slate-50">
                     {renderOption ? renderOption(option) : getOptionLabel(option)}
@@ -225,6 +227,29 @@ const PaidBadge = ({ isPaid, compact = false }) => (
     </span>
   )
 );
+
+// ─── API helper for employee leave configs ───────────────────────────────────
+const fetchEmployeeAvailableConfigsAsync = async (employeeId, year) => {
+  const companyId = getCompanyId();
+  const response = await apiCall(`/leave/employee/${employeeId}?year=${year}`, 'GET', null, companyId);
+  const result = await response.json();
+  if (!result.success || !Array.isArray(result.data)) return [];
+  return result.data.map(c => ({
+    id: c.leave_config_id,
+    leave_config_id: c.leave_config_id,
+    code: c.code,
+    name: c.name,
+    is_paid: c.is_paid,
+    allow_half_day: c.allow_half_day,
+    max_balance: Number(c.max_balance),
+    carry_forward_limit: Number(c.carry_forward_limit),
+    exclude_weekends: c.exclude_weekends,
+    allocated: !!c.allocated,
+    used: c.balance ? Number(c.balance.used || 0) : 0,
+    total_allocated: c.balance ? Number(c.balance.total_allocated || 0) : 0,
+    remaining: c.balance ? Number(c.balance.remaining || 0) : 0,
+  }));
+};
 
 // ─── LeaveBalanceManagement ────────────────────────────────────────────────────
 const LeaveBalanceManagement = () => {
@@ -254,32 +279,84 @@ const LeaveBalanceManagement = () => {
 
   const [formData, setFormData] = useState({
     employee_id: '',
-    leave_config_id: '',
-    total_allocated: 0,
-    leaves: [{ leave_config_id: '', total_allocated: 0 }],
+    delete_leave_config_ids: [],
+    leaves: [{ leave_config_id: '', total_allocated: '' }],
   });
 
-  const fetchLeaveConfigs = useCallback(async (search = '') => {
+  // ─── Leave configs map for validation ──────────────────────────────────────
+  const configMap = useMemo(() => {
+    const map = new Map();
+    leaveConfigs.forEach(c => {
+      const max = parseFloat(c.max_balance);
+      const used = parseFloat(c.used);
+      map.set(c.id, {
+        maxBalance: isNaN(max) ? null : max,
+        used: isNaN(used) ? 0 : used,
+        name: c.name,
+        code: c.code,
+      });
+    });
+    return map;
+  }, [leaveConfigs]);
+
+  const assignableConfigs = useMemo(() => {
+    if (modalMode === 'assign') {
+      return leaveConfigs.filter(c => !c.allocated);
+    }
+    return leaveConfigs;
+  }, [leaveConfigs, modalMode]);
+
+  // ─── Validate a single leave row ──────────────────────────────────────────
+  const isLeaveRowValid = useCallback((row) => {
+    if (!row.leave_config_id) return false;
+    const value = parseFloat(row.total_allocated);
+    if (isNaN(value) || value <= 0) return false;
+    const config = configMap.get(row.leave_config_id);
+    if (config) {
+      if (config.maxBalance !== null && config.maxBalance !== undefined && value > config.maxBalance) return false;
+      if (config.used > 0 && value < config.used) return false;
+    }
+    return true;
+  }, [configMap]);
+
+  // ─── Overall form validity ─────────────────────────────────────────────────
+  const isFormValid = useMemo(() => {
+    if (!formData.employee_id) return false;
+    if (modalMode === 'delete') {
+      return formData.delete_leave_config_ids.length > 0;
+    }
+    if (formData.leaves.length === 0) return false;
+    return formData.leaves.every(row => isLeaveRowValid(row));
+  }, [formData, modalMode, isLeaveRowValid]);
+
+  // Fetch leave configs for the selected employee
+  const fetchEmployeeAvailableConfigs = useCallback(async (employeeId) => {
+    if (!employeeId) {
+      setLeaveConfigs([]);
+      return;
+    }
     setLeaveConfigsLoading(true);
     try {
-      const companyId = getCompanyId();
-      const params = new URLSearchParams({ is_paid: 'true' });
-      if (search) params.append('search', search);
-      const response = await apiCall(`/leave/company?${params.toString()}`, 'GET', null, companyId);
-      const result = await response.json();
-      setLeaveConfigs(result.success && result.data ? result.data : []);
-    } catch {
+      const configs = await fetchEmployeeAvailableConfigsAsync(employeeId, selectedYear);
+      setLeaveConfigs(configs);
+    } catch (err) {
+      console.error('Failed to fetch available configs for employee', err);
       setLeaveConfigs([]);
     } finally {
       setLeaveConfigsLoading(false);
     }
-  }, []);
+  }, [selectedYear]);
 
-  const handleLeaveConfigSearch = useCallback((search) => { fetchLeaveConfigs(search); }, [fetchLeaveConfigs]);
-
+  // Load configs when the modal opens or employee changes
   useEffect(() => {
-    if (showModal && modalMode !== 'delete') fetchLeaveConfigs();
-  }, [showModal, modalMode, fetchLeaveConfigs]);
+    if (!showModal || modalMode === 'delete') return;
+
+    if (formData.employee_id) {
+      fetchEmployeeAvailableConfigs(formData.employee_id);
+    } else {
+      setLeaveConfigs([]);
+    }
+  }, [showModal, modalMode, formData.employee_id, fetchEmployeeAvailableConfigs]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -309,26 +386,22 @@ const LeaveBalanceManagement = () => {
       if (!formData.employee_id) return toast.error('Please select an employee');
       if (!formData.leaves.some(l => l.leave_config_id)) return toast.error('Please keep at least one leave type');
     } else if (modalMode === 'delete') {
-      if (!formData.leave_config_id) return toast.error('Please select a leave type to delete');
+      if (!formData.employee_id) return toast.error('Please select an employee');
+      if (!formData.delete_leave_config_ids.length) return toast.error('Please select at least one leave type to delete');
     }
 
     setSaving(true);
     try {
       let response;
-      if (modalMode === 'assign') {
-        response = await apiCall('/leave/assign-balance', 'POST', {
+      if (modalMode === 'assign' || modalMode === 'edit') {
+        response = await apiCall('/leave/upsert-balance', 'PUT', {
           employee_id: formData.employee_id,
           leaves: formData.leaves.map(l => ({ leave_config_id: l.leave_config_id, total_allocated: Number(l.total_allocated) || 0 }))
         }, getCompanyId());
-      } else if (modalMode === 'edit') {
-        response = await apiCall('/leave/update-balance', 'PUT', {
-          employee_id: formData.employee_id,
-          leaves: formData.leaves.map(l => ({ leave_config_id: l.leave_config_id, total_allocated: Number(l.total_allocated) || 0 })),
-        }, getCompanyId());
       } else if (modalMode === 'delete') {
         response = await apiCall('/leave/delete-balance', 'DELETE', {
-          employee_id: selectedBalance.employee_id,
-          leave_config_id: formData.leave_config_id,
+          employee_id: formData.employee_id,
+          leave_config_ids: formData.delete_leave_config_ids
         }, getCompanyId());
       }
 
@@ -339,7 +412,7 @@ const LeaveBalanceManagement = () => {
         await fetchData();
       }
     } catch (error) {
-      toast.error('An error occurred. Please try again.');
+      toast.error(error.message || 'An error occurred. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -379,15 +452,32 @@ const LeaveBalanceManagement = () => {
     setModalMode(mode);
     if (balance) {
       setSelectedBalance(balance);
-      setFormData({
-        employee_id: balance.employee_id,
-        leave_config_id: '',
-        total_allocated: 0,
-        leaves: (balance.leaves || []).map(l => ({ leave_config_id: l.leave_config_id, total_allocated: l.total_allocated })),
-      });
+      if (mode === 'delete') {
+        setFormData({
+          employee_id: balance.employee_id,
+          delete_leave_config_ids: [],
+          leaves: []
+        });
+      } else {
+        setFormData({
+          employee_id: balance.employee_id,
+          leaves: (balance.leaves || []).map(l => ({ leave_config_id: l.leave_config_id, total_allocated: l.total_allocated })),
+          delete_leave_config_ids: []
+        });
+        const existingConfigs = balance.leaves.map(l => ({
+          id: l.leave_config_id,
+          leave_config_id: l.leave_config_id,
+          code: l.code,
+          name: l.name,
+          is_paid: l.is_paid,
+          max_balance: l.max_balance,
+        }));
+        setLeaveConfigs(existingConfigs);
+      }
     } else {
       setSelectedBalance(null);
-      setFormData({ employee_id: '', leave_config_id: '', total_allocated: 0, leaves: [{ leave_config_id: '', total_allocated: 0 }] });
+      setFormData({ employee_id: '', delete_leave_config_ids: [], leaves: [{ leave_config_id: '', total_allocated: '' }] });
+      setLeaveConfigs([]);
     }
     setShowModal(true);
   };
@@ -434,7 +524,6 @@ const LeaveBalanceManagement = () => {
     },
   ], [balances]);
 
-  // ─── Action menu buttons builder ────────────────────────────────────────────
   const getActionButtons = (employee) => [
     {
       label: 'View Details',
@@ -460,7 +549,6 @@ const LeaveBalanceManagement = () => {
     }
   ];
 
-  // ─── Table columns ───────────────────────────────────────────────────────────
   const columns = [
     {
       key: 'employee',
@@ -886,57 +974,106 @@ const LeaveBalanceManagement = () => {
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className={`relative bg-white w-full max-h-[80vh] rounded-xl shadow-2xl border border-gray-100 m-auto flex flex-col overflow-hidden ${modalMode === 'delete' ? 'max-w-md' : 'max-w-4xl'}`}
+              className={`relative bg-white w-full max-h-[80vh] rounded-xl shadow-2xl border border-gray-100 m-auto flex flex-col overflow-hidden ${modalMode === 'delete' ? 'max-w-2xl' : 'max-w-4xl'}`}
               onMouseDown={(e) => e.stopPropagation()}
             >
               {modalMode === 'delete' ? (
                 <>
-                  <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-5 sticky top-0 z-10">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 sm:px-8 py-5 sticky top-0 z-10">
                     <div className="flex items-center gap-3">
                       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-rose-200">
                         <FaTrash className="h-6 w-6 text-white" />
                       </div>
                       <div>
-                        <h2 className="text-xl font-bold text-slate-900">Delete Leave Balance</h2>
-                        <p className="text-sm text-slate-500">This action cannot be undone</p>
+                        <h2 className="text-xl font-bold text-slate-900">Delete Leave Balances</h2>
+                        <p className="text-sm text-slate-500">
+                          {selectedBalance?.employee_name} – {selectedBalance?.leaves[0]?.year || selectedYear}
+                        </p>
                       </div>
                     </div>
                     <button type="button" onClick={closeModal} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-all hover:bg-slate-100">
                       <FaTimes className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-4">
-                    <p className="text-gray-600 text-sm leading-relaxed text-center">
-                      Select the leave balance you want to delete for <span className="font-bold">{selectedBalance?.employee_name}</span>. This cannot be undone.
+
+                  {/* Body – checkbox list */}
+                  <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:p-8 space-y-4">
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Select the leave types you want to permanently delete. This cannot be undone and will fail if any selected type has already been used.
                     </p>
-                    <div className="max-w-xs mx-auto">
-                      <SearchableSelect
-                        label="Leave Type to Delete"
-                        placeholder="Choose..."
-                        value={formData.leave_config_id}
-                        onChange={(val) => setFormData(prev => ({ ...prev, leave_config_id: val }))}
-                        options={selectedBalance?.leaves || []}
-                        getOptionLabel={(l) => `${l.name} (${l.code})`}
-                        getOptionValue={(l) => l.leave_config_id}
-                        renderOption={(l) => (
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-800 text-sm">{l.name}</span>
-                            <span className="text-[10px] font-bold text-slate-400">{l.code}</span>
-                          </div>
-                        )}
-                      />
+
+                    <div className="space-y-2">
+                      {selectedBalance?.leaves?.map((leave) => {
+                        const isChecked = formData.delete_leave_config_ids.includes(leave.leave_config_id);
+                        const toggle = () => {
+                          setFormData(prev => ({
+                            ...prev,
+                            delete_leave_config_ids: isChecked
+                              ? prev.delete_leave_config_ids.filter(id => id !== leave.leave_config_id)
+                              : [...prev.delete_leave_config_ids, leave.leave_config_id]
+                          }));
+                        };
+                        const isUsed = Number(leave.used || 0) > 0;
+
+                        return (
+                          <label
+                            key={leave.leave_config_id}
+                            className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${isChecked
+                                ? 'border-red-300 bg-red-50 shadow-sm'
+                                : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={toggle}
+                              className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                              disabled={isUsed}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-violet-50 text-violet-700 rounded-xl text-[10px] font-bold">{leave.code}</span>
+                                <span className="font-bold text-slate-800 text-sm">{leave.name}</span>
+                                <PaidBadge isPaid={leave.is_paid} compact />
+                              </div>
+                              <div className="mt-1 flex items-center gap-4 text-xs text-slate-500">
+                                <span>Allocated: <strong>{formatDays(leave.total_allocated)}d</strong></span>
+                                <span>Used: <strong className={isUsed ? 'text-orange-600' : ''}>{formatDays(leave.used)}d</strong></span>
+                                <span>Remaining: <strong className={isLowBalance(leave.remaining) ? 'text-rose-600' : 'text-emerald-600'}>{formatDays(leave.remaining)}d</strong></span>
+                              </div>
+                              {isUsed && (
+                                <p className="mt-1 text-[10px] text-rose-600 font-semibold">⚠️ This leave has been used – cannot be deleted</p>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
+
+                    {selectedBalance?.leaves?.length === 0 && (
+                      <div className="text-center py-8 text-slate-400">No leave types assigned to this employee.</div>
+                    )}
                   </div>
+
+                  {/* Footer */}
                   <div className="flex justify-end gap-3 px-6 py-5 border-t border-gray-100">
                     <button type="button" onClick={closeModal} disabled={saving}
                       className="flex px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all disabled:opacity-60">
                       Cancel
                     </button>
-                    <button type="button" onClick={handleAction}
-                      disabled={saving || !formData.leave_config_id || deleteAccess.disabled}
+                    <button
+                      type="button"
+                      onClick={handleAction}
+                      disabled={
+                        saving ||
+                        formData.delete_leave_config_ids.length === 0 ||
+                        deleteAccess.disabled
+                      }
                       title={deleteAccess.disabled ? deleteMessage : ''}
-                      className="flex px-5 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-medium hover:from-red-700 hover:to-rose-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-                      {saving ? 'Deleting...' : 'Delete'}
+                      className="flex px-5 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-medium hover:from-red-700 hover:to-rose-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {saving ? 'Deleting...' : `Delete Selected (${formData.delete_leave_config_ids.length})`}
                     </button>
                   </div>
                 </>
@@ -966,91 +1103,160 @@ const LeaveBalanceManagement = () => {
                       <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">Select Employee</label>
                       <EmployeeSelect
                         value={formData.employee_id}
-                        onChange={(id) => setFormData({ ...formData, employee_id: id })}
+                        onChange={(id) => setFormData(prev => ({
+                          ...prev,
+                          employee_id: id,
+                          leaves: [{ leave_config_id: '', total_allocated: '' }]
+                        }))}
                         disabled={modalMode === 'edit'}
                         placeholder="Choose an employee..."
                         initialEmployee={selectedBalance ? { id: selectedBalance.employee_id, name: selectedBalance.employee_name, employee_code: selectedBalance.employee_code } : null}
                       />
                     </div>
 
+                    {!formData.employee_id && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
+                        <p className="text-xs font-bold text-amber-700">Please select an employee above to configure leave balances.</p>
+                      </div>
+                    )}
+
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
                           {modalMode === 'assign' ? 'Leave Allocations' : 'Adjust Balances'}
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, leaves: [...prev.leaves, { leave_config_id: '', total_allocated: 0 }] }))}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700 transition hover:bg-violet-100"
-                        >
-                          <FaPlus size={10} /> Add More
-                        </button>
+                        {/* Only show Add More button in assign mode */}
+                        {modalMode === 'assign' && (
+                          <button
+                            type="button"
+                            disabled={!formData.employee_id || (assignableConfigs.length > 0 && formData.leaves.length >= assignableConfigs.length)}
+                            onClick={() => setFormData(prev => ({ ...prev, leaves: [...prev.leaves, { leave_config_id: '', total_allocated: '' }] }))}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700 transition hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={!formData.employee_id ? 'Please select an employee first' : (assignableConfigs.length > 0 && formData.leaves.length >= assignableConfigs.length ? 'All available leave types have been added' : '')}
+                          >
+                            <FaPlus size={10} /> Add More
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid gap-4">
-                        {formData.leaves.map((row, idx) => (
-                          <motion.div
-                            key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                            className="relative rounded-xl border border-slate-100 bg-slate-50/60 p-4"
-                          >
-                            <div className="mb-3 flex items-center justify-between">
-                              <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700">
-                                {modalMode === 'assign' ? `Leave #${idx + 1}` : 'Leave Type'}
-                              </span>
-                              {formData.leaves.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setFormData(prev => ({ ...prev, leaves: prev.leaves.filter((_, i) => i !== idx) }))}
-                                  className="rounded-lg p-1.5 text-rose-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                >
-                                  <FaTimes size={12} />
-                                </button>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                              <SearchableSelect
-                                label="Leave Type"
-                                placeholder="Choose..."
-                                value={row.leave_config_id}
-                                onChange={(value) => setFormData(prev => ({
-                                  ...prev,
-                                  leaves: prev.leaves.map((l, i) => i === idx ? { ...l, leave_config_id: value } : l)
-                                }))}
-                                options={leaveConfigs}
-                                onSearch={handleLeaveConfigSearch}
-                                loading={leaveConfigsLoading}
-                                getOptionLabel={(config) => `${config.name} (${config.code})`}
-                                getOptionValue={(config) => config.id}
-                                renderOption={(config) => (
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <p className="font-semibold text-slate-800 text-sm truncate">{config.name}</p>
-                                      <p className="text-[10px] text-slate-400 font-mono italic">Code: {config.code}</p>
-                                    </div>
-                                    <PaidBadge isPaid={config.is_paid} compact />
-                                  </div>
+                        {formData.leaves.map((row, idx) => {
+                          const selectedInOtherRows = new Set(
+                            formData.leaves
+                              .filter((_, i) => i !== idx)
+                              .map(l => l.leave_config_id)
+                              .filter(Boolean)
+                          );
+
+                          const availableConfigs = assignableConfigs.filter(config => !selectedInOtherRows.has(config.id));
+
+                          const config = configMap.get(row.leave_config_id);
+                          const val = parseFloat(row.total_allocated);
+                          let errorMessage = null;
+                          if (row.total_allocated !== '') {
+                            if (isNaN(val) || val <= 0) {
+                              errorMessage = 'Enter a valid positive number';
+                            } else if (config) {
+                              if (config.maxBalance !== null && config.maxBalance !== undefined && val > config.maxBalance) {
+                                errorMessage = `Cannot exceed max limit of ${config.maxBalance} days`;
+                              } else if (config.used > 0 && val < config.used) {
+                                errorMessage = `Cannot be less than used leave (${config.used} days used)`;
+                              }
+                            }
+                          }
+                          const showError = !!errorMessage;
+
+                          return (
+                            <motion.div
+                              key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                              className={`relative rounded-xl border p-4 transition-all ${!formData.employee_id
+                                  ? 'border-slate-100 bg-slate-100/50 opacity-60 pointer-events-none'
+                                  : 'border-slate-100 bg-slate-50/60'
+                                }`}
+                            >
+                              <div className="mb-3 flex items-center justify-between">
+                                <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                                  {modalMode === 'assign' ? `Leave #${idx + 1}` : 'Leave Type'}
+                                </span>
+                                {/* Remove the X button in edit mode to avoid confusion */}
+                                {formData.leaves.length > 1 && modalMode !== 'edit' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFormData(prev => ({ ...prev, leaves: prev.leaves.filter((_, i) => i !== idx) }))}
+                                    className="rounded-lg p-1.5 text-rose-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                  >
+                                    <FaTimes size={12} />
+                                  </button>
                                 )}
-                              />
-                              <div className="space-y-2">
-                                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">Total Days</label>
-                                <input
-                                  type="text"
-                                  value={row.total_allocated}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (/^\d*\.?\d*$/.test(val)) {
-                                      setFormData(prev => ({
-                                        ...prev,
-                                        leaves: prev.leaves.map((l, i) => i === idx ? { ...l, total_allocated: val } : l)
-                                      }));
-                                    }
-                                  }}
-                                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-500/5"
-                                />
                               </div>
-                            </div>
-                          </motion.div>
-                        ))}
+                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <SearchableSelect
+                                  label="Leave Type"
+                                  placeholder={!formData.employee_id ? "Select an employee first..." : "Choose..."}
+                                  value={row.leave_config_id}
+                                  // Disable the dropdown entirely in edit mode
+                                  disabled={!formData.employee_id || modalMode === 'edit'}
+                                  onChange={(value) => setFormData(prev => ({
+                                    ...prev,
+                                    leaves: prev.leaves.map((l, i) => i === idx ? { ...l, leave_config_id: value } : l)
+                                  }))}
+                                  options={availableConfigs}
+                                  allOptions={assignableConfigs}
+                                  loading={leaveConfigsLoading}
+                                  getOptionLabel={(cfg) => `${cfg.name} (${cfg.code})`}
+                                  getOptionValue={(cfg) => cfg.id}
+                                  renderOption={(cfg) => (
+                                    <div className="flex items-center justify-between gap-3 w-full">
+                                      <div className="min-w-0">
+                                        <p className="font-semibold text-slate-800 text-sm truncate">{cfg.name}</p>
+                                        <p className="text-[10px] text-slate-400 font-mono italic">
+                                          Code: {cfg.code}
+                                          {cfg.max_balance ? ` • Max: ${cfg.max_balance}d` : ''}
+                                          {cfg.used > 0 ? ` • Used: ${cfg.used}d` : ''}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        {cfg.allocated && (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                                            Allocated ({cfg.total_allocated}d)
+                                          </span>
+                                        )}
+                                        <PaidBadge isPaid={cfg.is_paid} compact />
+                                      </div>
+                                    </div>
+                                  )}
+                                />
+                                <div className="space-y-2">
+                                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">Total Days</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. 10"
+                                    disabled={!formData.employee_id}
+                                    value={row.total_allocated}
+                                    onChange={(e) => {
+                                      const valStr = e.target.value;
+                                      if (/^\d*\.?\d*$/.test(valStr)) {
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          leaves: prev.leaves.map((l, i) => i === idx ? { ...l, total_allocated: valStr } : l)
+                                        }));
+                                      }
+                                    }}
+                                    className={`w-full rounded-xl border px-4 py-3 text-sm font-semibold outline-none transition ${showError
+                                        ? 'border-red-300 bg-red-50 focus:ring-red-500/20'
+                                        : 'border-slate-200 bg-white focus:border-violet-400 focus:ring-4 focus:ring-violet-500/5'
+                                      } ${!formData.employee_id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  />
+                                  {showError && (
+                                    <p className="text-[10px] text-red-500 font-semibold mt-1">
+                                      {errorMessage}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -1065,9 +1271,7 @@ const LeaveBalanceManagement = () => {
                       onClick={handleAction}
                       disabled={
                         saving ||
-                        !formData.employee_id ||
-                        formData.leaves.length === 0 ||
-                        formData.leaves.some(l => !l.leave_config_id) ||
+                        !isFormValid ||
                         (modalMode === 'assign' ? createAccess.disabled : updateAccess.disabled)
                       }
                       title={modalMode === 'assign' ? (createAccess.disabled ? createMessage : '') : (updateAccess.disabled ? updateMessage : '')}
