@@ -506,7 +506,7 @@ const LeaveManagement = () => {
         setSubmitting(true);
         try {
             const companyId = JSON.parse(localStorage.getItem('company'))?.id;
-            const response = await apiCall('/leave/reject', 'PUT', { id: rejectLeave.id, remarks: rejectRemarks }, companyId);
+            const response = await apiCall('/leave/management/bulk-approve-reject', 'PUT', { ids: [rejectLeave.id], action: 'reject', remarks: rejectRemarks }, companyId);
             const result = await response.json();
             if (!response.ok || !result.success) throw new Error(result.message || 'Failed to reject');
             toast.success('Leave rejected');

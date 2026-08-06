@@ -26,6 +26,7 @@ import { DateRangePickerField } from '../components/DatePicker';
 import { ManagementHub, ManagementTable } from '../components/common';
 import Modal from '../components/Modal';
 import SelectField from '../components/SelectField';
+import { useAuth } from '../context/AuthContext';
 
 const getCompanyId = () => {
   try {
@@ -152,10 +153,15 @@ const getRequestedDays = (startDate, endDate, isHalfDay) => {
 };
 
 // Leave Balance Card Component
-const LeaveBalanceCard = ({ type, balance }) => {
-  const percentage = balance.total > 0 ? (balance.used / balance.total) * 100 : 0;
-  const displayName = formatLeaveTypeName(type);
+const LeaveBalanceCard = ({ item }) => {
+  const isAllocated = Boolean(item.allocated && item.balance);
+  const total = isAllocated ? Number(item.balance.total_allocated || 0) : 0;
+  const used = isAllocated ? Number(item.balance.used || 0) : 0;
+  const remaining = isAllocated ? Number(item.balance.remaining || 0) : 0;
+
+  const percentage = total > 0 ? (used / total) * 100 : 0;
   const usedPct = Math.min(100, Math.round(percentage));
+  const displayName = item.name || formatLeaveTypeName(item.code || '');
 
   return (
     <motion.div
@@ -163,59 +169,94 @@ const LeaveBalanceCard = ({ type, balance }) => {
       animate={{ opacity: 1, scale: 1 }}
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.2 }}
-      className="rounded-2xl bg-white p-4 shadow-md border border-gray-100 hover:shadow-lg transition-all space-y-3"
+      className={`rounded-2xl p-4 shadow-md border transition-all space-y-3 ${isAllocated
+        ? 'bg-white border-gray-100 hover:shadow-lg'
+        : 'bg-slate-50/70 border-slate-200/80 opacity-80 hover:opacity-95'
+        }`}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-800 text-sm truncate">{displayName}</h3>
           <div className="flex flex-wrap gap-1 mt-1">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 font-mono">{balance.code}</span>
-            {balance.is_paid
-              ? <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-green-100 text-green-700">Paid</span>
-              : <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-orange-100 text-orange-700">Unpaid</span>
-            }
-            {balance.allow_half_day && <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700">Half‑day</span>}
-            {balance.is_comp_off && <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700">Comp Off</span>}
-            {balance.exclude_weekends && <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-yellow-100 text-yellow-700">Excl. Wknd</span>}
+            {item.code && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 font-mono">
+                {item.code}
+              </span>
+            )}
+            {item.is_paid ? (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-green-100 text-green-700">
+                Paid
+              </span>
+            ) : (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-orange-100 text-orange-700">
+                Unpaid
+              </span>
+            )}
+            {item.allow_half_day && (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
+                Half‑day
+              </span>
+            )}
+            {item.exclude_weekends && (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-yellow-100 text-yellow-700">
+                Excl. Wknd
+              </span>
+            )}
+            {!isAllocated && (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                Not Allocated
+              </span>
+            )}
           </div>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className={`text-2xl font-black ${balance.remaining <= 0 ? 'text-rose-600' : 'text-purple-600'}`}>{balance.remaining}</p>
-          <p className="text-[10px] text-gray-400 uppercase tracking-wide">remaining</p>
+          {isAllocated ? (
+            <>
+              <p className={`text-2xl font-black ${remaining <= 0 ? 'text-rose-600' : 'text-purple-600'}`}>
+                {remaining}
+              </p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">remaining</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-black text-slate-400">N/A</p>
+              <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide">Not Allocated</p>
+            </>
+          )}
         </div>
       </div>
 
       {/* Progress bar */}
       <div>
         <div className="mb-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${usedPct}%` }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
-          />
+          {isAllocated && (
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${usedPct}%` }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
+            />
+          )}
         </div>
         <div className="flex justify-between text-[10px] text-gray-500">
-          <span>Used: <strong>{balance.used}</strong></span>
-          <span>Total: <strong>{balance.total}</strong></span>
+          <span>Used: <strong>{isAllocated ? used : 0}</strong></span>
+          <span>Total: <strong>{isAllocated ? total : (item.max_balance ?? 'N/A')}</strong></span>
         </div>
       </div>
 
       {/* Extra info row */}
-      {(balance.carry_forward_limit > 0 || balance.allow_negative_balance) && (
-        <div className="flex gap-2 pt-1 border-t border-gray-50">
-          {balance.carry_forward_limit > 0 && (
-            <span className="text-[10px] text-gray-400">Carry fwd: <strong className="text-gray-600">{balance.carry_forward_limit}d</strong></span>
-          )}
-          {balance.allow_negative_balance && (
-            <span className="text-[10px] text-gray-400 ml-auto">Neg. balance allowed</span>
-          )}
+      {Number(item.carry_forward_limit) > 0 && (
+        <div className="flex gap-2 pt-1 border-t border-gray-100">
+          <span className="text-[10px] text-gray-400">
+            Carry fwd limit: <strong className="text-gray-600">{item.carry_forward_limit}d</strong>
+          </span>
         </div>
       )}
     </motion.div>
   );
 };
+
 
 // Leave Card Component for Mobile
 const LeaveCard = ({ leave, onViewDetails, onEdit, onCancel }) => {
@@ -373,10 +414,16 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
     [leaveTypes, form.leave_config_id]
   );
   const leaveTypeSelectOptions = useMemo(
-    () => leaveTypes.map((type) => ({
-      value: type.id,
-      label: `${type.name}${type.code ? ` (${type.code})` : ''}${!type.is_paid ? ' (Unpaid)' : ''}`,
-    })),
+    () => leaveTypes
+      .filter(type => type.allocated)
+      .map((type) => {
+        const isAllocated = Boolean(type.allocated);
+        return {
+          value: type.id,
+          label: `${type.name}${type.code ? ` (${type.code})` : ''}${!isAllocated ? ' (Not Allocated)' : (!type.is_paid ? ' (Unpaid)' : '')}`,
+          isDisabled: !isAllocated,
+        };
+      }),
     [leaveTypes]
   );
   const selectedLeaveTypeOption = useMemo(
@@ -386,13 +433,15 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
   // Direct balance lookup by leave_config_id since leaveTypes are derived from balances
   const selectedLeaveBalance = useMemo(() => {
     if (!selectedLeaveType) return null;
-    return { balance: selectedLeaveType._balance };
+    return selectedLeaveType._balance;
   }, [selectedLeaveType]);
-  const remainingDays = toNumber(selectedLeaveBalance?.balance?.remaining);
+  const isAllocated = Boolean(selectedLeaveType?.allocated);
+  const remainingDays = isAllocated ? toNumber(selectedLeaveBalance?.remaining) : 0;
   const selectedDays = getRequestedDays(form.start_date, form.end_date, form.is_half_day);
-  const overBalance = Boolean(selectedLeaveType && selectedLeaveBalance && selectedDays > remainingDays);
+  const overBalance = Boolean(selectedLeaveType && isAllocated && selectedDays > remainingDays);
+  const unallocatedSelected = Boolean(selectedLeaveType && !isAllocated);
   const balanceLabel = selectedLeaveType
-    ? `${formatDays(remainingDays)} left`
+    ? isAllocated ? `${formatDays(remainingDays)} left` : 'Not Allocated'
     : 'Choose a leave type';
 
   const handleDateChange = (range) => {
@@ -479,6 +528,10 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
 
   const submit = async (event) => {
     event.preventDefault();
+    if (unallocatedSelected) {
+      toast.error('Selected leave type is not allocated to you.');
+      return;
+    }
     if (overBalance) {
       toast.error(`Selected date range exceeds your ${formatDays(remainingDays)} day balance for ${selectedLeaveType?.name || 'this leave type'}.`);
       return;
@@ -541,8 +594,14 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
           <button
             type="submit"
             form="leave-form"
-            disabled={saving || isUploading || overBalance}
-            title={overBalance ? `Selected ${formatDays(selectedDays)} day(s), but only ${formatDays(remainingDays)} day(s) are available.` : ''}
+            disabled={saving || isUploading || overBalance || unallocatedSelected || !form.leave_config_id}
+            title={
+              unallocatedSelected
+                ? 'This leave type is not allocated to you.'
+                : overBalance
+                  ? `Selected ${formatDays(selectedDays)} day(s), but only ${formatDays(remainingDays)} day(s) are available.`
+                  : ''
+            }
             className="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-bold hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {saving ? <FaSpinner className="animate-spin" /> : (isEditing ? <FaEdit /> : <FaPlus />)}
@@ -564,10 +623,16 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
 
           <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between group hover:border-violet-200 transition-all">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Balance</span>
-            <div className="mt-1 flex items-baseline gap-1">
-              <span className={`text-2xl font-black ${remainingDays <= 0 ? 'text-rose-600' : 'text-slate-800'}`}>{formatDays(remainingDays)}</span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Days Left</span>
-            </div>
+            {selectedLeaveType && !isAllocated ? (
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-xl font-bold text-amber-600">Not Allocated</span>
+              </div>
+            ) : (
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className={`text-2xl font-black ${remainingDays <= 0 ? 'text-rose-600' : 'text-slate-800'}`}>{formatDays(remainingDays)}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Days Left</span>
+              </div>
+            )}
           </div>
 
           <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col justify-between group hover:border-indigo-200 transition-all">
@@ -590,6 +655,7 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
               onChange={(option) => setForm((prev) => ({ ...prev, leave_config_id: option ? option.value : '' }))}
               placeholder="Choose leave type..."
               isClearable
+              isOptionDisabled={(option) => option.isDisabled}
               styles={{
                 control: (base) => ({
                   ...base,
@@ -620,6 +686,11 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
                 })
               }}
             />
+            {unallocatedSelected && (
+              <p className="mt-1.5 text-xs text-amber-600 font-semibold flex items-center gap-1">
+                <FaInfoCircle size={12} /> This leave type is not allocated to you.
+              </p>
+            )}
           </div>
 
           {/* Half Day Toggle */}
@@ -811,9 +882,10 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
 };
 
 const MyLeave = () => {
+  const { user, employee, company } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
-  const [balances, setBalances] = useState({});
+  const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -868,24 +940,32 @@ const MyLeave = () => {
   }, [pagination.page, pagination.limit, updatePagination]);
 
   const loadBalances = useCallback(async () => {
+    const employeeId = company?.employee_id || employee?.id || user?.id;
+    if (!employeeId) return;
+
     try {
-      const result = await request('/leave/my-balance');
-      const data = result.data || {};
+      const year = new Date().getFullYear();
+      const result = await request(`/leave/employee/${employeeId}?year=${year}`);
+      const data = Array.isArray(result.data) ? result.data : [];
       setBalances(data);
-      // Derive leaveTypes from balance response — each key has leave_config_id, code, is_paid, allow_half_day
-      const types = Object.entries(data).map(([key, bal]) => ({
-        id: String(bal.leave_config_id),
-        name: formatLeaveTypeName(key),
-        code: bal.code || '',
-        is_paid: bal.is_paid,
-        allow_half_day: bal.allow_half_day,
-        _balance: bal, // keep full balance obj for the form
+      const types = data.map((item) => ({
+        id: String(item.leave_config_id),
+        name: item.name || formatLeaveTypeName(item.code || ''),
+        code: item.code || '',
+        is_paid: item.is_paid,
+        allow_half_day: item.allow_half_day,
+        allocated: Boolean(item.allocated),
+        max_balance: item.max_balance,
+        carry_forward_limit: item.carry_forward_limit,
+        exclude_weekends: item.exclude_weekends,
+        _balance: item.balance,
+        _item: item,
       }));
       setLeaveTypes(types);
     } catch (error) {
       toast.error(error.message || 'Failed to load leave balances');
     }
-  }, []);
+  }, [company, employee, user]);
 
   const initialFetchDoneRef = useRef(false);
 
@@ -993,7 +1073,7 @@ const MyLeave = () => {
         </motion.div>
 
         {/* Leave Balance Section */}
-        {Object.keys(balances).length >= 0 && (
+        {Array.isArray(balances) && balances.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1003,9 +1083,11 @@ const MyLeave = () => {
               <FaCalendarCheck className="text-violet-500" /> Leave Balance
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {Object.entries(balances).map(([type, balance]) => (
-                <LeaveBalanceCard key={type} type={type} balance={balance} />
-              ))}
+              {balances
+                .filter(item => item.allocated === true)
+                .map((item) => (
+                  <LeaveBalanceCard key={item.leave_config_id} item={item} />
+                ))}
             </div>
           </motion.div>
         )}
