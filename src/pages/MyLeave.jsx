@@ -12,7 +12,6 @@ import {
   FaCalendarCheck,
   FaInfoCircle,
   FaUpload,
-  FaCog
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -27,7 +26,9 @@ import { ManagementHub, ManagementTable } from '../components/common';
 import Modal from '../components/Modal';
 import SelectField from '../components/SelectField';
 import { useAuth } from '../context/AuthContext';
+import AdvancedDateFilter from '../components/AdvancedDateFilter';
 
+/* ──────────────────────────────── Helpers ──────────────────────────────── */
 const getCompanyId = () => {
   try {
     return JSON.parse(localStorage.getItem('company'))?.id ?? null;
@@ -43,6 +44,7 @@ const formatDays = (value) => {
   if (!Number.isFinite(number)) return '0';
   return Number.isInteger(number) ? String(number) : number.toFixed(1);
 };
+
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const ALLOWED_ATTACHMENT_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
 
@@ -64,7 +66,11 @@ const isImageAttachment = (file) => {
   const name = file.name || file.original_name || (url ? url.split('/').pop() : '');
   const fileType = String(file.type || file.file_type || '').toLowerCase();
   const fileExtension = getFileExtension(name);
-  return fileType.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp'].includes(fileExtension) || (url && /\.(jpg|jpeg|png|webp|gif)$/i.test(url));
+  return (
+    fileType.startsWith('image/') ||
+    ['.jpg', '.jpeg', '.png', '.webp'].includes(fileExtension) ||
+    (url && /\.(jpg|jpeg|png|webp|gif)$/i.test(url))
+  );
 };
 
 const request = async (endpoint, method = 'GET', body = null) => {
@@ -74,27 +80,6 @@ const request = async (endpoint, method = 'GET', body = null) => {
   return result;
 };
 
-const StatusBadge = ({ status }) => {
-  const styles = {
-    approved: 'bg-green-100 text-green-700',
-    rejected: 'bg-red-100 text-red-700',
-    pending: 'bg-yellow-100 text-yellow-700',
-    cancelled: 'bg-gray-100 text-gray-700',
-  };
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${styles[status] || styles.pending}`}>
-      {status || 'pending'}
-    </span>
-  );
-};
-
-const LeaveTypeBadge = ({ name, isPaid }) => (
-  <span className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-xs font-medium text-violet-700">
-    {name} {!isPaid && '(Unpaid)'}
-  </span>
-);
-
-// Format leave type name for display
 const formatLeaveTypeName = (key) => {
   const nameMap = {
     sick_leave: 'Sick Leave',
@@ -107,38 +92,9 @@ const formatLeaveTypeName = (key) => {
   return nameMap[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
-const normalizeBalanceKey = (value) =>
-  String(value ?? '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
-
 const toNumber = (value) => {
   const next = Number(value);
   return Number.isFinite(next) ? next : 0;
-};
-
-const findBalanceForLeaveType = (leaveType, balances) => {
-  if (!leaveType) return null;
-
-  const candidates = [
-    leaveType.id,
-    leaveType.code,
-    leaveType.name,
-    formatLeaveTypeName(leaveType.code || ''),
-    leaveType.code ? leaveType.code.replace(/_/g, ' ') : '',
-  ]
-    .filter(Boolean)
-    .map(normalizeBalanceKey);
-
-  for (const [key, balance] of Object.entries(balances || {})) {
-    const normalizedKey = normalizeBalanceKey(key);
-    const normalizedName = normalizeBalanceKey(balance?.name || balance?.code || balance?.leave_type_name || '');
-    if (candidates.includes(normalizedKey) || (normalizedName && candidates.includes(normalizedName))) {
-      return { key, balance };
-    }
-  }
-
-  return null;
 };
 
 const getRequestedDays = (startDate, endDate, isHalfDay) => {
@@ -146,13 +102,35 @@ const getRequestedDays = (startDate, endDate, isHalfDay) => {
   const start = new Date(startDate);
   const end = new Date(endDate);
   const dayCount = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
-  if (isHalfDay && start.toDateString() === end.toDateString()) {
-    return 0.5;
-  }
+  if (isHalfDay && start.toDateString() === end.toDateString()) return 0.5;
   return dayCount;
 };
 
-// Leave Balance Card Component
+/* ─────────────────────────── Subcomponents ─────────────────────────── */
+const StatusBadge = ({ status }) => {
+  const styles = {
+    approved: 'bg-green-100 text-green-700',
+    rejected: 'bg-red-100 text-red-700',
+    pending: 'bg-yellow-100 text-yellow-700',
+    cancelled: 'bg-gray-100 text-gray-700',
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${styles[status] || styles.pending
+        }`}
+    >
+      {status || 'pending'}
+    </span>
+  );
+};
+
+const LeaveTypeBadge = ({ name, isPaid }) => (
+  <span className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-xs font-medium text-violet-700">
+    {name} {!isPaid && '(Unpaid)'}
+  </span>
+);
+
+/* ──────────────────────── Leave Balance Card ──────────────────────── */
 const LeaveBalanceCard = ({ item }) => {
   const isAllocated = Boolean(item.allocated && item.balance);
   const total = isAllocated ? Number(item.balance.total_allocated || 0) : 0;
@@ -170,11 +148,10 @@ const LeaveBalanceCard = ({ item }) => {
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.2 }}
       className={`rounded-2xl p-4 shadow-md border transition-all space-y-3 ${isAllocated
-        ? 'bg-white border-gray-100 hover:shadow-lg'
-        : 'bg-slate-50/70 border-slate-200/80 opacity-80 hover:opacity-95'
+          ? 'bg-white border-gray-100 hover:shadow-lg'
+          : 'bg-slate-50/70 border-slate-200/80 opacity-80 hover:opacity-95'
         }`}
     >
-      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-800 text-sm truncate">{displayName}</h3>
@@ -227,7 +204,6 @@ const LeaveBalanceCard = ({ item }) => {
         </div>
       </div>
 
-      {/* Progress bar */}
       <div>
         <div className="mb-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
           {isAllocated && (
@@ -240,16 +216,20 @@ const LeaveBalanceCard = ({ item }) => {
           )}
         </div>
         <div className="flex justify-between text-[10px] text-gray-500">
-          <span>Used: <strong>{isAllocated ? used : 0}</strong></span>
-          <span>Total: <strong>{isAllocated ? total : (item.max_balance ?? 'N/A')}</strong></span>
+          <span>
+            Used: <strong>{isAllocated ? used : 0}</strong>
+          </span>
+          <span>
+            Total: <strong>{isAllocated ? total : (item.max_balance ?? 'N/A')}</strong>
+          </span>
         </div>
       </div>
 
-      {/* Extra info row */}
       {Number(item.carry_forward_limit) > 0 && (
         <div className="flex gap-2 pt-1 border-t border-gray-100">
           <span className="text-[10px] text-gray-400">
-            Carry fwd limit: <strong className="text-gray-600">{item.carry_forward_limit}d</strong>
+            Carry fwd limit:{' '}
+            <strong className="text-gray-600">{item.carry_forward_limit}d</strong>
           </span>
         </div>
       )}
@@ -257,8 +237,7 @@ const LeaveBalanceCard = ({ item }) => {
   );
 };
 
-
-// Leave Card Component for Mobile
+/* ────────────────────────── Leave Card (Mobile) ────────────────────────── */
 const LeaveCard = ({ leave, onViewDetails, onEdit, onCancel }) => {
   return (
     <motion.div
@@ -270,10 +249,9 @@ const LeaveCard = ({ leave, onViewDetails, onEdit, onCancel }) => {
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="flex-1">
-          <LeaveTypeBadge name={leave.leave_type_name} isPaid={leave.is_paid} />
-          <p className="mt-1 text-xs text-gray-400">
-            Applied: {formatDate(leave.applied_at)}
-          </p>
+          {/* Updated: use leave_name from backend */}
+          <LeaveTypeBadge name={leave.leave_name} isPaid={leave.is_paid} />
+          <p className="mt-1 text-xs text-gray-400">Applied: {formatDate(leave.applied_at)}</p>
         </div>
         <div onClick={(e) => e.stopPropagation()}>
           <ActionMenu
@@ -292,7 +270,7 @@ const LeaveCard = ({ leave, onViewDetails, onEdit, onCancel }) => {
                     icon: <FaEdit size={12} />,
                     onClick: () => onEdit(leave),
                     className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50',
-                  }
+                  },
                 ]
                 : []),
               ...(leave.status === 'pending'
@@ -302,20 +280,20 @@ const LeaveCard = ({ leave, onViewDetails, onEdit, onCancel }) => {
                     icon: <FaTimes size={12} />,
                     onClick: () => onCancel(leave),
                     className: 'text-red-600 hover:text-red-700 hover:bg-red-50',
-                  }
+                  },
                 ]
                 : []),
             ]}
           />
         </div>
       </div>
-
       <div className="space-y-2 border-t border-gray-100 pt-3">
         <div className="flex justify-between">
           <span className="text-xs text-gray-500">Duration:</span>
           <span className="text-xs font-medium text-gray-700">
             {formatDays(leave.total_days)} day(s)
-            {leave.is_half_day && ` (${leave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})`}
+            {leave.is_half_day &&
+              ` (${leave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})`}
           </span>
         </div>
         <div className="flex justify-between">
@@ -338,8 +316,7 @@ const LeaveCard = ({ leave, onViewDetails, onEdit, onCancel }) => {
   );
 };
 
-
-
+/* ──────────────────────── Cancel Leave Modal ──────────────────────── */
 const CancelLeaveModal = ({ leave, onClose, onSuccess }) => {
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -361,15 +338,29 @@ const CancelLeaveModal = ({ leave, onClose, onSuccess }) => {
   return (
     <AnimatePresence>
       {leave && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+        >
           <ModalScrollLock />
-          <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="relative bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="relative bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden"
+          >
             <div className="border-b border-gray-100 bg-white px-6 py-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">Cancel Leave</h3>
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                <FaTimes />
+              </button>
             </div>
             <div className="p-6">
-              <p className="text-sm text-gray-600 mb-4">Are you sure you want to cancel this leave? Please provide a reason.</p>
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to cancel this leave? Please provide a reason.
+              </p>
               <textarea
                 className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                 placeholder="Remarks for cancellation..."
@@ -380,8 +371,17 @@ const CancelLeaveModal = ({ leave, onClose, onSuccess }) => {
               />
             </div>
             <div className="flex gap-3 px-6 py-4 bg-gray-50 border-t border-gray-100">
-              <button onClick={onClose} className="flex-1 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all">Back</button>
-              <button onClick={handleCancel} disabled={submitting || !remarks.trim()} className="flex-1 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={submitting || !remarks.trim()}
+                className="flex-1 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
                 {submitting ? <FaSpinner className="animate-spin" /> : <FaTimes />}
                 Confirm Cancel
               </button>
@@ -393,6 +393,7 @@ const CancelLeaveModal = ({ leave, onClose, onSuccess }) => {
   );
 };
 
+/* ──────────────────────── Leave Form Modal ──────────────────────── */
 const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClose, onSuccess }) => {
   const [form, setForm] = useState({
     leave_config_id: '',
@@ -413,36 +414,34 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
     () => leaveTypes.find((type) => String(type.id) === String(form.leave_config_id)) || null,
     [leaveTypes, form.leave_config_id]
   );
+
   const leaveTypeSelectOptions = useMemo(
-    () => leaveTypes
-      .filter(type => type.allocated)
-      .map((type) => {
-        const isAllocated = Boolean(type.allocated);
-        return {
+    () =>
+      leaveTypes
+        .filter((type) => type.allocated)
+        .map((type) => ({
           value: type.id,
-          label: `${type.name}${type.code ? ` (${type.code})` : ''}${!isAllocated ? ' (Not Allocated)' : (!type.is_paid ? ' (Unpaid)' : '')}`,
-          isDisabled: !isAllocated,
-        };
-      }),
+          label: `${type.name}${type.code ? ` (${type.code})` : ''}${!type.is_paid ? ' (Unpaid)' : ''}`,
+        })),
     [leaveTypes]
   );
+
   const selectedLeaveTypeOption = useMemo(
-    () => leaveTypeSelectOptions.find((opt) => String(opt.value) === String(form.leave_config_id)) || null,
+    () =>
+      leaveTypeSelectOptions.find((opt) => String(opt.value) === String(form.leave_config_id)) || null,
     [leaveTypeSelectOptions, form.leave_config_id]
   );
-  // Direct balance lookup by leave_config_id since leaveTypes are derived from balances
+
   const selectedLeaveBalance = useMemo(() => {
     if (!selectedLeaveType) return null;
     return selectedLeaveType._balance;
   }, [selectedLeaveType]);
+
   const isAllocated = Boolean(selectedLeaveType?.allocated);
   const remainingDays = isAllocated ? toNumber(selectedLeaveBalance?.remaining) : 0;
   const selectedDays = getRequestedDays(form.start_date, form.end_date, form.is_half_day);
   const overBalance = Boolean(selectedLeaveType && isAllocated && selectedDays > remainingDays);
   const unallocatedSelected = Boolean(selectedLeaveType && !isAllocated);
-  const balanceLabel = selectedLeaveType
-    ? isAllocated ? `${formatDays(remainingDays)} left` : 'Not Allocated'
-    : 'Choose a leave type';
 
   const handleDateChange = (range) => {
     if (!range) return;
@@ -457,30 +456,19 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
     const selectedFiles = Array.from(event.target.files || []);
     const validFiles = selectedFiles.filter(isAllowedAttachment);
     const invalidFiles = selectedFiles.filter((file) => !isAllowedAttachment(file));
-
-    if (invalidFiles.length > 0) {
-      toast.error('Only JPG/JPEG images and PDF files are allowed');
-    }
-
-    if (validFiles.length === 0) return;
+    if (invalidFiles.length) toast.error('Only JPG/JPEG images and PDF files are allowed');
+    if (!validFiles.length) return;
 
     setIsUploading(true);
     try {
-      const uploadPromises = validFiles.map(file => uploadFile(file).then(url => ({
-        url,
-        name: file.name,
-        type: file.type,
-        size: file.size
-      })));
+      const uploadPromises = validFiles.map((file) =>
+        uploadFile(file).then((url) => ({ url, name: file.name, type: file.type, size: file.size }))
+      );
       const uploadedFiles = await Promise.all(uploadPromises);
-
-      setForm((prev) => ({
-        ...prev,
-        attachments: [...prev.attachments, ...uploadedFiles],
-      }));
+      setForm((prev) => ({ ...prev, attachments: [...prev.attachments, ...uploadedFiles] }));
       toast.success(`${uploadedFiles.length} file(s) uploaded successfully`);
     } catch (error) {
-      toast.error("Failed to upload one or more files");
+      toast.error('Failed to upload one or more files');
     } finally {
       setIsUploading(false);
     }
@@ -488,7 +476,6 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
 
   useEffect(() => {
     if (!open) return;
-
     if (!initialLeave) {
       setForm({
         leave_config_id: '',
@@ -502,9 +489,9 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
       });
       return;
     }
-
+    // Use the correct field names from the API response
     setForm({
-      leave_config_id: String(initialLeave.leave_type_id || ''),
+      leave_config_id: String(initialLeave.leave_config_id || ''),
       start_date: initialLeave.start_date || '',
       end_date: initialLeave.end_date || '',
       is_half_day: Boolean(initialLeave.is_half_day),
@@ -522,7 +509,6 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
       isImage: isImageAttachment(att),
       url: att.url,
     }));
-
     setAttachmentPreviews(nextPreviews);
   }, [form.attachments]);
 
@@ -533,22 +519,24 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
       return;
     }
     if (overBalance) {
-      toast.error(`Selected date range exceeds your ${formatDays(remainingDays)} day balance for ${selectedLeaveType?.name || 'this leave type'}.`);
+      toast.error(
+        `Selected date range exceeds your ${formatDays(remainingDays)} day balance for ${selectedLeaveType?.name || 'this leave type'
+        }.`
+      );
       return;
     }
     setSaving(true);
     try {
-      let method;
-      let endpoint;
+      let endpoint = '/leave/apply';
+      let method = 'POST';
       const payload = {
         leave_config_id: form.leave_config_id,
         start_date: form.start_date,
         end_date: form.end_date,
         is_half_day: form.is_half_day ? 1 : 0,
         reason: form.reason,
-        attachments: form.attachments.map(a => a.url),
+        attachments: form.attachments.map((a) => a.url),
       };
-
       if (form.is_half_day) payload.half_day_type = form.half_day_type;
 
       if (initialLeave) {
@@ -556,14 +544,12 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
         endpoint = '/leave/application-update';
         payload.id = initialLeave.id;
         payload.deleted_attachments = form.deleted_attachments;
-      } else {
-        method = 'POST';
-        endpoint = '/leave/apply';
       }
 
       await request(endpoint, method, payload);
-
-      toast.success(initialLeave ? 'Leave updated successfully' : 'Leave application submitted successfully');
+      toast.success(
+        initialLeave ? 'Leave updated successfully' : 'Leave application submitted successfully'
+      );
       onSuccess();
       onClose();
     } catch (error) {
@@ -579,7 +565,13 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
       onClose={onClose}
       title={title}
       subtitle={isEditing ? 'Update your leave request details.' : 'Submit a new leave application.'}
-      icon={isEditing ? <FaEdit className="h-6 w-6 text-blue-600" /> : <FaPlus className="h-6 w-6 text-blue-600" />}
+      icon={
+        isEditing ? (
+          <FaEdit className="h-6 w-6 text-blue-600" />
+        ) : (
+          <FaPlus className="h-6 w-6 text-blue-600" />
+        )
+      }
       size="3xl"
       footer={
         <div className="flex gap-3 w-full justify-end sm:w-auto">
@@ -594,17 +586,25 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
           <button
             type="submit"
             form="leave-form"
-            disabled={saving || isUploading || overBalance || unallocatedSelected || !form.leave_config_id}
+            disabled={
+              saving ||
+              isUploading ||
+              overBalance ||
+              unallocatedSelected ||
+              !form.leave_config_id
+            }
             title={
               unallocatedSelected
                 ? 'This leave type is not allocated to you.'
                 : overBalance
-                  ? `Selected ${formatDays(selectedDays)} day(s), but only ${formatDays(remainingDays)} day(s) are available.`
+                  ? `Selected ${formatDays(selectedDays)} day(s), but only ${formatDays(
+                    remainingDays
+                  )} day(s) are available.`
                   : ''
             }
             className="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-bold hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {saving ? <FaSpinner className="animate-spin" /> : (isEditing ? <FaEdit /> : <FaPlus />)}
+            {saving ? <FaSpinner className="animate-spin" /> : isEditing ? <FaEdit /> : <FaPlus />}
             {saving ? 'Processing...' : 'Save'}
           </button>
         </div>
@@ -614,48 +614,66 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
         {/* Balance Summary Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between group hover:border-violet-200 transition-all">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Selected Mode</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Selected Mode
+            </span>
             <div className="flex items-center gap-2 mt-2">
               <div className={`w-2 h-2 rounded-full ${isEditing ? 'bg-amber-400' : 'bg-green-400'}`} />
-              <p className="text-sm font-bold text-slate-700">{isEditing ? 'Editing Request' : 'New Application'}</p>
+              <p className="text-sm font-bold text-slate-700">
+                {isEditing ? 'Editing Request' : 'New Application'}
+              </p>
             </div>
           </div>
-
           <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between group hover:border-violet-200 transition-all">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Balance</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Current Balance
+            </span>
             {selectedLeaveType && !isAllocated ? (
               <div className="mt-1 flex items-baseline gap-1">
                 <span className="text-xl font-bold text-amber-600">Not Allocated</span>
               </div>
             ) : (
               <div className="mt-1 flex items-baseline gap-1">
-                <span className={`text-2xl font-black ${remainingDays <= 0 ? 'text-rose-600' : 'text-slate-800'}`}>{formatDays(remainingDays)}</span>
+                <span
+                  className={`text-2xl font-black ${remainingDays <= 0 ? 'text-rose-600' : 'text-slate-800'
+                    }`}
+                >
+                  {formatDays(remainingDays)}
+                </span>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Days Left</span>
               </div>
             )}
           </div>
-
           <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col justify-between group hover:border-indigo-200 transition-all">
-            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Selected Range</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
+              Selected Range
+            </span>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className={`text-2xl font-black ${overBalance ? 'text-rose-600' : 'text-indigo-600'}`}>{formatDays(selectedDays)}</span>
+              <span
+                className={`text-2xl font-black ${overBalance ? 'text-rose-600' : 'text-indigo-600'
+                  }`}
+              >
+                {formatDays(selectedDays)}
+              </span>
               <span className="text-[10px] font-bold text-indigo-400 uppercase">Days Selected</span>
             </div>
           </div>
         </div>
 
-        {/* Form Grid */}
+        {/* Leave Type & Half Day */}
         <div className="flex flex-col gap-6">
-          {/* Leave Type */}
           <div className="md:col-span-2">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Leave Type <span className="text-rose-500">*</span></label>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Leave Type <span className="text-rose-500">*</span>
+            </label>
             <SelectField
               options={leaveTypeSelectOptions}
               value={selectedLeaveTypeOption}
-              onChange={(option) => setForm((prev) => ({ ...prev, leave_config_id: option ? option.value : '' }))}
+              onChange={(option) =>
+                setForm((prev) => ({ ...prev, leave_config_id: option ? option.value : '' }))
+              }
               placeholder="Choose leave type..."
               isClearable
-              isOptionDisabled={(option) => option.isDisabled}
               styles={{
                 control: (base) => ({
                   ...base,
@@ -683,7 +701,7 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
                   ...base,
                   color: '#334155',
                   fontWeight: 500,
-                })
+                }),
               }}
             />
             {unallocatedSelected && (
@@ -693,10 +711,14 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
             )}
           </div>
 
-          {/* Half Day Toggle */}
           <div className="md:col-span-1">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Day Type</label>
-            <div className={`bg-slate-50 rounded-2xl p-3 border border-slate-100 flex flex-col gap-3 transition-all ${form.is_half_day ? 'ring-2 ring-violet-100 border-violet-200 bg-white' : ''}`}>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Day Type
+            </label>
+            <div
+              className={`bg-slate-50 rounded-2xl p-3 border border-slate-100 flex flex-col gap-3 transition-all ${form.is_half_day ? 'ring-2 ring-violet-100 border-violet-200 bg-white' : ''
+                }`}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-700">Half Day</span>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -709,14 +731,13 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
                       setForm((prev) => ({
                         ...prev,
                         is_half_day: checked,
-                        half_day_type: checked ? "first_half" : "",
+                        half_day_type: checked ? 'first_half' : '',
                       }));
                     }}
                   />
                   <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-600"></div>
                 </label>
               </div>
-
               {form.is_half_day && (
                 <AnimatePresence>
                   <motion.div
@@ -729,10 +750,10 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
                         <button
                           key={type}
                           type="button"
-                          onClick={() => setForm(prev => ({ ...prev, half_day_type: type }))}
+                          onClick={() => setForm((prev) => ({ ...prev, half_day_type: type }))}
                           className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${form.half_day_type === type
-                            ? 'bg-white text-violet-600 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
+                              ? 'bg-white text-violet-600 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
                           {type === 'first_half' ? '1st' : '2nd'} Half
@@ -745,17 +766,17 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
             </div>
           </div>
 
-          {/* Date Range - Now full width of the grid */}
+          {/* Date Range */}
           <div className="md:col-span-3">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date Range <span className="text-rose-500">*</span></label>
-              <div className="flex items-center gap-3">
-                {overBalance && (
-                  <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
-                    <FaInfoCircle size={10} /> Exceeds Balance
-                  </span>
-                )}
-              </div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Date Range <span className="text-rose-500">*</span>
+              </label>
+              {overBalance && (
+                <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
+                  <FaInfoCircle size={10} /> Exceeds Balance
+                </span>
+              )}
             </div>
             <DateRangePickerField
               value={{ start: form.start_date, end: form.end_date }}
@@ -770,14 +791,23 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
               maxDays={selectedLeaveType ? Math.max(0, remainingDays) : null}
             />
             <p className="mt-2 text-[11px] text-slate-400 italic">
-              Selected: <span className="font-bold text-slate-600">{form.start_date ? formatDate(form.start_date) : '...'}</span> to <span className="font-bold text-slate-600">{form.end_date ? formatDate(form.end_date) : '...'}</span>
+              Selected:{' '}
+              <span className="font-bold text-slate-600">
+                {form.start_date ? formatDate(form.start_date) : '...'}
+              </span>{' '}
+              to{' '}
+              <span className="font-bold text-slate-600">
+                {form.end_date ? formatDate(form.end_date) : '...'}
+              </span>
             </p>
           </div>
         </div>
 
-        {/* Reason Section */}
+        {/* Reason */}
         <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reason / Description</label>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+            Reason / Description
+          </label>
           <textarea
             rows={3}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 placeholder:text-slate-300 resize-none font-medium"
@@ -787,47 +817,68 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
           />
         </div>
 
-        {/* Attachments Section */}
+        {/* Attachments */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attachments</label>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">PDF, JPG, PNG (Max 5MB)</span>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Attachments
+            </label>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">
+              PDF, JPG, PNG (Max 5MB)
+            </span>
           </div>
-
           {initialLeave?.attachments?.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {initialLeave.attachments.map((file) => {
                 const marked = form.deleted_attachments.includes(file.id);
                 const isImage = isImageAttachment(file);
                 return (
-                  <div key={file.id} className={`group relative rounded-xl border overflow-hidden aspect-square transition-all ${marked ? 'border-rose-200 ring-2 ring-rose-100 opacity-60' : 'border-slate-100'}`}>
+                  <div
+                    key={file.id}
+                    className={`group relative rounded-xl border overflow-hidden aspect-square transition-all ${marked ? 'border-rose-200 ring-2 ring-rose-100 opacity-60' : 'border-slate-100'
+                      }`}
+                  >
                     <div className="h-full w-full bg-slate-50 flex items-center justify-center">
                       {isImage ? (
-                        <img src={file.file_url} alt={file.original_name} className="h-full w-full object-cover" />
+                        <img
+                          src={file.file_url}
+                          alt={file.original_name}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         <div className="flex flex-col items-center gap-1.5 text-slate-400">
                           <FaPaperclip size={20} />
-                          <span className="text-[9px] font-bold uppercase truncate px-2 max-w-full">{file.original_name}</span>
+                          <span className="text-[9px] font-bold uppercase truncate px-2 max-w-full">
+                            {file.original_name}
+                          </span>
                         </div>
                       )}
                     </div>
                     <button
                       type="button"
-                      onClick={() => setForm(prev => ({
-                        ...prev,
-                        deleted_attachments: marked ? prev.deleted_attachments.filter(id => id !== file.id) : [...prev.deleted_attachments, file.id]
-                      }))}
-                      className={`absolute inset-0 flex flex-col items-center justify-center gap-1 transition-all ${marked ? 'bg-rose-500/90 text-white' : 'bg-slate-900/0 text-transparent group-hover:bg-slate-900/60 group-hover:text-white'}`}
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          deleted_attachments: marked
+                            ? prev.deleted_attachments.filter((id) => id !== file.id)
+                            : [...prev.deleted_attachments, file.id],
+                        }))
+                      }
+                      className={`absolute inset-0 flex flex-col items-center justify-center gap-1 transition-all ${marked
+                          ? 'bg-rose-500/90 text-white'
+                          : 'bg-slate-900/0 text-transparent group-hover:bg-slate-900/60 group-hover:text-white'
+                        }`}
                     >
                       {marked ? <FaPlus className="rotate-45" /> : <FaTrash size={14} />}
-                      <span className="text-[10px] font-black uppercase tracking-tighter">{marked ? 'Restore' : 'Remove'}</span>
+                      <span className="text-[10px] font-black uppercase tracking-tighter">
+                        {marked ? 'Restore' : 'Remove'}
+                      </span>
                     </button>
                   </div>
                 );
               })}
             </div>
           )}
-
           <div className="relative group">
             <input
               type="file"
@@ -841,11 +892,14 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
               <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center mb-3 shadow-sm group-hover:text-violet-600 transition-colors">
                 {isUploading ? <FaSpinner className="animate-spin" /> : <FaUpload />}
               </div>
-              <p className="text-sm font-bold text-slate-700">Drop files here or <span className="text-violet-600">Browse</span></p>
-              <p className="text-[11px] text-slate-400 mt-1 font-medium">Add medical certificates or support documents</p>
+              <p className="text-sm font-bold text-slate-700">
+                Drop files here or <span className="text-violet-600">Browse</span>
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                Add medical certificates or support documents
+              </p>
             </div>
           </div>
-
           <AnimatePresence>
             {attachmentPreviews.length > 0 && (
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2">
@@ -865,7 +919,12 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
                     )}
                     <button
                       type="button"
-                      onClick={() => setForm(prev => ({ ...prev, attachments: prev.attachments.filter((_, i) => i !== index) }))}
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          attachments: prev.attachments.filter((_, i) => i !== index),
+                        }))
+                      }
                       className="absolute top-1 right-1 w-5 h-5 bg-slate-900/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <FaTimes size={10} />
@@ -881,6 +940,7 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
   );
 };
 
+/* ──────────────────────────── MyLeave Main Component ──────────────────────────── */
 const MyLeave = () => {
   const { user, employee, company } = useAuth();
   const [leaves, setLeaves] = useState([]);
@@ -893,56 +953,73 @@ const MyLeave = () => {
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'card' : 'table'
   );
   const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
-  const [resultMeta, setResultMeta] = useState({ total: 0, total_pages: 1 });
+  const [resultMeta, setResultMeta] = useState({ total: 0, total_pages: 1, counts: {} });
   const [viewLeave, setViewLeave] = useState(null);
   const [editLeave, setEditLeave] = useState(null);
   const [showApply, setShowApply] = useState(false);
   const [cancellingLeave, setCancellingLeave] = useState(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState(null);
 
   const lastRequestKeyRef = useRef('');
 
-  const loadLeaves = useCallback(async (targetPage = pagination.page, force = false) => {
-    const requestKey = `${targetPage}-${pagination.limit}`;
-    if (!force && lastRequestKeyRef.current === requestKey) {
-      return;
-    }
+  const buildQueryParams = useCallback(
+    (page, limit) => {
+      const params = new URLSearchParams();
+      params.set('page', page);
+      params.set('limit', limit);
+      if (status && status !== 'all') params.set('status', status);
+      if (search) params.set('search', search);
+      if (leaveTypeFilter) params.set('leave_type', leaveTypeFilter);
+      if (dateFilter?.from_date) params.set('start_date', dateFilter.from_date);
+      if (dateFilter?.to_date) params.set('end_date', dateFilter.to_date);
+      return params.toString();
+    },
+    [status, search, leaveTypeFilter, dateFilter]
+  );
 
-    setLoading(true);
-    try {
-      lastRequestKeyRef.current = requestKey;
-      const result = await request(
-        `/leave/my-applications?page=${targetPage}&limit=${pagination.limit}`
-      );
-      const rows = result.data || [];
-      const total = Number(result.meta?.total ?? result.total ?? rows.length ?? 0);
-      const totalPages = Number(
-        result.meta?.total_pages ??
-        result.last_page ??
-        Math.max(1, Math.ceil(total / pagination.limit))
-      );
-
-      setLeaves(result.data || []);
-      setResultMeta({ total, total_pages: totalPages });
-      updatePagination({
-        page: result.meta?.page || targetPage,
-        limit: result.meta?.limit || pagination.limit,
-        total,
-        total_pages: totalPages,
-        is_last_page: (result.meta?.page || targetPage) >= totalPages,
-      });
-    } catch (error) {
-      lastRequestKeyRef.current = '';
-      toast.error(error.message || 'Failed to load leaves');
-    } finally {
-      setLoading(false);
-    }
-  }, [pagination.page, pagination.limit, updatePagination]);
+  const loadLeaves = useCallback(
+    async (targetPage = pagination.page, force = false) => {
+      const queryString = buildQueryParams(targetPage, pagination.limit);
+      const requestKey = `${queryString}`;
+      if (!force && lastRequestKeyRef.current === requestKey) return;
+      setLoading(true);
+      try {
+        lastRequestKeyRef.current = requestKey;
+        const result = await request(`/leave/my-applications?${queryString}`);
+        const rows = result.data || [];
+        const total = Number(result.meta?.total ?? result.total ?? rows.length ?? 0);
+        const totalPages = Number(
+          result.meta?.total_pages ??
+          result.last_page ??
+          Math.max(1, Math.ceil(total / pagination.limit))
+        );
+        setLeaves(rows);
+        setResultMeta({
+          total,
+          total_pages: totalPages,
+          counts: result.meta?.counts || {},
+        });
+        updatePagination({
+          page: result.meta?.page || targetPage,
+          limit: result.meta?.limit || pagination.limit,
+          total,
+          total_pages: totalPages,
+          is_last_page: (result.meta?.page || targetPage) >= totalPages,
+        });
+      } catch (error) {
+        lastRequestKeyRef.current = '';
+        toast.error(error.message || 'Failed to load leaves');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pagination.page, pagination.limit, buildQueryParams, updatePagination]
+  );
 
   const loadBalances = useCallback(async () => {
     const employeeId = company?.employee_id || employee?.id || user?.id;
     if (!employeeId) return;
-
     try {
       const year = new Date().getFullYear();
       const result = await request(`/leave/employee/${employeeId}?year=${year}`);
@@ -969,45 +1046,59 @@ const MyLeave = () => {
 
   const initialFetchDoneRef = useRef(false);
 
-  // Initial load - only once
   useEffect(() => {
     if (initialFetchDoneRef.current) return;
     initialFetchDoneRef.current = true;
-
     const loadInitialData = async () => {
-      await Promise.all([
-        loadBalances(),  // leaveTypes are derived inside loadBalances
-        loadLeaves(1)
-      ]);
+      await Promise.all([loadBalances(), loadLeaves(1)]);
     };
     loadInitialData();
   }, [loadBalances, loadLeaves]);
 
-  // Handle page changes
+  useEffect(() => {
+    goToPage(1);
+    loadLeaves(1, true);
+  }, [status, search, leaveTypeFilter, dateFilter, goToPage, loadLeaves]);
+
   useEffect(() => {
     loadLeaves(pagination.page);
   }, [pagination.page, loadLeaves]);
 
-  // Calculate statistics
-  const stats = {
-    total: leaves.length,
-    pending: leaves.filter(l => l.status === 'pending').length,
-    approved: leaves.filter(l => l.status === 'approved').length,
-    rejected: leaves.filter(l => l.status === 'rejected').length,
-    cancelled: leaves.filter(l => l.status === 'cancelled').length,
-  };
+  const stats = useMemo(
+    () => ({
+      total: resultMeta.total,
+      pending: resultMeta.counts?.pending || 0,
+      approved: resultMeta.counts?.approved || 0,
+      rejected: resultMeta.counts?.rejected || 0,
+      cancelled: resultMeta.counts?.cancelled || 0,
+    }),
+    [resultMeta]
+  );
 
-  const filteredLeaves = useMemo(() => {
-    return leaves.filter((leave) => {
-      if (status !== 'all' && leave.status !== status) return false;
-      if (!search) return true;
-      const term = search.toLowerCase();
-      return (
-        String(leave.leave_type_name || '').toLowerCase().includes(term) ||
-        String(leave.reason || '').toLowerCase().includes(term)
-      );
-    });
-  }, [leaves, search, status]);
+  const leaveTypeOptions = useMemo(
+    () =>
+      leaveTypes
+        .filter((type) => type.allocated)
+        .map((type) => ({
+          value: type.code || type.name,
+          label: `${type.name}${!type.is_paid ? ' (Unpaid)' : ''}`,
+        })),
+    [leaveTypes]
+  );
+
+  const handleDateFilterChange = (value) => {
+    if (!value) {
+      setDateFilter(null);
+      return;
+    }
+    if (value.date) {
+      setDateFilter({ from_date: value.date, to_date: value.date });
+    } else if (value.from_date && value.to_date) {
+      setDateFilter({ from_date: value.from_date, to_date: value.to_date });
+    } else {
+      setDateFilter(null);
+    }
+  };
 
   const handlePageChange = (nextPage) => {
     goToPage(nextPage);
@@ -1016,7 +1107,11 @@ const MyLeave = () => {
 
   return (
     <ManagementHub
-      eyebrow={<><FaCalendarAlt size={11} /> Leave management</>}
+      eyebrow={
+        <>
+          <FaCalendarAlt size={11} /> Leave management
+        </>
+      }
       title="My Leaves"
       description="Manage your leave applications and track leave balance."
       accent="violet"
@@ -1084,7 +1179,7 @@ const MyLeave = () => {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {balances
-                .filter(item => item.allocated === true)
+                .filter((item) => item.allocated === true)
                 .map((item) => (
                   <LeaveBalanceCard key={item.leave_config_id} item={item} />
                 ))}
@@ -1092,18 +1187,19 @@ const MyLeave = () => {
           </motion.div>
         )}
 
-        {/* View and Filters */}
+        {/* Filters Row */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
           className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-6"
         >
-          <div className="flex items-center gap-4 flex-1">
-            <div className="relative flex-1 w-full">
+          <div className="flex flex-col sm:flex-row gap-4 flex-1">
+            <div className="relative flex-1">
               <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-              <input className="w-full pl-11 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none transition-all text-sm min-h-[42px]"
-                placeholder="Search leaves by type or reason..."
+              <input
+                className="w-full pl-11 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none transition-all text-sm min-h-[42px]"
+                placeholder="Search by type or reason..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -1116,16 +1212,6 @@ const MyLeave = () => {
                 </button>
               )}
             </div>
-
-            {!loading && filteredLeaves.length > 0 && (
-              <p className="text-sm text-gray-500 hidden xl:block">
-                <span className="font-semibold text-gray-800">{filteredLeaves.length}</span> of <span className="font-semibold text-gray-800">{resultMeta.total || leaves.length}</span> leaves
-                {search && <span className="ml-1 text-violet-600">· "{search}"</span>}
-              </p>
-            )}
-          </div>
-
-          <div className="flex w-full lg:w-auto items-center justify-between lg:justify-end gap-4">
             <div className="min-w-[180px]">
               <SelectField
                 options={[
@@ -1146,9 +1232,35 @@ const MyLeave = () => {
                 className="text-sm font-medium"
               />
             </div>
+          </div>
 
+          <div className="flex w-full lg:w-auto items-center justify-between lg:justify-end gap-4">
+            <div className="min-w-[200px]">
+              <SelectField
+                options={leaveTypeOptions}
+                value={leaveTypeOptions.find((opt) => opt.value === leaveTypeFilter) || null}
+                onChange={(option) => setLeaveTypeFilter(option ? option.value : '')}
+                placeholder="All Leave Types"
+                isClearable
+                className="text-sm font-medium"
+              />
+            </div>
+            <div className="min-w-[240px]">
+              <AdvancedDateFilter
+                value={
+                  dateFilter
+                    ? dateFilter.from_date === dateFilter.to_date
+                      ? { date: dateFilter.from_date }
+                      : { from_date: dateFilter.from_date, to_date: dateFilter.to_date }
+                    : null
+                }
+                onChange={handleDateFilterChange}
+                placeholder="Filter by date"
+                tabOptions={['date', 'range']}
+                buttonClassName="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm shadow-sm transition hover:border-violet-400 focus:outline-none focus:ring-4 focus:ring-violet-500/10 font-medium"
+              />
+            </div>
             <div className="h-8 w-px bg-gray-200 hidden lg:block"></div>
-
             <div className="flex w-full lg:w-auto justify-end">
               <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="violet" />
             </div>
@@ -1166,7 +1278,7 @@ const MyLeave = () => {
             <div className="flex justify-center py-16">
               <FaSpinner className="text-3xl text-purple-500 animate-spin" />
             </div>
-          ) : filteredLeaves.length === 0 ? (
+          ) : leaves.length === 0 ? (
             <div className="p-10 text-center">
               <FaInfoCircle className="mx-auto mb-3 text-4xl text-gray-300" />
               <p className="text-gray-500">No leaves found</p>
@@ -1176,44 +1288,58 @@ const MyLeave = () => {
             <>
               {viewMode === 'table' && (
                 <ManagementTable
-                  rows={filteredLeaves}
+                  rows={leaves}
                   columns={[
                     {
-                      key: 'leave_type', label: 'Leave Type', render: (leave) => (
+                      key: 'leave_type',
+                      label: 'Leave Type',
+                      render: (leave) => (
                         <>
-                          <LeaveTypeBadge name={leave.leave_type_name} isPaid={leave.is_paid} />
-                          <p className="mt-1 text-xs text-gray-500">{formatDays(leave.total_days)} day(s)</p>
+                          {/* Updated: use leave_name and is_paid */}
+                          <LeaveTypeBadge name={leave.leave_name} isPaid={leave.is_paid} />
+                          <p className="mt-1 text-xs text-gray-500">
+                            {formatDays(leave.total_days)} day(s)
+                          </p>
                         </>
-                      )
+                      ),
                     },
                     {
-                      key: 'start_date', label: 'Start Date', render: (leave) => (
+                      key: 'start_date',
+                      label: 'Start Date',
+                      render: (leave) => (
                         <span className="text-sm">{formatDate(leave.start_date)}</span>
-                      )
+                      ),
                     },
                     {
-                      key: 'end_date', label: 'End Date', render: (leave) => (
+                      key: 'end_date',
+                      label: 'End Date',
+                      render: (leave) => (
                         <span className="text-sm">{formatDate(leave.end_date)}</span>
-                      )
+                      ),
                     },
                     {
-                      key: 'duration', label: 'Duration', render: (leave) => (
+                      key: 'duration',
+                      label: 'Duration',
+                      render: (leave) => (
                         <span className="text-sm">
                           {formatDays(leave.total_days)} day(s)
-                          {leave.is_half_day && ` (${leave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})`}
+                          {leave.is_half_day &&
+                            ` (${leave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})`}
                         </span>
-                      )
+                      ),
                     },
                     {
-                      key: 'status', label: 'Status', render: (leave) => (
-                        <StatusBadge status={leave.status} />
-                      )
+                      key: 'status',
+                      label: 'Status',
+                      render: (leave) => <StatusBadge status={leave.status} />,
                     },
                     {
-                      key: 'applied_on', label: 'Applied On', render: (leave) => (
+                      key: 'applied_on',
+                      label: 'Applied On',
+                      render: (leave) => (
                         <span className="text-sm">{formatDateTime(leave.applied_at)}</span>
-                      )
-                    }
+                      ),
+                    },
                   ]}
                   rowKey={(row) => row.id}
                   onRowClick={(row) => setViewLeave(row)}
@@ -1231,7 +1357,7 @@ const MyLeave = () => {
                           icon: <FaEdit size={12} />,
                           onClick: () => setEditLeave(leave),
                           className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50',
-                        }
+                        },
                       ]
                       : []),
                     ...(leave.status === 'pending'
@@ -1241,18 +1367,17 @@ const MyLeave = () => {
                           icon: <FaTimes size={12} />,
                           onClick: () => setCancellingLeave(leave),
                           className: 'text-red-600 hover:text-red-700 hover:bg-red-50',
-                        }
+                        },
                       ]
                       : []),
                   ]}
                   accent="violet"
                 />
               )}
-
               {viewMode === 'card' && (
                 <ManagementGrid viewMode={viewMode} className="p-3 sm:p-4">
                   <AnimatePresence>
-                    {filteredLeaves.map((leave) => (
+                    {leaves.map((leave) => (
                       <LeaveCard
                         key={leave.id}
                         leave={leave}
@@ -1278,7 +1403,7 @@ const MyLeave = () => {
           >
             <Pagination
               currentPage={pagination.page}
-              totalItems={resultMeta.total || leaves.length}
+              totalItems={resultMeta.total}
               itemsPerPage={pagination.limit}
               onPageChange={handlePageChange}
               showInfo={viewMode !== 'card'}
@@ -1288,12 +1413,24 @@ const MyLeave = () => {
         )}
       </div>
 
-      {/* Modals */}
+      {/* ─── View Leave Modal ─── */}
       <AnimatePresence>
         {viewLeave && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onMouseDown={(e) => e.target === e.currentTarget && setViewLeave(null)}>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onMouseDown={(e) => e.target === e.currentTarget && setViewLeave(null)}
+          >
             <ModalScrollLock />
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0, transition: { type: 'spring', duration: 0.5 } }} exit={{ scale: 0.9, opacity: 0, y: 20, transition: { duration: 0.3 } }} className="relative bg-white backdrop-blur-xl w-full max-w-4xl max-h-[85vh] rounded-xl shadow-2xl border border-gray-100 m-auto flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0, transition: { type: 'spring', duration: 0.5 } }}
+              exit={{ scale: 0.9, opacity: 0, y: 20, transition: { duration: 0.3 } }}
+              className="relative bg-white backdrop-blur-xl w-full max-w-4xl max-h-[85vh] rounded-xl shadow-2xl border border-gray-100 m-auto flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 sm:px-8 py-5 sticky top-0 z-[10]">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-lg shadow-fuchsia-200">
@@ -1306,46 +1443,90 @@ const MyLeave = () => {
                     </div>
                   </div>
                 </div>
-                <button type="button" onClick={() => setViewLeave(null)} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-all">
+                <button
+                  type="button"
+                  onClick={() => setViewLeave(null)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-all"
+                >
                   <FaTimes className="h-4 w-4" />
                 </button>
               </div>
+
               <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-4 px-6 sm:px-8 py-6">
+                {/* Updated: use leave_name */}
                 <div className="p-4 bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-100">
-                  <h3 className="text-2xl font-black text-slate-800">{viewLeave.leave_type_name}</h3>
-                  <p className="text-violet-600 mt-1 font-semibold text-sm">{viewLeave.is_paid ? 'Paid Leave' : 'Unpaid Leave'} · {formatDays(viewLeave.total_days)} Days {viewLeave.is_half_day && `(${viewLeave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})`}</p>
+                  <h3 className="text-2xl font-black text-slate-800">
+                    {viewLeave.leave_name}
+                  </h3>
+                  <p className="text-violet-600 mt-1 font-semibold text-sm">
+                    {viewLeave.is_paid ? 'Paid Leave' : 'Unpaid Leave'} ·{' '}
+                    {formatDays(viewLeave.total_days)} Days{' '}
+                    {viewLeave.is_half_day &&
+                      `(${viewLeave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'
+                      })`}
+                  </p>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Start Date</label>
-                    <div className="text-gray-800 font-medium">{formatDate(viewLeave.start_date)}</div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">
+                      Start Date
+                    </label>
+                    <div className="text-gray-800 font-medium">
+                      {formatDate(viewLeave.start_date)}
+                    </div>
                   </div>
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">End Date</label>
-                    <div className="text-gray-800 font-medium">{formatDate(viewLeave.end_date)}</div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">
+                      End Date
+                    </label>
+                    <div className="text-gray-800 font-medium">
+                      {formatDate(viewLeave.end_date)}
+                    </div>
                   </div>
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Applied On</label>
-                    <div className="text-gray-800 font-medium">{formatDateTime(viewLeave.applied_at)}</div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">
+                      Applied On
+                    </label>
+                    <div className="text-gray-800 font-medium">
+                      {formatDateTime(viewLeave.applied_at)}
+                    </div>
                   </div>
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Status</label>
-                    <div className="text-gray-800 font-medium"><StatusBadge status={viewLeave.status} /></div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">
+                      Status
+                    </label>
+                    <div className="text-gray-800 font-medium">
+                      <StatusBadge status={viewLeave.status} />
+                    </div>
                   </div>
                 </div>
+
                 <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Reason / Description</label>
-                  <div className="text-gray-700 text-sm italic leading-relaxed">"{viewLeave.reason || 'No reason provided.'}"</div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">
+                    Reason / Description
+                  </label>
+                  <div className="text-gray-700 text-sm italic leading-relaxed">
+                    "{viewLeave.reason || 'No reason provided.'}"
+                  </div>
                 </div>
+
                 {viewLeave.approval_remarks && (
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
-                    <label className="text-xs font-semibold text-amber-600 uppercase tracking-wider block mb-2">Approval Remarks</label>
-                    <div className="text-amber-800 text-sm">{viewLeave.approval_remarks}</div>
+                    <label className="text-xs font-semibold text-amber-600 uppercase tracking-wider block mb-2">
+                      Approval Remarks
+                    </label>
+                    <div className="text-amber-800 text-sm">
+                      {viewLeave.approval_remarks}
+                    </div>
                   </div>
                 )}
+
                 {viewLeave.attachments?.length > 0 && (
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Attachments</label>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">
+                      Attachments
+                    </label>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       {viewLeave.attachments.map((file) => {
                         const isImage = isImageAttachment(file);
@@ -1371,7 +1552,9 @@ const MyLeave = () => {
                               ) : (
                                 <div className="flex flex-col items-center gap-2 text-gray-400">
                                   <FaPaperclip size={24} />
-                                  <span className="px-2 text-center text-[10px] font-medium line-clamp-2">{file.original_name}</span>
+                                  <span className="px-2 text-center text-[10px] font-medium line-clamp-2">
+                                    {file.original_name}
+                                  </span>
                                 </div>
                               )}
                               <div className="absolute inset-0 flex items-center justify-center bg-black/0 text-transparent transition-all group-hover:bg-black/20 group-hover:text-white">
@@ -1379,7 +1562,12 @@ const MyLeave = () => {
                               </div>
                             </div>
                             <div className="border-t border-gray-100 bg-white px-2 py-1.5">
-                              <p className="truncate text-[10px] font-medium text-gray-600">{file.original_name || (file.file_url ? file.file_url.split('/').pop() : 'Attachment')}</p>
+                              <p className="truncate text-[10px] font-medium text-gray-600">
+                                {file.original_name ||
+                                  (file.file_url
+                                    ? file.file_url.split('/').pop()
+                                    : 'Attachment')}
+                              </p>
                             </div>
                           </a>
                         );
@@ -1388,8 +1576,15 @@ const MyLeave = () => {
                   </div>
                 )}
               </div>
+
               <div className="flex gap-3 justify-end w-full px-6 sm:px-8 py-5 border-t border-gray-100 bg-white">
-                <button type="button" onClick={() => setViewLeave(null)} className="flex px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all">Close</button>
+                <button
+                  type="button"
+                  onClick={() => setViewLeave(null)}
+                  className="flex px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all"
+                >
+                  Close
+                </button>
                 {viewLeave.status === 'pending' && (
                   <>
                     <button
@@ -1420,6 +1615,7 @@ const MyLeave = () => {
         )}
       </AnimatePresence>
 
+      {/* Apply / Edit / Cancel Modals */}
       <LeaveFormModal
         open={showApply}
         title="Apply Leave"
