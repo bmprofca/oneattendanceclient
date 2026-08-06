@@ -3,8 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FaPlus, FaEdit, FaTrash, FaSyncAlt, FaSearch, FaTimes, FaCheck,
   FaExclamationTriangle, FaUser, FaCalendarAlt, FaClock,
-  FaToggleOn, FaEye, FaSpinner, FaChevronDown, FaTh, FaListUl, FaCog,
-  FaEnvelope, FaIdCard, FaChartBar
+  FaEye, FaSpinner, FaChevronDown, FaTh, FaListUl, FaCog,
+  FaEnvelope, FaIdCard, FaChartBar, FaUsers
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import apiCall from '../utils/api';
@@ -520,7 +520,7 @@ const LeaveBalanceManagement = () => {
     {
       label: 'Employees',
       value: new Set(balances.map((b) => b.employee_id)).size,
-      icon: FaToggleOn, color: 'indigo', isCount: true,
+      icon: FaUsers, color: 'indigo', isCount: true,
     },
   ], [balances]);
 
@@ -1020,8 +1020,8 @@ const LeaveBalanceManagement = () => {
                           <label
                             key={leave.leave_config_id}
                             className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${isChecked
-                                ? 'border-red-300 bg-red-50 shadow-sm'
-                                : 'border-slate-200 bg-white hover:border-slate-300'
+                              ? 'border-red-300 bg-red-50 shadow-sm'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
                               }`}
                           >
                             <input
@@ -1170,8 +1170,8 @@ const LeaveBalanceManagement = () => {
                             <motion.div
                               key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                               className={`relative rounded-xl border p-4 transition-all ${!formData.employee_id
-                                  ? 'border-slate-100 bg-slate-100/50 opacity-60 pointer-events-none'
-                                  : 'border-slate-100 bg-slate-50/60'
+                                ? 'border-slate-100 bg-slate-100/50 opacity-60 pointer-events-none'
+                                : 'border-slate-100 bg-slate-50/60'
                                 }`}
                             >
                               <div className="mb-3 flex items-center justify-between">
@@ -1243,8 +1243,8 @@ const LeaveBalanceManagement = () => {
                                       }
                                     }}
                                     className={`w-full rounded-xl border px-4 py-3 text-sm font-semibold outline-none transition ${showError
-                                        ? 'border-red-300 bg-red-50 focus:ring-red-500/20'
-                                        : 'border-slate-200 bg-white focus:border-violet-400 focus:ring-4 focus:ring-violet-500/5'
+                                      ? 'border-red-300 bg-red-50 focus:ring-red-500/20'
+                                      : 'border-slate-200 bg-white focus:border-violet-400 focus:ring-4 focus:ring-violet-500/5'
                                       } ${!formData.employee_id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   />
                                   {showError && (
