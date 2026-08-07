@@ -36,7 +36,6 @@ const DEFAULT_CURRENCY_OPTIONS = [
 ];
 
 const normalizeCurrencyValue = (value) => {
-  // Return null for null/undefined/empty so the field can be blank
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === "object") {
     return normalizeCurrencyValue(value.value || value.key);
@@ -157,7 +156,6 @@ function MethodTabButton({ tab, active, enabled, disabled, onClick, onExpand, on
             {tab.description || tab.value}
           </span>
         </span>
-        {/* Chevron – no hover effect when disabled */}
         <span
           className={`flex-shrink-0 ml-1 mr-2 p-1.5 rounded-full transition-colors 
             ${disabled
@@ -170,7 +168,6 @@ function MethodTabButton({ tab, active, enabled, disabled, onClick, onExpand, on
         </span>
       </button>
 
-      {/* Checkbox – disabled cursor */}
       <div className="flex shrink-0 items-center justify-center pl-2 pr-1">
         <label
           className={`relative flex items-center ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
@@ -220,6 +217,7 @@ export default function CompanyDetailsPage() {
   const [isAddressAutoDetected, setIsAddressAutoDetected] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAutoDetectingIp, setIsAutoDetectingIp] = useState(false);
   const fileInputRef = useRef(null);
   const companyDetailsRequestRef = useRef({ key: null, promise: null });
   const currencyConstantsRequestRef = useRef(null);
@@ -286,7 +284,7 @@ export default function CompanyDetailsPage() {
         country: company.country || "India", latitude: company.latitude || "", longitude: company.longitude || "",
         transaction_currency: normalizeCurrencyValue(company.transaction_currency),
         gst_no: company.gst_no || "",
-        max_distance: company.max_distance ?? ""
+        max_distance: company.max_distance != null ? String(company.max_distance) : ""
       };
       setFormData(data);
       setOriginalData(data);
@@ -460,7 +458,17 @@ export default function CompanyDetailsPage() {
     finally { setIsGeocoding(false); }
   };
 
-  const toggleMethod = (methodValue) => setEnabledMethods((prev) => prev.includes(methodValue) ? prev.filter((item) => item !== methodValue) : [...prev, methodValue]);
+  const toggleMethod = (methodValue) => {
+    const isCurrentlyEnabled = enabledMethods.includes(methodValue);
+    if (!isCurrentlyEnabled) {
+      setEnabledMethods((prev) => [...prev, methodValue]);
+    } else {
+      setEnabledMethods((prev) => prev.filter((item) => item !== methodValue));
+      if (methodValue === 'gps') {
+        setFormData((prev) => ({ ...prev, max_distance: '' }));
+      }
+    }
+  };
 
   const addIp = () => {
     const next = ipInput.trim();
@@ -473,16 +481,28 @@ export default function CompanyDetailsPage() {
   const removeIp = (value) => setIps((prev) => prev.filter((ip) => ip !== value));
 
   const handleAutoDetectIps = async () => {
-    setIsSubmitting(true);
+    setIsAutoDetectingIp(true);
     try {
-      const payload = { id: company.id, company_ips: [] };
-      const response = await apiCall('/company/update-attendance-settings', 'PUT', payload, company.id);
+      const response = await apiCall('/ip', 'GET');
       const result = await response.json();
-      if (!result.success) throw new Error(result.message || 'Failed to update company');
-      toast.success('Company IP auto-detected successfully');
-      setCompany(prev => ({ ...prev, company_ips: payload.company_ips }));
-    } catch (error) { toast.error(error.message || 'Failed to auto-detect IP'); }
-    finally { setIsSubmitting(false); }
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to detect IP');
+      }
+      const detectedIp = result.data?.ip_v4;
+      if (!detectedIp) {
+        throw new Error('No IPv4 address returned from server');
+      }
+      if (ips.includes(detectedIp)) {
+        toast.info('This IP is already in the list');
+      } else {
+        setIps(prev => [...prev, detectedIp]);
+        toast.success(`Detected your public IP: ${detectedIp}`);
+      }
+    } catch (error) {
+      toast.error(error.message || 'Could not auto-detect IP');
+    } finally {
+      setIsAutoDetectingIp(false);
+    }
   };
 
   const hasChanges = useMemo(() => {
@@ -526,51 +546,103 @@ export default function CompanyDetailsPage() {
 
       ATTENDANCE_UPDATE_FIELDS.forEach((key) => {
         if (formData[key] !== originalData[key]) {
-          if (formData[key] || originalData[key]) {
-            attendancePayload[key] = key === 'max_distance' && formData[key] !== '' ? Number(formData[key]) : formData[key];
+          if (key === 'max_distance') {
+            if (formData[key] === '') {
+              attendancePayload[key] = null;
+            } else {
+              const num = Number(formData[key]);
+              if (!isNaN(num)) attendancePayload[key] = num;
+            }
+          } else {
+            if (formData[key] !== '') {
+              attendancePayload[key] = formData[key];
+            }
           }
         }
       });
 
-      const normalizedIps = ips.map((ip) => ip.trim()).filter(Boolean);
-      const normalizedMethods = enabledMethods.map((method) => method.trim().toLowerCase()).filter(Boolean);
+      let normalizedMethods = enabledMethods
+        .map(method => method.trim().toLowerCase())
+        .filter(Boolean);
+      if (normalizedMethods.length === 0) {
+        normalizedMethods = ['manual'];
+      }
+      const originalMethods = parseMethods(company?.attendance_methods || []);
+      const methodsChanged =
+        normalizedMethods.length !== originalMethods.length ||
+        normalizedMethods.some(method => !originalMethods.includes(method));
 
-      const originalIps = parseIPs(company?.company_ips || []);
-      const ipsChanged = ips.length !== originalIps.length || ips.some((ip) => !originalIps.includes(ip));
-      if (ipsChanged) {
-        attendancePayload.company_ips = normalizedIps;
-        if (normalizedIps.length === 0) attendancePayload.clear_ips = true;
+      if (methodsChanged) {
+        attendancePayload.attendance_methods = normalizedMethods;
       }
 
-      const originalMethods = parseMethods(company?.attendance_methods || []);
-      const methodsChanged = enabledMethods.length !== originalMethods.length || enabledMethods.some((method) => !originalMethods.includes(method));
-      if (methodsChanged) attendancePayload.attendance_methods = normalizedMethods;
+      const finalMethods = methodsChanged ? normalizedMethods : originalMethods;
 
+      if (finalMethods.includes('ip')) {
+        const cleanIps = ips.map(ip => ip.trim()).filter(Boolean);
+        attendancePayload.company_ips = cleanIps.length > 0 ? cleanIps : [];
+        if (!attendancePayload.attendance_methods) {
+          attendancePayload.attendance_methods = finalMethods;
+        }
+      } else {
+        const originalIps = parseIPs(company?.company_ips || []);
+        if (originalIps.length > 0) {
+          if (!attendancePayload.attendance_methods) {
+            attendancePayload.attendance_methods = finalMethods;
+          }
+        }
+        delete attendancePayload.company_ips;
+      }
+      if (finalMethods.includes('gps')) {
+        const raw = formData.max_distance;
+        const num = Number(raw);
+        if (raw === '' || isNaN(num)) {
+          toast.error('Max Distance is required when GPS attendance is enabled.');
+          setIsSubmitting(false);
+          return;
+        }
+        attendancePayload.max_distance = num;
+        if (!attendancePayload.attendance_methods) {
+          attendancePayload.attendance_methods = finalMethods;
+        }
+      } else {
+        if (company.max_distance !== null && company.max_distance !== undefined) {
+          if (!attendancePayload.attendance_methods) {
+            attendancePayload.attendance_methods = finalMethods;
+          }
+        }
+        delete attendancePayload.max_distance;
+      }
       const shouldUpdateBasic = Object.keys(basicPayload).length > 1;
       const shouldUpdateAttendance = Object.keys(attendancePayload).length > 1;
-      if (!shouldUpdateBasic && !shouldUpdateAttendance) return;
 
-      const updatedCompany = {};
+      if (!shouldUpdateBasic && !shouldUpdateAttendance) {
+        setIsSubmitting(false);
+        return;
+      }
+
+      let basicUpdated = false;
+      let attendanceUpdated = false;
 
       if (shouldUpdateBasic) {
         const response = await apiCall('/company/update-basic', 'PUT', basicPayload, company.id);
         const result = await response.json();
         if (!result.success) throw new Error(result.message || 'Basic information update failed');
-        Object.assign(updatedCompany, basicPayload);
+        basicUpdated = true;
       }
 
       if (shouldUpdateAttendance) {
         const response = await apiCall('/company/update-attendance-settings', 'PUT', attendancePayload, company.id);
         const result = await response.json();
         if (!result.success) throw new Error(result.message || 'Attendance settings update failed');
-        Object.assign(updatedCompany, attendancePayload);
-        if (attendancePayload.clear_ips) updatedCompany.company_ips = [];
+        attendanceUpdated = true;
       }
 
       toast.success('Company updated successfully!');
-      setCompany(prev => ({ ...prev, ...updatedCompany }));
-      setOriginalData(prev => ({ ...prev, ...formData }));
-      setLogoFile(null);
+
+      if (basicUpdated || attendanceUpdated) {
+        await fetchCompanyDetails({ showToast: false, force: true });
+      }
     } catch (error) {
       toast.error(error.message || 'Failed to update company');
     } finally {
@@ -593,10 +665,8 @@ export default function CompanyDetailsPage() {
   const inputClass = "w-full border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm";
   const disabledClass = "bg-gray-50 text-gray-400 cursor-not-allowed";
 
-  // ---------- Method body with GPS max distance ----------
   const renderMethodBody = (methodItem) => {
     if (!methodItem) return null;
-    const methodEnabled = enabledMethods.includes(methodItem.value);
 
     if (methodItem.value === 'ip') {
       return (
@@ -620,10 +690,18 @@ export default function CompanyDetailsPage() {
           <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-gray-700">Auto detect or clear IPs</p>
-              <p className="text-xs text-gray-400">Auto detect stores the current request IP.</p>
+              <p className="text-xs text-gray-400">Detects your current public IP and adds it to the list.</p>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={handleAutoDetectIps} className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100">Auto Detect</button>
+              <button
+                type="button"
+                onClick={handleAutoDetectIps}
+                disabled={isAutoDetectingIp}
+                className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100 disabled:opacity-50"
+              >
+                {isAutoDetectingIp ? <FaSpinner className="animate-spin mr-1 inline" size={12} /> : null}
+                Auto Detect
+              </button>
               <button type="button" onClick={() => setIps([])} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-red-600 shadow-sm transition hover:bg-red-50"><FaTrash className="mr-2 inline" size={10} />Clear</button>
             </div>
           </div>
@@ -681,7 +759,6 @@ export default function CompanyDetailsPage() {
 
   const fullAddress = [formData.address_line1, formData.address_line2, formData.city, formData.state, formData.postal_code, formData.country].filter(Boolean).join(', ');
 
-  // ---------- Basic Information with improved logo upload ----------
   const renderBasicInformation = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
@@ -706,13 +783,11 @@ export default function CompanyDetailsPage() {
           <SelectField isLoading={loadingCurrencies} options={currencyOptions} value={currencyOptions.find(o => o.value === formData.transaction_currency) || null} onChange={handleCurrencyChange} placeholder="Select currency" />
         </div>
 
-        {/* Logo section with custom upload button and larger preview */}
         <div className="md:col-span-2 space-y-2 pt-2">
           <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             <FaLink className="text-indigo-400" /> Company Logo
           </label>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-            {/* Hidden real file input */}
             <input
               ref={fileInputRef}
               type="file"
@@ -722,7 +797,6 @@ export default function CompanyDetailsPage() {
               className="hidden"
               id="logo-upload"
             />
-            {/* Styled label as upload button */}
             <label
               htmlFor="logo-upload"
               className={`inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition cursor-pointer ${isUploadingLogo ? 'pointer-events-none opacity-60' : ''}`}
@@ -731,7 +805,6 @@ export default function CompanyDetailsPage() {
               {isUploadingLogo ? 'Uploading...' : (logoPreview || formData.logo_url) ? 'Change Logo' : 'Upload Logo'}
             </label>
 
-            {/* Large preview image */}
             {(logoPreview || formData.logo_url) && (
               <div className="flex items-center gap-3">
                 <img
@@ -755,7 +828,6 @@ export default function CompanyDetailsPage() {
     </div>
   );
 
-  // ---------- Address section (unchanged) ----------
   const renderAddress = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
@@ -827,7 +899,6 @@ export default function CompanyDetailsPage() {
     </div>
   );
 
-  // ---------- Attendance section (unchanged) ----------
   const renderAttendance = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
