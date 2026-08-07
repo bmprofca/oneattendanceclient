@@ -58,7 +58,7 @@ const getCompanyId = () => {
 };
 
 const fetchConstants = async () => {
-  const res = await apiCall('/constants/', 'GET', null, getCompanyId());
+  const res = await apiCall('/constants?type=leave_type', 'GET', null, getCompanyId());
   if (!res.ok) throw new Error(`Server error: ${res.status}`);
   const json = await res.json();
   if (!json.success) throw new Error(json.message || 'Failed to fetch constants');
@@ -101,7 +101,7 @@ const formatDate = (dateStr) => {
 };
 
 const formatDays = (value) => {
-  if (value === null || value === undefined) return 'Unlimited';
+  if (value === null || value === undefined) return '-';
   const number = Number(value);
   if (!Number.isFinite(number)) return '0';
   return String(Math.round(number));

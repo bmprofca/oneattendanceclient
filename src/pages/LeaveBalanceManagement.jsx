@@ -231,7 +231,7 @@ const PaidBadge = ({ isPaid, compact = false }) => (
 // ─── API helper for employee leave configs ───────────────────────────────────
 const fetchEmployeeAvailableConfigsAsync = async (employeeId, year) => {
   const companyId = getCompanyId();
-  const response = await apiCall(`/leave/employee/${employeeId}?year=${year}&paid=true`, 'GET', null, companyId);
+  const response = await apiCall(`/leave/employee/${employeeId}?year=${year}`, 'GET', null, companyId);
   const result = await response.json();
   if (!result.success || !Array.isArray(result.data)) return [];
   return result.data.map(c => ({
