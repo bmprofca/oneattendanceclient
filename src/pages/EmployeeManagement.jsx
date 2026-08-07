@@ -25,6 +25,7 @@ import { CountryCodeModal, getFlagEmoji, ManagementHub, ManagementTable, Refresh
 import ProfileAvatar from '../components/common/ProfileAvatar';
 import useEmployeeNavigation from '../hooks/useEmployeeNavigation';
 import CurrencyIcon from "../components/common/CurrencyIcon";
+import { useAuth } from '../context/AuthContext'; // ← new import
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ const CollapsibleSection = ({ title, icon, children, defaultOpen = true, classNa
 const EmployeeEditModal = ({
     isOpen, selectedEmployee, formData, setFormData, constants, permissionPackages,
     designationOptions, employmentTypeOptions, salaryTypeOptions,
+    attendanceMethods,
     attendanceMethodsConfig, handleToggleMethod, handleEdit, closeModal,
     loading, constantsLoading, permissionsLoading, updateDisabled, submitTitle,
 }) => {
@@ -319,9 +321,9 @@ const EmployeeEditModal = ({
                             <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
                                 <FaFingerprint className="h-4 w-4 text-indigo-500" />Attendance Methods
                             </label>
-                            {constants.attendance_methods.length > 0 ? (
+                            {attendanceMethods.length > 0 ? (
                                 <div className="flex flex-wrap gap-2">
-                                    {constants.attendance_methods.map((method) => {
+                                    {attendanceMethods.map((method) => {
                                         const active = attendanceMethodsConfig[method.id]?.enabled || false;
                                         return (
                                             <button key={method.id} type="button"
@@ -1190,11 +1192,12 @@ const EmployeeManagement = () => {
     const navigate = useNavigate();
     const navigateToEmployeeProfile = useEmployeeNavigation();
     const { checkActionAccess, getAccessMessage } = usePermissionAccess();
+    const { attendanceMethods: companyAttendanceMethods, loading: authLoading } = useAuth(); // ← new
 
     const [employees, setEmployees] = useState([]);
     const [constants, setConstants] = useState({
         employment_types: [], salary_types: [], designations: [],
-        employment_status: [], attendance_methods: [],
+        employment_status: [],
     });
     const [permissionPackages, setPermissionPackages] = useState([]);
     const permissionPackagesRef = useRef([]);
@@ -1249,6 +1252,16 @@ const EmployeeManagement = () => {
     const readEmployeeAccess = checkActionAccess('employeeManagement', 'read');
     const createEmployeeAccess = checkActionAccess('employeeManagement', 'create');
 
+    // Memoised attendance method options from AuthContext
+    const attendanceMethodOptions = useMemo(() => {
+        if (!companyAttendanceMethods) return [];
+        return companyAttendanceMethods.map(m => ({
+            id: m.method.toLowerCase(),
+            name: m.label || m.method,
+            available: true, // all methods from auth are assumed available
+        }));
+    }, [companyAttendanceMethods]);
+
     useEffect(() => {
         isMounted.current = true;
         return () => { isMounted.current = false; };
@@ -1300,11 +1313,7 @@ const EmployeeManagement = () => {
                         salary_types: d.salary_types?.map(i => ({ value: i.value.value, key: i.key, label: i.value.label, description: i.value.description })) || [],
                         designations: d.designations?.map(i => ({ value: i.value.value, key: i.key, label: i.value.label, description: i.value.description })) || [],
                         employment_status: d.employment_status?.map(i => ({ value: i.value.value, key: i.key, label: i.value.label, description: i.value.description })) || [],
-                        attendance_methods: d.attendance_methods?.map(i => ({
-                            id: i.key.toLowerCase(), name: i.value.label, icon: getIconForType(i.key),
-                            description: i.value.description, available: i.value.is_available,
-                            requiresDevice: i.value.requiresDevice || false,
-                        })) || [],
+                        // attendance_methods removed – now from AuthContext
                     };
                     constantsRequestCache = { companyId, promise: null, data: mapped };
                     return mapped;
@@ -1574,7 +1583,6 @@ const EmployeeManagement = () => {
         setCreateLoading(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
-            // No location fetching needed
             const payload = {
                 signup_type: createFormData.signup_type,
                 otp: createFormData.otp.trim(),
@@ -1582,7 +1590,6 @@ const EmployeeManagement = () => {
                 designation: createFormData.designation,
                 salary_type: createFormData.salary_type,
                 employment_type: createFormData.employment_type,
-                // platform, latitude, longitude removed
             };
 
             payload[createFormData.signup_type] = getCreateContactValue();
@@ -1658,7 +1665,6 @@ const EmployeeManagement = () => {
             const norm = normalizeEmployeeRecord(employee);
             setSelectedEmployee(norm);
 
-            // Build the initial selected package from the employee's own package data
             const selectedPackage = norm.permission_package_id
                 ? {
                     value: norm.permission_package_id,
@@ -1669,7 +1675,7 @@ const EmployeeManagement = () => {
                 : null;
 
             const initialConfig = {};
-            constants.attendance_methods.forEach(m => {
+            attendanceMethodOptions.forEach(m => {
                 initialConfig[m.id] = { enabled: false, available: m.available };
             });
             if (employee.attendance_methods?.length) {
@@ -1696,7 +1702,7 @@ const EmployeeManagement = () => {
                 joining_date: norm.joining_date ? new Date(norm.joining_date).toISOString().split('T')[0] : '',
                 status: typeof norm.status === 'object' ? norm.status?.value : (norm.status || ''),
                 permission_package_id: norm.permission_package_id,
-                selectedPackage: selectedPackage,          // no lag anymore
+                selectedPackage: selectedPackage,
                 auto_approve: norm.auto_approve ?? false,
                 shift_start: norm.shift_start || DEFAULT_SHIFT_START,
                 shift_end: norm.shift_end || DEFAULT_SHIFT_END,
@@ -2397,6 +2403,7 @@ const EmployeeManagement = () => {
                     designationOptions={designationOptions}
                     employmentTypeOptions={employmentTypeOptions}
                     salaryTypeOptions={salaryTypeOptions}
+                    attendanceMethods={attendanceMethodOptions}
                     attendanceMethodsConfig={attendanceMethodsConfig}
                     handleToggleMethod={handleToggleMethod}
                     handleEdit={handleEdit}
