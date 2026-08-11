@@ -1433,10 +1433,30 @@ const LeaveManagement = () => {
                         }
                     >
                         <div className="space-y-4">
-                            <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3">
-                                <h3 className="text-xl font-black tracking-tight text-slate-800">{detailLeave.employee_name}</h3>
-                                <p className="text-blue-600 mt-1 font-semibold text-sm">{detailLeave.leave_name} · {formatDays(detailLeave.total_days)} Days</p>
+                            {/* Header Card */}
+                            <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-xl font-black tracking-tight text-slate-800">
+                                            {detailLeave.employee_name}
+                                        </h3>
+                                        <p className="text-blue-600 mt-1 font-semibold text-sm">
+                                            {detailLeave.leave_name} · {formatDays(detailLeave.total_days)} Days
+                                            {detailLeave.is_half_day && (
+                                                <span className="ml-1 text-xs font-bold text-indigo-500">
+                                                    (Half Day – {detailLeave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <StatusBadge status={detailLeave.status} />
+                                </div>
+                                <div className="mt-2 inline-flex items-center rounded-lg bg-white/70 px-2 py-1 text-[10px] font-bold text-slate-500 border border-slate-200/70">
+                                    {detailLeave.leave_code}
+                                </div>
                             </div>
+
+                            {/* Key Dates Grid */}
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-3">
                                     <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
@@ -1454,15 +1474,87 @@ const LeaveManagement = () => {
                                     <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Payment Type</label>
                                     <div className="text-sm font-medium text-gray-800">{detailLeave.is_paid ? 'Paid Leave' : 'Unpaid Leave'}</div>
                                 </div>
+
+                                {/* Approved / Cancelled Dates */}
+                                {detailLeave.approved_at && (
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                                        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Approved On</label>
+                                        <div className="text-sm font-medium text-emerald-800">{fmt(detailLeave.approved_at)}</div>
+                                    </div>
+                                )}
+                                {detailLeave.cancelled_at && (
+                                    <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3">
+                                        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-rose-600">Cancelled On</label>
+                                        <div className="text-sm font-medium text-rose-800">{fmt(detailLeave.cancelled_at)}</div>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Half Day Detail (if not already shown) – added as a separate card for clarity */}
+                            {detailLeave.is_half_day && (
+                                <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+                                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-indigo-600">Half Day Session</label>
+                                    <div className="text-sm font-medium text-indigo-800">
+                                        {detailLeave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Reason / Description */}
                             <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-3">
                                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Reason / Description</label>
                                 <div className="text-sm italic leading-relaxed text-gray-700">"{detailLeave.reason || 'No reason provided.'}"</div>
                             </div>
+
+                            {/* Approval Remarks */}
                             {detailLeave.approval_remarks && (
                                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                                     <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Approval Remarks</label>
                                     <div className="text-sm text-emerald-800">{detailLeave.approval_remarks}</div>
+                                </div>
+                            )}
+
+                            {/* Attachments */}
+                            {detailLeave.attachments?.length > 0 && (
+                                <div className="space-y-2">
+                                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                                        Attachments ({detailLeave.attachments.length})
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                                        {detailLeave.attachments.map((url, index) => {
+                                            const fileObj = {
+                                                url,
+                                                name: decodeURIComponent(url.substring(url.lastIndexOf('/') + 1) || 'attachment'),
+                                                type: '', // will be detected by extension
+                                            };
+                                            const isImage = isImageAttachment(fileObj);
+                                            return (
+                                                <a
+                                                    key={index}
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow"
+                                                >
+                                                    {isImage ? (
+                                                        <img
+                                                            src={url}
+                                                            alt={fileObj.name}
+                                                            className="h-full w-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-orange-50 text-orange-500">
+                                                            <FaPaperclip />
+                                                            <span className="max-w-full truncate px-1 text-[9px] font-bold uppercase">
+                                                                {fileObj.name.split('.').pop()}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                                </a>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>

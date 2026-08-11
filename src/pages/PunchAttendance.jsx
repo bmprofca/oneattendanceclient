@@ -3,7 +3,7 @@ import {
   FaFingerprint, FaClock, FaCoffee, FaSignInAlt, FaSignOutAlt,
   FaMapMarkerAlt, FaCamera, FaIdCard, FaWifi, FaHandPaper,
   FaTimesCircle, FaCalendarAlt, FaPause, FaPlay, FaSpinner,
-  FaHistory, FaBolt, FaCheckCircle,
+  FaHistory, FaBolt, FaCheckCircle, FaSync,
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaBriefcase } from 'react-icons/fa';
@@ -23,16 +23,16 @@ const ATTENDANCE_ICONS = {
 };
 
 const STATUS_CONFIG = {
-  WORKING:  { label: 'Working',  dot: 'bg-emerald-400', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', icon: FaPlay },
-  ON_BREAK: { label: 'On Break', dot: 'bg-amber-400',   badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',     icon: FaPause },
-  OFF_DUTY: { label: 'Off Duty', dot: 'bg-slate-500',   badge: 'bg-slate-500/15 text-slate-400 border-slate-500/30',     icon: FaTimesCircle },
+  WORKING: { label: 'Working', dot: 'bg-emerald-400', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', icon: FaPlay },
+  ON_BREAK: { label: 'On Break', dot: 'bg-amber-400', badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30', icon: FaPause },
+  OFF_DUTY: { label: 'Off Duty', dot: 'bg-slate-500', badge: 'bg-slate-500/15 text-slate-400 border-slate-500/30', icon: FaTimesCircle },
 };
 
 const ACTION_CONFIG = {
-  PUNCH_IN:    { label: 'Punch In',    icon: FaSignInAlt,  key: 'punch-in',  from: '#10b981', to: '#0d9488', glow: 'rgba(16,185,129,0.35)' },
-  PUNCH_OUT:   { label: 'Punch Out',   icon: FaSignOutAlt, key: 'punch-out', from: '#f43f5e', to: '#e11d48', glow: 'rgba(244,63,94,0.35)'  },
-  BREAK_START: { label: 'Start Break', icon: FaCoffee,     key: 'break-in',  from: '#f59e0b', to: '#d97706', glow: 'rgba(245,158,11,0.35)' },
-  BREAK_END:   { label: 'End Break',   icon: FaPlay,       key: 'break-out', from: '#6366f1', to: '#4f46e5', glow: 'rgba(99,102,241,0.35)' },
+  PUNCH_IN: { label: 'Punch In', icon: FaSignInAlt, key: 'punch-in', from: '#10b981', to: '#0d9488', glow: 'rgba(16,185,129,0.35)' },
+  PUNCH_OUT: { label: 'Punch Out', icon: FaSignOutAlt, key: 'punch-out', from: '#f43f5e', to: '#e11d48', glow: 'rgba(244,63,94,0.35)' },
+  BREAK_START: { label: 'Start Break', icon: FaCoffee, key: 'break-in', from: '#f59e0b', to: '#d97706', glow: 'rgba(245,158,11,0.35)' },
+  BREAK_END: { label: 'End Break', icon: FaPlay, key: 'break-out', from: '#6366f1', to: '#4f46e5', glow: 'rgba(99,102,241,0.35)' },
 };
 
 const ACTION_ENDPOINTS = {
@@ -41,10 +41,10 @@ const ACTION_ENDPOINTS = {
 };
 
 const ACTIVITY_STYLE = {
-  PUNCH_IN:    { icon: FaSignInAlt,  color: '#10b981', bg: 'rgba(16,185,129,0.12)',  label: 'Punch In'    },
-  PUNCH_OUT:   { icon: FaSignOutAlt, color: '#f43f5e', bg: 'rgba(244,63,94,0.12)',   label: 'Punch Out'   },
-  BREAK_START: { icon: FaCoffee,     color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  label: 'Break Start' },
-  BREAK_END:   { icon: FaPlay,       color: '#6366f1', bg: 'rgba(99,102,241,0.12)',  label: 'Break End'   },
+  PUNCH_IN: { icon: FaSignInAlt, color: '#10b981', bg: 'rgba(16,185,129,0.12)', label: 'Punch In' },
+  PUNCH_OUT: { icon: FaSignOutAlt, color: '#f43f5e', bg: 'rgba(244,63,94,0.12)', label: 'Punch Out' },
+  BREAK_START: { icon: FaCoffee, color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Break Start' },
+  BREAK_END: { icon: FaPlay, color: '#6366f1', bg: 'rgba(99,102,241,0.12)', label: 'Break End' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,9 +60,9 @@ const Ring = ({ percent, size = 110, stroke = 9 }) => {
   const color = percent >= 100 ? '#10b981' : percent >= 60 ? '#6366f1' : percent >= 30 ? '#f59e0b' : '#f43f5e';
   return (
     <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth={stroke} />
       <motion.circle
-        cx={size/2} cy={size/2} r={r} fill="none"
+        cx={size / 2} cy={size / 2} r={r} fill="none"
         stroke={color} strokeWidth={stroke}
         strokeDasharray={circ}
         initial={{ strokeDashoffset: circ }}
@@ -87,25 +87,25 @@ const PunchAttendance = () => {
   const { attendanceMethods } = useAuth();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab]         = useState(null);
-  const [activeMode, setActiveMode]       = useState(null);
+  const [activeTab, setActiveTab] = useState(null);
+  const [activeMode, setActiveMode] = useState(null);
   const [loadingAction, setLoadingAction] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
-  const [statusData, setStatusData]       = useState(null);
-  const [swipeModalOpen, setSwipeModal]   = useState(false);
-  const [pendingAction, setPending]       = useState(null);
+  const [statusData, setStatusData] = useState(null);
+  const [swipeModalOpen, setSwipeModal] = useState(false);
+  const [pendingAction, setPending] = useState(null);
 
-  const status         = statusData?.status || 'OFF_DUTY';
+  const status = statusData?.status || 'OFF_DUTY';
   const allowedActions = statusData?.allowed_actions || [];
-  const summary        = statusData?.today_summary || {};
-  const activities     = statusData?.today_activities || [];
-  const shift          = statusData?.shift || {};
-  const dayInfo        = statusData?.day_info || {};
+  const summary = statusData?.today_summary || {};
+  const activities = statusData?.today_activities || [];
+  const shift = statusData?.shift || {};
+  const dayInfo = statusData?.day_info || {};
 
-  const workedMins   = summary.total_work_minutes || 0;
-  const breakMins    = summary.total_break_minutes || 0;
+  const workedMins = summary.total_work_minutes || 0;
+  const breakMins = summary.total_break_minutes || 0;
   const expectedMins = shift.expected_work_minutes || 0;
-  const progress     = pct(workedMins, expectedMins);
+  const progress = pct(workedMins, expectedMins);
   const progressColor = progress >= 100 ? '#10b981' : progress >= 60 ? '#6366f1' : progress >= 30 ? '#f59e0b' : '#f43f5e';
 
   const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.OFF_DUTY;
@@ -214,15 +214,25 @@ const PunchAttendance = () => {
               </div>
             </div>
 
-            {/* Status badge */}
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-black ${statusCfg.badge}`}>
-              {loadingStatus ? <FaSpinner className="animate-spin" /> : (
-                <>
-                  <span className={`w-2 h-2 rounded-full animate-pulse ${statusCfg.dot}`} />
-                  <StatusIcon />
-                  <span>{statusCfg.label}</span>
-                </>
-              )}
+            {/* Status + Refresh */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchStatus(true)}
+                disabled={loadingStatus}
+                className="p-1.5 rounded-full hover:bg-slate-100 transition-colors disabled:opacity-50"
+                title="Refresh status"
+              >
+                <FaSync className={`w-3.5 h-3.5 text-slate-400 ${loadingStatus ? 'animate-spin' : ''}`} />
+              </button>
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-black ${statusCfg.badge}`}>
+                {loadingStatus ? <FaSpinner className="animate-spin" /> : (
+                  <>
+                    <span className={`w-2 h-2 rounded-full animate-pulse ${statusCfg.dot}`} />
+                    <StatusIcon />
+                    <span>{statusCfg.label}</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -240,9 +250,9 @@ const PunchAttendance = () => {
             {/* Stats */}
             <div className="flex-1 space-y-3">
               <div className="flex flex-wrap gap-2">
-                <StatChip label="Worked"  value={minsToHM(workedMins)}   color={progressColor} />
-                <StatChip label="Break"   value={minsToHM(breakMins)}    color="#f59e0b"       />
-                <StatChip label="Target"  value={minsToHM(expectedMins)} color="#94a3b8"       />
+                <StatChip label="Worked" value={minsToHM(workedMins)} color={progressColor} />
+                <StatChip label="Break" value={minsToHM(breakMins)} color="#f59e0b" />
+                <StatChip label="Target" value={minsToHM(expectedMins)} color="#94a3b8" />
               </div>
               {/* Bar */}
               <div>
@@ -266,7 +276,7 @@ const PunchAttendance = () => {
           {shift.start_time && (
             <div className="mt-5 pt-4 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500">
               <FaBriefcase className="opacity-40" />
-              <span>Shift <strong className="text-slate-700">{shift.start_time?.slice(0,5)}</strong> – <strong className="text-slate-700">{shift.end_time?.slice(0,5)}</strong></span>
+              <span>Shift <strong className="text-slate-700">{shift.start_time?.slice(0, 5)}</strong> – <strong className="text-slate-700">{shift.end_time?.slice(0, 5)}</strong></span>
               {shift.grace_minutes > 0 && (
                 <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-black border border-indigo-100 bg-indigo-50 text-indigo-500">
                   Grace {shift.grace_minutes}m
@@ -292,9 +302,8 @@ const PunchAttendance = () => {
                 <button
                   key={m.method}
                   onClick={() => setActiveTab(m.method)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all font-bold text-sm flex-shrink-0 ${
-                    isActive ? 'bg-white text-indigo-600 shadow-md border border-slate-200/80 scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/60'
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all font-bold text-sm flex-shrink-0 ${isActive ? 'bg-white text-indigo-600 shadow-md border border-slate-200/80 scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/60'
+                    }`}
                 >
                   <TabIcon className={`w-4 h-4 ${isActive ? 'text-indigo-500' : 'text-slate-300'}`} />
                   <span className="capitalize">{m.method}</span>
@@ -314,9 +323,8 @@ const PunchAttendance = () => {
                   key={mode}
                   onClick={() => enabled && setActiveMode(mode)}
                   disabled={!enabled}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all capitalize ${
-                    activeMode === mode ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
-                  } ${!enabled ? 'opacity-30 cursor-not-allowed' : 'hover:text-slate-600'}`}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all capitalize ${activeMode === mode ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
+                    } ${!enabled ? 'opacity-30 cursor-not-allowed' : 'hover:text-slate-600'}`}
                 >{mode}</button>
               ))}
             </div>
