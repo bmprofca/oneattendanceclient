@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-    FaMoneyBillWave, FaPlus, FaSpinner, FaCheckCircle, FaMinus,
-    FaTimesCircle, FaExclamationTriangle, FaTimes,
-    FaChartBar, FaEdit, FaTrash, FaInfoCircle,
-    FaListUl, FaTh, FaPercentage,
-    FaBuilding, FaBalanceScale, FaTag, FaToggleOn, FaToggleOff, FaEye,
-    FaSearch, FaClock, FaBriefcase, FaUserCircle, FaCog, FaSave, FaIdCard
+    FaMoneyBillWave, FaPlus, FaSpinner, FaMinus,
+    FaExclamationTriangle, FaTimes,
+    FaEdit, FaTrash, FaEye,
+    FaSearch, FaBuilding, FaBalanceScale, FaToggleOn, FaSave, FaIdCard,
+    FaCheckSquare, FaRegSquare, FaTrashAlt, FaCheck,
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -16,6 +15,7 @@ import ManagementGrid from '../components/ManagementGrid';
 import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import { ManagementButton, ManagementCard, ManagementHub, ManagementTable } from '../components/common';
 import ModalScrollLock from "../components/ModalScrollLock";
+import Select from '../components/SelectField';
 
 // ─── Constants & Helpers ─────────────────────────────────────────────────────
 
@@ -30,8 +30,6 @@ const backdropVariants = {
     visible: { opacity: 1 },
     exit: { opacity: 0 }
 };
-
-const CONFIRM_MODAL_CLASS = "bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col";
 
 const COMPONENT_TYPES = [
     { value: 'earning', label: 'Earning', color: 'green' },
@@ -77,21 +75,43 @@ const formatCalcValue = (calcType, calcValue) => {
     return `₹${v.toFixed(2)}`;
 };
 
-const formatDate = (date) => {
-    if (!date) return "N/A";
-    return new Date(date).toLocaleDateString("en-US", {
-        year: "numeric", month: "short", day: "numeric"
-    });
+const customSelectStyles = {
+    control: (base, state) => ({
+        ...base,
+        minHeight: '48px',
+        backgroundColor: '#f9fafb',
+        fontSize: '0.875rem',
+        borderColor: state.isFocused ? '#6366f1' : '#e2e8f0',
+        boxShadow: state.isFocused ? '0 0 0 4px rgba(99,102,241,0.10)' : 'none',
+        '&:hover': { borderColor: '#cbd5e1' },
+        borderRadius: '0.75rem',
+        padding: '0 0.5rem',
+    }),
+    valueContainer: (base) => ({ ...base, padding: '0 14px', fontSize: '0.875rem' }),
+    input: (base) => ({ ...base, margin: 0, padding: 0, fontSize: '0.875rem' }),
+    placeholder: (base) => ({ ...base, color: '#94a3b8', fontWeight: 500, fontSize: '0.875rem' }),
+    singleValue: (base) => ({ ...base, color: '#334155', fontWeight: 500, fontSize: '0.875rem' }),
+    option: (base, state) => ({
+        ...base,
+        fontSize: '0.875rem',
+        backgroundColor: state.isSelected ? '#6366f1' : state.isFocused ? '#f1f5f9' : 'white',
+        color: state.isSelected ? 'white' : '#1e293b',
+        '&:active': { backgroundColor: '#6366f1' },
+    }),
 };
 
-const InfoItem = ({ icon, label, value }) => (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1 mb-2">
-            {icon}{label}
-        </label>
-        <div className="text-gray-800 font-medium">{value}</div>
-    </div>
-);
+const ACTIVE_FILTER_OPTIONS = [
+    { value: 'all', label: 'All Status' },
+    { value: 'true', label: 'Active' },
+    { value: 'false', label: 'Inactive' },
+];
+
+const TYPE_FILTER_OPTIONS = [
+    { value: 'all', label: 'All Types' },
+    { value: 'earning', label: 'Earning' },
+    { value: 'deduction', label: 'Deduction' },
+    { value: 'employer_contribution', label: 'Employer Contribution' },
+];
 
 // ─── Component Detail Modal ───────────────────────────────────────────────────
 
@@ -181,12 +201,6 @@ const ComponentDetailModal = ({ component, onClose, onEdit, onDelete }) => {
                                         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">System Metadata</p>
                                     </div>
                                     <div className="divide-y divide-slate-50">
-                                        <div className="flex items-center justify-between px-4 py-3.5">
-                                            <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
-                                                <FaClock className="text-indigo-500" /> Date Created
-                                            </span>
-                                            <span className="text-xs font-bold text-slate-800">{formatDate(component.created_at)}</span>
-                                        </div>
                                         <div className="flex items-center justify-between px-4 py-3.5">
                                             <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
                                                 <FaIdCard className="text-slate-400" /> Component ID
@@ -391,25 +405,25 @@ const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
     );
 };
 
-// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+// ─── Bulk Delete Confirm Modal ─────────────────────────────────────────────
 
-const DeleteConfirmModal = ({ component, onClose, onConfirm, deleting }) => {
-    if (!component) return null;
-
+const BulkDeleteConfirmModal = ({ scope, count, onClose, onConfirm, deleting }) => {
+    const isAll = scope === 'all';
     return (
         <AnimatePresence>
             <motion.div variants={backdropVariants} initial="hidden" animate="visible" exit="exit" className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex justify-center items-start overflow-y-auto p-4 sm:p-6 pt-8 sm:pt-16 !mt-0" onClick={onClose}>
                 <ModalScrollLock />
                 <motion.div variants={modalVariants} initial="hidden" animate="visible" exit="exit" className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 m-auto flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                    {/* Header */}
                     <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4">
                         <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 shadow-sm border border-rose-100">
-                                <FaTrash className="h-4 w-4" />
+                                <FaTrashAlt className="h-4 w-4" />
                             </div>
                             <div>
-                                <h2 className="text-lg font-bold text-slate-900">Delete Component</h2>
-                                <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Confirmation</p>
+                                <h2 className="text-lg font-bold text-slate-900">Delete Components</h2>
+                                <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">
+                                    {isAll ? 'All records' : `${count} selected`}
+                                </p>
                             </div>
                         </div>
                         <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-all">
@@ -425,17 +439,19 @@ const DeleteConfirmModal = ({ component, onClose, onConfirm, deleting }) => {
                         <div className="space-y-1">
                             <h3 className="text-base font-bold text-slate-900">Are you sure?</h3>
                             <p className="text-xs text-slate-500 leading-relaxed px-4">
-                                Permanently delete the salary component <span className="font-bold text-slate-900">{component.name}</span>? This action cannot be undone.
+                                {isAll
+                                    ? 'This will permanently delete all salary components. This action cannot be undone.'
+                                    : `Permanently delete ${count} salary component${count > 1 ? 's' : ''}? This cannot be undone.`
+                                }
                             </p>
                         </div>
                     </div>
 
-                    {/* Footer */}
                     <div className="border-t border-slate-100 bg-slate-50 px-5 py-3.5 flex gap-3">
                         <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
-                            Keep
+                            Cancel
                         </button>
-                        <button onClick={() => onConfirm(component.id)} disabled={deleting} className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest hover:from-rose-700 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-rose-200">
+                        <button onClick={onConfirm} disabled={deleting} className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest hover:from-rose-700 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-rose-200">
                             {deleting ? <FaSpinner className="animate-spin" /> : <FaTrash />}
                             {deleting ? 'Deleting...' : 'Delete'}
                         </button>
@@ -455,7 +471,6 @@ const SalaryComponents = () => {
     const [deleting, setDeleting] = useState(false);
     const [selectedComponent, setSelectedComponent] = useState(null);
     const [formModal, setFormModal] = useState(null);
-    const [deleteTarget, setDeleteTarget] = useState(null);
     const [viewMode, setViewMode] = useState('table');
     const [activeActionMenu, setActiveActionMenu] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -473,6 +488,14 @@ const SalaryComponents = () => {
         }
     });
 
+    // ── Bulk selection state ──────────────────────────────────────────────
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [bulkDeleteScope, setBulkDeleteScope] = useState(null); // 'selected' | 'all' | null
+
+    // Filters
+    const [activeFilter, setActiveFilter] = useState('true');
+    const [typeFilter, setTypeFilter] = useState('all');
+
     const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
     const fetchInProgress = useRef(false);
 
@@ -482,7 +505,7 @@ const SalaryComponents = () => {
         return () => clearTimeout(t);
     }, [searchTerm]);
 
-    // Handle window resize
+    // Window resize
     useEffect(() => {
         const handleResize = () => setWindowWidth(window.innerWidth);
         window.addEventListener('resize', handleResize);
@@ -496,7 +519,6 @@ const SalaryComponents = () => {
                 setSidebarOffset(0);
                 return;
             }
-
             try {
                 const stored = localStorage.getItem('sidebarCollapsed');
                 const isCollapsed = stored === null ? true : stored === 'true';
@@ -505,7 +527,6 @@ const SalaryComponents = () => {
                 setSidebarOffset(64);
             }
         };
-
         syncSidebarOffset();
         window.addEventListener('sidebar-offset-change', syncSidebarOffset);
         window.addEventListener('resize', syncSidebarOffset);
@@ -517,6 +538,16 @@ const SalaryComponents = () => {
 
     const contentWidth = windowWidth - sidebarOffset;
 
+    // Clear selection when data changes
+    useEffect(() => {
+        setSelectedIds(new Set());
+    }, [components]);
+
+    const allVisibleSelected = useMemo(
+        () => components.length > 0 && components.every(c => selectedIds.has(c.id)),
+        [components, selectedIds]
+    );
+
     const fetchComponents = useCallback(async (page = pagination.page, search = debouncedSearch, resetLoading = true) => {
         if (fetchInProgress.current) return;
         fetchInProgress.current = true;
@@ -526,6 +557,8 @@ const SalaryComponents = () => {
             const company = JSON.parse(localStorage.getItem('company'));
             let url = `/salary/components/list?page=${page}&limit=${pagination.limit}`;
             if (search) url += `&search=${search}`;
+            if (activeFilter !== 'all') url += `&is_active=${activeFilter}`;
+            if (typeFilter !== 'all') url += `&type=${typeFilter}`;
 
             const response = await apiCall(url, 'GET', null, company?.id);
             const result = await response.json();
@@ -549,32 +582,31 @@ const SalaryComponents = () => {
             fetchInProgress.current = false;
             setIsInitialLoad(false);
         }
-    }, [pagination.page, pagination.limit, debouncedSearch, updatePagination]);
+    }, [pagination.page, pagination.limit, debouncedSearch, activeFilter, typeFilter, updatePagination]);
 
     const handlePageChange = useCallback((newPage) => {
         if (newPage !== pagination.page) goToPage(newPage);
     }, [pagination.page, goToPage]);
 
-    // Search trigger
     useEffect(() => {
         if (!isInitialLoad) {
             if (pagination.page !== 1) goToPage(1);
             else fetchComponents(1, debouncedSearch, true);
         }
-    }, [debouncedSearch]);
+    }, [debouncedSearch, activeFilter, typeFilter]);
 
     useEffect(() => {
         if (!isInitialLoad && !fetchInProgress.current) {
             fetchComponents(pagination.page, debouncedSearch, true);
         }
-    }, [pagination.page, pagination.limit, debouncedSearch]);
+    }, [pagination.page, pagination.limit]);
 
     useEffect(() => {
         const company = JSON.parse(localStorage.getItem('company'));
         if (company && isInitialLoad) {
             fetchComponents(1, "", true);
         } else if (!company) {
-            toast.error("Company ID not found. Please ensure you're logged in as a company.");
+            toast.error("Company ID not found.");
             setLoading(false);
             setIsInitialLoad(false);
         }
@@ -584,61 +616,66 @@ const SalaryComponents = () => {
         setSaving(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
-
             const isEdit = !!payload.id;
-
             const endpoint = `/salary/components/${isEdit ? 'update' : 'create'}`;
-            const method = isEdit ? 'PUT' : 'POST'; // ✅ FIXED
-
-            console.log('API DEBUG =>', { endpoint, method, payload });
-
-            const response = await apiCall(
-                endpoint,
-                method, // ✅ dynamic method
-                payload,
-                company?.id
-            );
-
+            const method = isEdit ? 'PUT' : 'POST';
+            const response = await apiCall(endpoint, method, payload, company?.id);
             const result = await response.json();
-
             if (result.success) {
-                toast.success(
-                    isEdit
-                        ? 'Component updated successfully!'
-                        : 'Component created successfully!'
-                );
-
+                toast.success(isEdit ? 'Component updated!' : 'Component created!');
                 setFormModal(null);
                 fetchComponents(1, debouncedSearch, true);
             } else {
                 throw new Error(result.message || 'Save failed');
             }
-
         } catch (e) {
             toast.error(e.message || 'Failed to save component');
-        } finally {
-            setSaving(false);
-        }
+        } finally { setSaving(false); }
     };
 
-
-    const handleDelete = async (id) => {
+    const handleBulkDelete = async () => {
+        if (bulkDeleteScope === null) return;
         setDeleting(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
-            const response = await apiCall('/salary/components/delete', 'DELETE', { id }, company?.id);
+            const body = bulkDeleteScope === 'all'
+                ? { ids: 'all' }
+                : { ids: [...selectedIds] };
+
+            const response = await apiCall('/salary/components/delete', 'DELETE', body, company?.id);
             const result = await response.json();
             if (result.success) {
-                toast.success('Component deleted successfully!');
-                setDeleteTarget(null);
+                toast.success(
+                    bulkDeleteScope === 'all'
+                        ? 'All components deleted!'
+                        : `${result.deleted_count || selectedIds.size} component(s) deleted!`
+                );
+                setSelectedIds(new Set());
+                setBulkDeleteScope(null);
                 fetchComponents(1, debouncedSearch, true);
             } else {
                 throw new Error(result.message || 'Delete failed');
             }
         } catch (e) {
-            toast.error(e.message || 'Failed to delete component');
-        } finally {
-            setDeleting(false);
+            toast.error(e.message || 'Failed to delete components');
+        } finally { setDeleting(false); }
+    };
+
+    const toggleSelectId = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAllVisible = () => {
+        if (allVisibleSelected) {
+            setSelectedIds(new Set());
+        } else {
+            const allIds = new Set(components.map(c => c.id));
+            setSelectedIds(allIds);
         }
     };
 
@@ -651,114 +688,68 @@ const SalaryComponents = () => {
 
     if (isInitialLoad && loading) return <SkeletonComponent />;
 
-    // Determine which columns to show based on content width (excludes 80px mini-sidebar)
-    // On very small screens (< 640px): only show Name and Actions
-    // On small screens (640px - 768px): show Name, Type, Value, Actions
-    // On medium screens (768px - 1024px): show Name, Type, Calculation, Value, Actions
-    // On large screens (> 1024px): show all columns including Code, Flags, Status
     const showCode = contentWidth >= 1024;
     const showCalc = contentWidth >= 768;
     const showFlags = contentWidth >= 1280;
     const showStatus = contentWidth >= 1024;
     const showType = contentWidth >= 640;
-    const showValue = contentWidth >= 420; // Hide value column under 420px content width
+    const showValue = contentWidth >= 420;
+
     const componentActions = (comp) => ([
-        {
-            label: 'View Details',
-            icon: <FaEye size={13} />,
-            onClick: () => setSelectedComponent(comp),
-            className: 'text-green-600 hover:text-green-700 hover:bg-green-50',
-        },
-        {
-            label: 'Edit',
-            icon: <FaEdit size={13} />,
-            onClick: () => setFormModal({ mode: 'edit', data: comp }),
-            className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50',
-        },
-        {
-            label: 'Delete',
-            icon: <FaTrash size={13} />,
-            onClick: () => setDeleteTarget(comp),
-            className: 'text-red-600 hover:text-red-700 hover:bg-red-50',
-        },
+        { label: 'View Details', icon: <FaEye size={13} />, onClick: () => setSelectedComponent(comp), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
+        { label: 'Edit', icon: <FaEdit size={13} />, onClick: () => setFormModal({ mode: 'edit', data: comp }), className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
+        { label: 'Delete', icon: <FaTrash size={13} />, onClick: () => { setBulkDeleteScope('selected'); setSelectedIds(new Set([comp.id])); }, className: 'text-red-600 hover:text-red-700 hover:bg-red-50' },
     ]);
 
     const componentColumns = [
         {
-            key: 'code',
-            label: 'Code',
-            visible: showCode,
-            className: 'font-mono',
+            key: 'checkbox',
+            label: '',
+            visible: true,
+            className: 'w-10',
             render: (comp) => (
-                <span className="rounded-lg border border-gray-200 bg-gray-100 px-3 py-1 font-mono text-xs font-bold text-gray-700">
-                    {comp.code}
-                </span>
-            ),
+                <button onClick={(e) => { e.stopPropagation(); toggleSelectId(comp.id); }} className="focus:outline-none">
+                    {selectedIds.has(comp.id) ?
+                        <FaCheckSquare className="text-blue-600" size={16} /> :
+                        <FaRegSquare className="text-gray-400" size={16} />
+                    }
+                </button>
+            )
         },
         {
-            key: 'name',
-            label: 'Name',
-            className: 'font-semibold text-gray-800',
-            render: (comp) => comp.name,
+            key: 'code', label: 'Code', visible: showCode, className: 'font-mono',
+            render: (comp) => <span className="rounded-lg border border-gray-200 bg-gray-100 px-3 py-1 font-mono text-xs font-bold text-gray-700">{comp.code}</span>
         },
+        { key: 'name', label: 'Name', className: 'font-semibold text-gray-800', render: (comp) => comp.name },
         {
-            key: 'type',
-            label: 'Type',
-            visible: showType,
+            key: 'type', label: 'Type', visible: showType,
             render: (comp) => {
                 const tc = getTypeConfig(comp.type);
-                return (
-                    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${tc.bg} ${tc.text} ${tc.border}`}>
-                        {formatTypeLabel(comp.type)}
-                    </span>
-                );
-            },
+                return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${tc.bg} ${tc.text} ${tc.border}`}>{formatTypeLabel(comp.type)}</span>;
+            }
+        },
+        { key: 'calc_type', label: 'Calculation', visible: showCalc, render: (comp) => <span className="capitalize text-gray-600">{comp.calc_type}</span> },
+        {
+            key: 'calc_value', label: 'Value', visible: showValue,
+            render: (comp) => <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{formatCalcValue(comp.calc_type, comp.calc_value)}</span>
         },
         {
-            key: 'calc_type',
-            label: 'Calculation',
-            visible: showCalc,
-            render: (comp) => <span className="capitalize text-gray-600">{comp.calc_type}</span>,
-        },
-        {
-            key: 'calc_value',
-            label: 'Value',
-            visible: showValue,
-            render: (comp) => (
-                <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-                    {formatCalcValue(comp.calc_type, comp.calc_value)}
-                </span>
-            ),
-        },
-        {
-            key: 'flags',
-            label: 'Flags',
-            visible: showFlags,
+            key: 'flags', label: 'Flags', visible: showFlags,
             render: (comp) => (
                 <div className="flex flex-wrap gap-1">
-                    {comp.is_taxable && (
-                        <span className="rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600">
-                            Tax
-                        </span>
-                    )}
-                    {comp.is_statutory && (
-                        <span className="rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
-                            Stat
-                        </span>
-                    )}
+                    {comp.is_taxable && <span className="rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600">Tax</span>}
+                    {comp.is_statutory && <span className="rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">Stat</span>}
                     {!comp.is_taxable && !comp.is_statutory && <span className="text-xs text-gray-400">—</span>}
                 </div>
-            ),
+            )
         },
         {
-            key: 'status',
-            label: 'Status',
-            visible: showStatus,
+            key: 'status', label: 'Status', visible: showStatus,
             render: (comp) => (
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${comp.is_active ? 'border-green-200 bg-green-100 text-green-800' : 'border-gray-200 bg-gray-100 text-gray-600'}`}>
                     {comp.is_active ? 'Active' : 'Inactive'}
                 </span>
-            ),
+            )
         },
     ];
 
@@ -772,13 +763,9 @@ const SalaryComponents = () => {
                 {debouncedSearch ? `No results for "${debouncedSearch}"` : 'Click "Add Component" to get started'}
             </p>
             {debouncedSearch ? (
-                <button onClick={() => setSearchTerm('')} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all text-sm font-medium">
-                    Clear Search
-                </button>
+                <button onClick={() => setSearchTerm('')} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all text-sm font-medium">Clear Search</button>
             ) : (
-                <button onClick={() => setFormModal({ mode: 'create', data: {} })} className="mt-4 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all text-sm font-medium">
-                    Add Component
-                </button>
+                <button onClick={() => setFormModal({ mode: 'create', data: {} })} className="mt-4 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all text-sm font-medium">Add Component</button>
             )}
         </motion.div>
     );
@@ -792,12 +779,7 @@ const SalaryComponents = () => {
             onRefresh={() => fetchComponents(1, debouncedSearch, true)}
             actions={
                 <div className="flex items-center gap-3">
-                    <ManagementButton
-                        tone="blue"
-                        variant="solid"
-                        leftIcon={<FaPlus />}
-                        onClick={() => setFormModal({ mode: 'create', data: {} })}
-                    >
+                    <ManagementButton tone="blue" variant="solid" leftIcon={<FaPlus />} onClick={() => setFormModal({ mode: 'create', data: {} })}>
                         Add Component
                     </ManagementButton>
                 </div>
@@ -826,15 +808,13 @@ const SalaryComponents = () => {
                     </motion.div>
                 )}
 
-                {/* ─── Consolidated Filter & View Bar ─── */}
+                {/* Filter & View Bar */}
                 <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
                     className="flex flex-col lg:flex-row lg:items-center md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-2"
                 >
-                    {/* Left Section: Search, Result Info & View Mode */}
                     <div className="flex flex-col md:flex-row md:items-center gap-4 flex-1">
+                        {/* Search input */}
                         <div className="relative flex-1 w-full">
                             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
                             <input
@@ -845,43 +825,76 @@ const SalaryComponents = () => {
                                 className="w-full pl-11 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-sm font-medium min-h-[42px]"
                             />
                             {searchTerm && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                                >
+                                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
                                     <FaTimes size={14} />
                                 </button>
                             )}
                         </div>
 
-                        <div className="hidden lg:block h-8 w-px bg-gray-200 mx-1"></div>
-                        <div>
-                            <ManagementViewSwitcher
-                                viewMode={viewMode}
-                                onChange={setViewMode}
-                                accent="blue"
+                        {/* Type Filter */}
+                        <div className="w-full md:w-44">
+                            <Select
+                                options={TYPE_FILTER_OPTIONS}
+                                value={TYPE_FILTER_OPTIONS.find(opt => opt.value === typeFilter) || null}
+                                onChange={(option) => {
+                                    const newVal = option?.value || 'all';
+                                    setTypeFilter(newVal);
+                                    if (pagination.page !== 1) goToPage(1);
+                                }}
+                                placeholder="Type"
+                                isClearable={false}
+                                styles={customSelectStyles}
                             />
                         </div>
 
+                        {/* Active/Inactive Filter */}
+                        <div className="w-full md:w-44">
+                            <Select
+                                options={ACTIVE_FILTER_OPTIONS}
+                                value={ACTIVE_FILTER_OPTIONS.find(opt => opt.value === activeFilter) || null}
+                                onChange={(option) => {
+                                    const newVal = option?.value || 'true';
+                                    setActiveFilter(newVal);
+                                    if (pagination.page !== 1) goToPage(1);
+                                }}
+                                placeholder="Status"
+                                isClearable={false}
+                                styles={customSelectStyles}
+                            />
+                        </div>
+
+                        <div className="hidden lg:block h-8 w-px bg-gray-200 mx-1"></div>
+                        <div>
+                            <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="blue" />
+                        </div>
                     </div>
                 </motion.div>
 
-                {loading && !components.length && <SkeletonComponent />}
+                {/* ── Select All / Deselect All BUTTON ── */}
+                {!loading && components.length > 0 && (
+                    <div className="flex items-center gap-3 mb-1">
+                        <button
+                            type="button"
+                            onClick={toggleSelectAllVisible}
+                            className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                        >
+                            {allVisibleSelected
+                                ? <><FaCheckSquare size={13} /> Deselect all</>
+                                : <><FaCheck size={13} /> Select all</>
+                            }
+                        </button>
+                    </div>
+                )}
 
+                {loading && !components.length && <SkeletonComponent />}
                 {!loading && components.length === 0 && emptyState}
 
                 {!loading && components.length > 0 && viewMode === "table" && (
                     <ManagementTable
-                        rows={components}
-                        columns={componentColumns}
-                        rowKey="id"
-                        accent="blue"
-                        activeId={activeActionMenu}
-                        onToggleAction={(e, id) => setActiveActionMenu(curr => curr === id ? null : id)}
-                        onRowClick={(row) => setSelectedComponent(row)}
-                        getActions={componentActions}
+                        rows={components} columns={componentColumns} rowKey="id" accent="blue"
+                        activeId={activeActionMenu} onToggleAction={(e, id) => setActiveActionMenu(curr => curr === id ? null : id)}
+                        onRowClick={(row) => setSelectedComponent(row)} getActions={componentActions}
                         rowClassName="hover:bg-gradient-to-r hover:from-blue-50 hover:to-violet-50 cursor-pointer"
-                        headerClassName="xsm:hidden"
                     />
                 )}
 
@@ -890,111 +903,123 @@ const SalaryComponents = () => {
                         {components.map((comp, index) => {
                             const tc = getTypeConfig(comp.type);
                             const accent = getCardAccentForType(comp.type);
-
+                            const isSelected = selectedIds.has(comp.id);
                             return (
-                                <ManagementCard
-                                    key={comp.id}
-                                    accent={accent}
-                                    title={comp.name}
-                                    subtitle={comp.code}
-                                    icon={<FaMoneyBillWave className="text-gray-600" />}
-                                    badge={(
-                                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${comp.is_active ? 'border-green-200 bg-green-100 text-green-800' : 'border-gray-200 bg-gray-100 text-gray-600'}`}>
-                                            {comp.is_active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    )}
-                                    actions={componentActions(comp)}
-                                    menuId={`card-${comp.id}`}
-                                    activeId={activeActionMenu}
-                                    onToggle={(e, id) => setActiveActionMenu(curr => curr === id ? null : id)}
-                                    onClick={() => setSelectedComponent(comp)}
-                                    delay={index * 0.05}
-                                    bodyClassName="space-y-3"
-                                    footer={(
-                                        <span className="text-xs text-gray-400">ID: #{comp.id}</span>
-                                    )}
-                                >
-                                    <div>
-                                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${tc.bg} ${tc.text} ${tc.border}`}>
-                                            {formatTypeLabel(comp.type)}
-                                        </span>
-                                    </div>
-
-                                    <div className="text-2xl font-bold text-indigo-600">
-                                        {formatCalcValue(comp.calc_type, comp.calc_value)}
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
-                                            <p className="text-xs text-gray-500">Calculation</p>
-                                            <p className="mt-1 text-sm font-semibold capitalize text-gray-700">
-                                                {comp.calc_type}
-                                            </p>
+                                <div key={comp.id} className="relative group">
+                                    {/* Checkbox overlay */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); toggleSelectId(comp.id); }}
+                                        className="absolute top-2 right-2 z-10 p-1 rounded-full bg-white/80 backdrop-blur-sm border border-gray-200 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        {isSelected ? <FaCheckSquare className="text-blue-600" size={18} /> : <FaRegSquare className="text-gray-400" size={18} />}
+                                    </button>
+                                    <ManagementCard
+                                        accent={accent} title={comp.name} subtitle={comp.code}
+                                        icon={<FaMoneyBillWave className="text-gray-600" />}
+                                        badge={<span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${comp.is_active ? 'border-green-200 bg-green-100 text-green-800' : 'border-gray-200 bg-gray-100 text-gray-600'}`}>{comp.is_active ? 'Active' : 'Inactive'}</span>}
+                                        actions={componentActions(comp)} menuId={`card-${comp.id}`} activeId={activeActionMenu}
+                                        onToggle={(e, id) => setActiveActionMenu(curr => curr === id ? null : id)} onClick={() => setSelectedComponent(comp)}
+                                        delay={index * 0.05} bodyClassName="space-y-3" footer={<span className="text-xs text-gray-400">ID: #{comp.id}</span>}
+                                    >
+                                        <div>
+                                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${tc.bg} ${tc.text} ${tc.border}`}>{formatTypeLabel(comp.type)}</span>
                                         </div>
-                                        <div className="rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
-                                            <p className="text-xs text-gray-500">Taxable</p>
-                                            <p className={`mt-1 text-sm font-semibold ${comp.is_taxable ? 'text-orange-600' : 'text-gray-400'}`}>
-                                                {comp.is_taxable ? 'Yes' : 'No'}
-                                            </p>
+                                        <div className="text-2xl font-bold text-indigo-600">{formatCalcValue(comp.calc_type, comp.calc_value)}</div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                                                <p className="text-xs text-gray-500">Calculation</p>
+                                                <p className="mt-1 text-sm font-semibold capitalize text-gray-700">{comp.calc_type}</p>
+                                            </div>
+                                            <div className="rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                                                <p className="text-xs text-gray-500">Taxable</p>
+                                                <p className={`mt-1 text-sm font-semibold ${comp.is_taxable ? 'text-orange-600' : 'text-gray-400'}`}>{comp.is_taxable ? 'Yes' : 'No'}</p>
+                                            </div>
+                                            <div className="col-span-2 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                                                <p className="text-xs text-gray-500">Statutory</p>
+                                                <p className={`mt-1 text-sm font-semibold ${comp.is_statutory ? 'text-blue-600' : 'text-gray-400'}`}>{comp.is_statutory ? 'Yes' : 'No'}</p>
+                                            </div>
                                         </div>
-                                        <div className="col-span-2 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
-                                            <p className="text-xs text-gray-500">Statutory</p>
-                                            <p className={`mt-1 text-sm font-semibold ${comp.is_statutory ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                {comp.is_statutory ? 'Yes' : 'No'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </ManagementCard>
+                                    </ManagementCard>
+                                </div>
                             );
                         })}
                     </ManagementGrid>
                 )}
 
                 {!loading && components.length > 0 && (
-                    <Pagination
-                        currentPage={pagination.page}
-                        totalItems={pagination.total}
-                        itemsPerPage={pagination.limit}
-                        onPageChange={handlePageChange}
-                        showInfo={true}
-                        onLimitChange={changeLimit}
-                    />
+                    <Pagination currentPage={pagination.page} totalItems={pagination.total} itemsPerPage={pagination.limit} onPageChange={handlePageChange} showInfo={true} onLimitChange={changeLimit} />
                 )}
             </div>
 
-            {/* Modals */}
+            {/* ── FLOATING BOTTOM BAR ── */}
             <AnimatePresence>
-                {selectedComponent && (
-                    <ComponentDetailModal
-                        component={selectedComponent}
-                        onClose={() => setSelectedComponent(null)}
-                        onEdit={(comp) => setFormModal({ mode: 'edit', data: comp })}
-                        onDelete={(comp) => setDeleteTarget(comp)}
-                    />
+                {selectedIds.size > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 100 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 100 }}
+                        className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-8 sm:bottom-8 z-[100] flex flex-wrap items-center gap-2 sm:gap-4 rounded-2xl border border-white/20 bg-white/90 px-4 py-3 sm:px-6 sm:py-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)] backdrop-blur-md"
+                    >
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Bulk Actions</span>
+                            <span className="text-sm font-black text-slate-800">{selectedIds.size} Selected</span>
+                        </div>
+
+                        <div className="hidden sm:block mx-1 h-10 w-px bg-gray-200" />
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedIds(new Set())}
+                                className="px-3 py-1.5 text-xs font-bold text-gray-500 transition-colors hover:text-gray-700"
+                            >
+                                Clear
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setBulkDeleteScope('all')}
+                                disabled={!allVisibleSelected}
+                                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${allVisibleSelected
+                                    ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                    : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                                    }`}
+                                title={allVisibleSelected ? 'Delete all components (across all pages)' : 'Select all visible components to enable'}
+                            >
+                                <FaTrashAlt size={11} />
+                                All
+                            </button>
+                            <ManagementButton
+                                tone="rose" variant="solid"
+                                leftIcon={<FaTrash />}
+                                onClick={() => setBulkDeleteScope('selected')}
+                                className="shadow-lg shadow-rose-200 !text-xs !px-3 !py-1.5"
+                            >
+                                Delete
+                            </ManagementButton>
+                        </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 
+            {/* ── Bulk Delete Confirm Modal ── */}
             <AnimatePresence>
-                {formModal && (
-                    <FormModal
-                        mode={formModal.mode}
-                        initial={formModal.data}
-                        onClose={() => setFormModal(null)}
-                        onSave={handleSave}
-                        saving={saving}
-                    />
-                )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-                {deleteTarget && (
-                    <DeleteConfirmModal
-                        component={deleteTarget}
-                        onClose={() => setDeleteTarget(null)}
-                        onConfirm={handleDelete}
+                {bulkDeleteScope && (
+                    <BulkDeleteConfirmModal
+                        scope={bulkDeleteScope}
+                        count={bulkDeleteScope === 'all' ? pagination.total : selectedIds.size}
+                        onClose={() => setBulkDeleteScope(null)}
+                        onConfirm={handleBulkDelete}
                         deleting={deleting}
                     />
                 )}
+            </AnimatePresence>
+
+            {/* Other modals */}
+            <AnimatePresence>
+                {selectedComponent && <ComponentDetailModal component={selectedComponent} onClose={() => setSelectedComponent(null)} onEdit={(comp) => setFormModal({ mode: 'edit', data: comp })} onDelete={(comp) => { setBulkDeleteScope('selected'); setSelectedIds(new Set([comp.id])); }} />}
+            </AnimatePresence>
+            <AnimatePresence>
+                {formModal && <FormModal mode={formModal.mode} initial={formModal.data} onClose={() => setFormModal(null)} onSave={handleSave} saving={saving} />}
             </AnimatePresence>
         </ManagementHub>
     );
