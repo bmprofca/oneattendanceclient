@@ -235,16 +235,17 @@ const ComponentDetailModal = ({ component, onClose, onEdit, onDelete }) => {
 
 const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
     const isEdit = mode === 'edit';
+
+    // Initialize form with only the fields the backend expects
     const [form, setForm] = useState({
-        code: '',
-        name: '',
-        type: 'earning',
-        calc_type: 'percentage',
-        calc_value: '',
-        is_taxable: false,
-        is_statutory: false,
-        is_active: true,
-        ...initial,
+        code: initial?.code || '',
+        name: initial?.name || '',
+        type: initial?.type || 'earning',
+        calc_type: initial?.calc_type || 'percentage',
+        calc_value: initial?.calc_value ?? '',
+        is_taxable: initial?.is_taxable || false,
+        is_statutory: initial?.is_statutory || false,
+        is_active: initial?.is_active ?? true,
     });
     const [errors, setErrors] = useState({});
 
@@ -261,22 +262,46 @@ const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
 
     const handleSubmit = () => {
         if (!validate()) return;
+
+        // Build a clean payload with only API‑expected fields
         const payload = {
-            ...form,
+            code: form.code.trim(),
+            name: form.name.trim(),
+            type: form.type,
+            calc_type: form.calc_type,
             calc_value: Number(form.calc_value),
-            is_taxable: form.is_taxable ? 1 : 0,
-            is_statutory: form.is_statutory ? 1 : 0,
-            is_active: form.is_active ? 1 : 0,
+            is_taxable: form.is_taxable,
+            is_statutory: form.is_statutory,
         };
-        if (isEdit) payload.id = initial.id;
+
+        // For edit, include id and is_active
+        if (isEdit) {
+            payload.id = initial.id;
+            payload.is_active = form.is_active;
+        }
+
         onSave(payload);
     };
 
     return (
         <AnimatePresence>
-            <motion.div variants={backdropVariants} initial="hidden" animate="visible" exit="exit" className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex justify-center items-start overflow-y-auto p-4 sm:p-6 pt-8 sm:pt-16 !mt-0" onClick={onClose}>
+            <motion.div
+                variants={backdropVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex justify-center items-start overflow-y-auto p-4 sm:p-6 pt-8 sm:pt-16 !mt-0"
+                onClick={onClose}
+            >
                 <ModalScrollLock />
-                <motion.div variants={modalVariants} initial="hidden" animate="visible" exit="exit" className="bg-white w-full max-w-4xl max-h-[80vh] rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden m-auto" onClick={e => e.stopPropagation()}>
+                <motion.div
+                    variants={modalVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="bg-white w-full max-w-4xl max-h-[80vh] rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden m-auto"
+                    onClick={e => e.stopPropagation()}
+                >
                     {/* Header */}
                     <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-5">
                         <div className="flex items-center gap-3">
@@ -284,11 +309,16 @@ const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
                                 {isEdit ? <FaEdit className="h-6 w-6 text-white" /> : <FaPlus className="h-6 w-6 text-white" />}
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-slate-900">{isEdit ? 'Edit Component' : 'New Component'}</h2>
+                                <h2 className="text-xl font-bold text-slate-900">
+                                    {isEdit ? 'Edit Component' : 'New Component'}
+                                </h2>
                                 <p className="text-sm text-slate-500 font-medium">Configure salary element</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-all">
+                        <button
+                            onClick={onClose}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-all"
+                        >
                             <FaTimes className="h-4 w-4" />
                         </button>
                     </div>
@@ -298,29 +328,67 @@ const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
                             {/* Identifiers */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div>
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Component Code *</label>
-                                    <input value={form.code} onChange={e => setField('code', e.target.value.toUpperCase())} placeholder="e.g. BASIC"
-                                        className={`w-full px-4 py-2.5 rounded-xl border text-sm font-mono font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all ${errors.code ? 'border-red-400 bg-red-50 text-red-900' : 'border-slate-200 bg-white text-slate-800'}`} />
-                                    {errors.code && <p className="text-[10px] text-red-500 mt-1 font-bold ml-1 uppercase">{errors.code}</p>}
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                                        Component Code *
+                                    </label>
+                                    <input
+                                        value={form.code}
+                                        onChange={e => setField('code', e.target.value.toUpperCase())}
+                                        placeholder="e.g. BASIC"
+                                        className={`w-full px-4 py-2.5 rounded-xl border text-sm font-mono font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all ${
+                                            errors.code
+                                                ? 'border-red-400 bg-red-50 text-red-900'
+                                                : 'border-slate-200 bg-white text-slate-800'
+                                        }`}
+                                    />
+                                    {errors.code && (
+                                        <p className="text-[10px] text-red-500 mt-1 font-bold ml-1 uppercase">
+                                            {errors.code}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Component Name *</label>
-                                    <input value={form.name} onChange={e => setField('name', e.target.value)} placeholder="e.g. Basic Salary"
-                                        className={`w-full px-4 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all ${errors.name ? 'border-red-400 bg-red-50 text-red-900' : 'border-slate-200 bg-white text-slate-800'}`} />
-                                    {errors.name && <p className="text-[10px] text-red-500 mt-1 font-bold ml-1 uppercase">{errors.name}</p>}
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                                        Component Name *
+                                    </label>
+                                    <input
+                                        value={form.name}
+                                        onChange={e => setField('name', e.target.value)}
+                                        placeholder="e.g. Basic Salary"
+                                        className={`w-full px-4 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all ${
+                                            errors.name
+                                                ? 'border-red-400 bg-red-50 text-red-900'
+                                                : 'border-slate-200 bg-white text-slate-800'
+                                        }`}
+                                    />
+                                    {errors.name && (
+                                        <p className="text-[10px] text-red-500 mt-1 font-bold ml-1 uppercase">
+                                            {errors.name}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
                             {/* Type Selection */}
                             <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Component Type</label>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">
+                                    Component Type
+                                </label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {COMPONENT_TYPES.map(t => {
                                         const tc = getTypeConfig(t.value);
                                         const active = form.type === t.value;
                                         return (
-                                            <button key={t.value} type="button" onClick={() => setField('type', t.value)}
-                                                className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-2 ${active ? `bg-white ${tc.text} border-indigo-500 shadow-md` : `bg-white text-slate-400 border-slate-100 hover:border-slate-200`}`}>
+                                            <button
+                                                key={t.value}
+                                                type="button"
+                                                onClick={() => setField('type', t.value)}
+                                                className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-2 ${
+                                                    active
+                                                        ? `bg-white ${tc.text} border-indigo-500 shadow-md`
+                                                        : `bg-white text-slate-400 border-slate-100 hover:border-slate-200`
+                                                }`}
+                                            >
                                                 {t.label}
                                             </button>
                                         );
@@ -331,31 +399,56 @@ const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
                             {/* Calculation Details */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2 border-t border-slate-100">
                                 <div>
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Calculation Method</label>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">
+                                        Calculation Method
+                                    </label>
                                     <div className="flex bg-slate-100 p-1 rounded-xl">
                                         {CALC_TYPES.map(ct => (
-                                            <button key={ct.value} type="button" onClick={() => setField('calc_type', ct.value)}
-                                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${form.calc_type === ct.value ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                                            <button
+                                                key={ct.value}
+                                                type="button"
+                                                onClick={() => setField('calc_type', ct.value)}
+                                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                                    form.calc_type === ct.value
+                                                        ? 'bg-white text-indigo-600 shadow-sm'
+                                                        : 'text-slate-400 hover:text-slate-600'
+                                                }`}
+                                            >
                                                 <span className="text-sm">{ct.icon}</span> {ct.label}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Default Value ({form.calc_type === 'percentage' ? '%' : '₹'})</label>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                                        Default Value ({form.calc_type === 'percentage' ? '%' : '₹'})
+                                    </label>
                                     <div className="relative">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
                                             {form.calc_type === 'percentage' ? '%' : '₹'}
                                         </div>
-                                        <input type="text" inputMode="decimal" value={form.calc_value}
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={form.calc_value}
                                             onChange={e => {
                                                 const val = e.target.value.replace(/[^0-9.]/g, '');
-                                                if (val === '' || /^\d*\.?\d*$/.test(val)) setField('calc_value', val);
+                                                if (val === '' || /^\d*\.?\d*$/.test(val))
+                                                    setField('calc_value', val);
                                             }}
                                             placeholder="0.00"
-                                            className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all ${errors.calc_value ? 'border-red-400 bg-red-50 text-red-900' : 'border-slate-200 bg-white text-slate-800'}`} />
+                                            className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all ${
+                                                errors.calc_value
+                                                    ? 'border-red-400 bg-red-50 text-red-900'
+                                                    : 'border-slate-200 bg-white text-slate-800'
+                                            }`}
+                                        />
                                     </div>
-                                    {errors.calc_value && <p className="text-[10px] text-red-500 mt-1 font-bold ml-1 uppercase">{errors.calc_value}</p>}
+                                    {errors.calc_value && (
+                                        <p className="text-[10px] text-red-500 mt-1 font-bold ml-1 uppercase">
+                                            {errors.calc_value}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -368,19 +461,44 @@ const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
                                 ].map(toggle => {
                                     const isOn = form[toggle.key];
                                     return (
-                                        <div key={toggle.key} onClick={() => setField(toggle.key, !isOn)}
-                                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${isOn ? 'bg-indigo-50/50 border-indigo-500 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-200'}`}>
+                                        <div
+                                            key={toggle.key}
+                                            onClick={() => setField(toggle.key, !isOn)}
+                                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                                                isOn
+                                                    ? 'bg-indigo-50/50 border-indigo-500 shadow-sm'
+                                                    : 'bg-white border-slate-100 hover:border-slate-200'
+                                            }`}
+                                        >
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${isOn ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                <div
+                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
+                                                        isOn
+                                                            ? 'bg-indigo-600 text-white'
+                                                            : 'bg-slate-100 text-slate-400'
+                                                    }`}
+                                                >
                                                     {toggle.icon}
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-bold text-slate-800 leading-tight">{toggle.label}</p>
-                                                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">{toggle.sub}</p>
+                                                    <p className="text-xs font-bold text-slate-800 leading-tight">
+                                                        {toggle.label}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                                        {toggle.sub}
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <div className={`w-10 h-6 rounded-full p-1 transition-colors ${isOn ? 'bg-indigo-600' : 'bg-slate-200'}`}>
-                                                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0'}`} />
+                                            <div
+                                                className={`w-10 h-6 rounded-full p-1 transition-colors ${
+                                                    isOn ? 'bg-indigo-600' : 'bg-slate-200'
+                                                }`}
+                                            >
+                                                <div
+                                                    className={`w-4 h-4 bg-white rounded-full transition-transform ${
+                                                        isOn ? 'translate-x-4' : 'translate-x-0'
+                                                    }`}
+                                                />
                                             </div>
                                         </div>
                                     );
@@ -391,10 +509,18 @@ const FormModal = ({ mode, initial, onClose, onSave, saving }) => {
 
                     {/* Footer */}
                     <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 justify-end flex gap-3">
-                        <button type="button" onClick={onClose} className="flex px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+                        >
                             Cancel
                         </button>
-                        <button onClick={handleSubmit} disabled={saving} className="flex px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-indigo-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
+                        <button
+                            onClick={handleSubmit}
+                            disabled={saving}
+                            className="flex px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-indigo-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
+                        >
                             {saving ? <FaSpinner className="animate-spin" /> : <FaSave />}
                             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Component'}
                         </button>
