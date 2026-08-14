@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     FaPlus, FaEdit, FaTrash, FaCog, FaCalendarAlt,
     FaTimes, FaCheck, FaSpinner, FaBriefcase,
     FaExclamationTriangle, FaSave,
     FaLayerGroup, FaArrowUp, FaArrowDown,
-    FaEye, FaSearch, FaCheckCircle, FaToggleOn
+    FaEye, FaSearch, FaCheckCircle, FaToggleOn,
+    FaCheckSquare, FaRegSquare, FaTrashAlt
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -30,8 +31,6 @@ const backdropVariants = {
     visible: { opacity: 1 },
     exit: { opacity: 0 }
 };
-
-const CONFIRM_MODAL_CLASS = "bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -166,11 +165,11 @@ const PackageDetailModal = ({ pkg, onClose, onEdit, onDelete }) => {
                             <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{pkg.items.length} Total</span>
                         </div>
                         <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
-                            {[...pkg.items].sort((a, b) => a.display_order - b.display_order).map((item, idx) => (
+                            {[...pkg.items].sort((a, b) => a.name.localeCompare(b.name)).map((item, idx) => (
                                 <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between transition-all hover:border-slate-300">
                                     <div className="flex items-center gap-3">
                                         <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
-                                            {item.display_order}
+                                            {idx + 1}
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-slate-800 leading-none">{item.name}</p>
@@ -200,7 +199,7 @@ const PackageFormModal = ({ pkg, availableComponents, onClose, onSave }) => {
     const [code, setCode] = useState(pkg?.code || '');
     const [description, setDescription] = useState(pkg?.description || '');
     const [selectedComponents, setSelectedComponents] = useState(
-        pkg?.items?.map(i => ({ component_id: i.component_id, display_order: i.display_order })) || []
+        pkg?.items?.map(i => i.component_id) || []
     );
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
@@ -216,22 +215,8 @@ const PackageFormModal = ({ pkg, availableComponents, onClose, onSave }) => {
 
     const toggleComponent = (compId) => {
         setSelectedComponents(prev => {
-            const exists = prev.find(c => c.component_id === compId);
-            if (exists) return prev.filter(c => c.component_id !== compId);
-            return [...prev, { component_id: compId, display_order: prev.length }];
-        });
-    };
-
-    const moveComponent = (compId, dir) => {
-        setSelectedComponents(prev => {
-            const arr = [...prev].sort((a, b) => a.display_order - b.display_order);
-            const idx = arr.findIndex(c => c.component_id === compId);
-            const newIdx = idx + dir;
-            if (newIdx < 0 || newIdx >= arr.length) return prev;
-            const temp = arr[idx].display_order;
-            arr[idx].display_order = arr[newIdx].display_order;
-            arr[newIdx].display_order = temp;
-            return [...arr];
+            if (prev.includes(compId)) return prev.filter(id => id !== compId);
+            return [...prev, compId];
         });
     };
 
@@ -247,8 +232,6 @@ const PackageFormModal = ({ pkg, availableComponents, onClose, onSave }) => {
             setSaving(false);
         }
     };
-
-    const sortedSelected = [...selectedComponents].sort((a, b) => a.display_order - b.display_order);
 
     return (
         <Modal
@@ -309,7 +292,7 @@ const PackageFormModal = ({ pkg, availableComponents, onClose, onSave }) => {
                 {errors.components && <p className="text-[10px] text-red-500 mb-2 font-bold uppercase ml-1">{errors.components}</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
                     {availableComponents.map(comp => {
-                        const isSelected = selectedComponents.some(c => c.component_id === comp.id);
+                        const isSelected = selectedComponents.includes(comp.id);
                         return (
                             <div key={comp.id} onClick={() => toggleComponent(comp.id)}
                                 className={`group flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${isSelected ? 'bg-blue-50/50 border-blue-500 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-200 shadow-sm'}`}>
@@ -333,57 +316,23 @@ const PackageFormModal = ({ pkg, availableComponents, onClose, onSave }) => {
                     })}
                 </div>
             </div>
-
-            {/* Reordering */}
-            {sortedSelected.length > 0 && (
-                <div className="pt-2">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Display Order &amp; Preview</label>
-                    <div className="space-y-2">
-                        {sortedSelected.map((sel, idx) => {
-                            const comp = availableComponents.find(c => c.id === sel.component_id);
-                            if (!comp) return null;
-                            return (
-                                <div key={sel.component_id} className="flex items-center gap-3 bg-white rounded-xl p-2.5 border border-slate-200 shadow-sm group">
-                                    <div className="w-6 h-6 bg-slate-900 text-white text-[10px] rounded-lg flex items-center justify-center font-black flex-shrink-0">
-                                        {idx + 1}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-slate-800 truncate">{comp.name}</p>
-                                    </div>
-                                    <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                                        <button type="button" onClick={() => moveComponent(sel.component_id, -1)} disabled={idx === 0}
-                                            className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 disabled:opacity-30 transition-all">
-                                            <FaArrowUp size={10} />
-                                        </button>
-                                        <button type="button" onClick={() => moveComponent(sel.component_id, 1)} disabled={idx === sortedSelected.length - 1}
-                                            className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 disabled:opacity-30 transition-all">
-                                            <FaArrowDown size={10} />
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
         </Modal>
     );
 };
 
-// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+// ─── Bulk Delete Confirm Modal ─────────────────────────────────────────────
 
-
-const DeleteModal = ({ pkg, onClose, onConfirm, deleting }) => {
-    if (!pkg) return null;
+const BulkDeleteConfirmModal = ({ scope, count, onClose, onConfirm, deleting }) => {
+    const isAll = scope === 'all';
     return (
         <Modal
-            isOpen={!!pkg}
+            isOpen={!!scope}
             onClose={onClose}
             title="Delete Package"
             subtitle="Confirmation required"
             icon={
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 shadow-sm border border-red-100">
-                    <FaTrash className="h-4 w-4" />
+                    <FaTrashAlt className="h-4 w-4" />
                 </div>
             }
             size="md"
@@ -392,7 +341,7 @@ const DeleteModal = ({ pkg, onClose, onConfirm, deleting }) => {
                     <button type="button" onClick={onClose} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
                         Keep
                     </button>
-                    <button onClick={() => onConfirm(pkg.id)} disabled={deleting} className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-red-700 hover:to-rose-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-red-200">
+                    <button onClick={onConfirm} disabled={deleting} className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-red-700 hover:to-rose-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-red-200">
                         {deleting ? <FaSpinner className="animate-spin" /> : <FaTrash />}
                         {deleting ? 'Deleting...' : 'Delete'}
                     </button>
@@ -406,7 +355,10 @@ const DeleteModal = ({ pkg, onClose, onConfirm, deleting }) => {
                 <div className="space-y-1">
                     <h3 className="text-base font-bold text-slate-900">Are you sure?</h3>
                     <p className="text-xs text-slate-500 leading-relaxed px-4">
-                        Permanently delete the salary package <span className="font-bold text-slate-900">{pkg.name}</span>? This may affect assigned employees.
+                        {isAll
+                            ? 'This will permanently delete all salary packages. This action cannot be undone.'
+                            : `Permanently delete ${count} salary package${count > 1 ? 's' : ''}? This cannot be undone.`
+                        }
                     </p>
                 </div>
             </div>
@@ -414,10 +366,9 @@ const DeleteModal = ({ pkg, onClose, onConfirm, deleting }) => {
     );
 };
 
-
 // ─── Package Card (Grid) ──────────────────────────────────────────────────────
 
-const PackageCard = ({ pkg, index, onView, onEdit, onDelete, activeId, onToggle }) => {
+const PackageCard = ({ pkg, index, onView, onEdit, onDelete, activeId, onToggle, isSelected, onToggleSelect }) => {
     const earningCount = pkg.items.filter(i => i.type === 'earning').length;
     const deductionCount = pkg.items.filter(i => i.type === 'deduction').length;
     const contributionCount = pkg.items.filter(i => i.type?.includes('employer')).length;
@@ -444,45 +395,54 @@ const PackageCard = ({ pkg, index, onView, onEdit, onDelete, activeId, onToggle 
     ];
 
     return (
-        <ManagementCard
-            accent="blue"
-            delay={index * 0.05}
-            onClick={() => onView(pkg)}
-            activeId={activeId}
-            onToggle={onToggle}
-            menuId={`card-${pkg.id}`}
-            actions={actions}
-            hoverable
-            title={pkg.name}
-            subtitle={pkg.code}
-            eyebrow={pkg.description || 'Salary package'}
-            badge={
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${pkg.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                    {pkg.is_active ? 'Active' : 'Inactive'}
-                </span>
-            }
-            footer={
-                <div className="flex w-full items-center justify-between text-xs text-gray-400">
-                    <span>{pkg.items.length} components</span>
-                    <span>{formatDate(pkg.created_at)}</span>
+        <div className="relative group">
+            {/* Checkbox overlay */}
+            <button
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(pkg.id); }}
+                className="absolute top-2 right-2 z-10 p-1 rounded-full bg-white/80 backdrop-blur-sm border border-gray-200 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+                {isSelected ? <FaCheckSquare className="text-blue-600" size={18} /> : <FaRegSquare className="text-gray-400" size={18} />}
+            </button>
+            <ManagementCard
+                accent="blue"
+                delay={index * 0.05}
+                onClick={() => onView(pkg)}
+                activeId={activeId}
+                onToggle={onToggle}
+                menuId={`card-${pkg.id}`}
+                actions={actions}
+                hoverable
+                title={pkg.name}
+                subtitle={pkg.code}
+                eyebrow={pkg.description || 'Salary package'}
+                badge={
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${pkg.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                        {pkg.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                }
+                footer={
+                    <div className="flex w-full items-center justify-between text-xs text-gray-400">
+                        <span>{pkg.items.length} components</span>
+                        <span>{formatDate(pkg.created_at)}</span>
+                    </div>
+                }
+            >
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-green-50 border border-green-100 rounded-xl p-2 text-center">
+                        <p className="text-sm font-bold text-green-700">{earningCount}</p>
+                        <p className="text-xs text-green-500">Earnings</p>
+                    </div>
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-2 text-center">
+                        <p className="text-sm font-bold text-red-600">{deductionCount}</p>
+                        <p className="text-xs text-red-400">Deductions</p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center">
+                        <p className="text-sm font-bold text-blue-700">{contributionCount}</p>
+                        <p className="text-xs text-blue-400">Contributions</p>
+                    </div>
                 </div>
-            }
-        >
-            <div className="grid grid-cols-3 gap-2">
-                <div className="bg-green-50 border border-green-100 rounded-xl p-2 text-center">
-                    <p className="text-sm font-bold text-green-700">{earningCount}</p>
-                    <p className="text-xs text-green-500">Earnings</p>
-                </div>
-                <div className="bg-red-50 border border-red-100 rounded-xl p-2 text-center">
-                    <p className="text-sm font-bold text-red-600">{deductionCount}</p>
-                    <p className="text-xs text-red-400">Deductions</p>
-                </div>
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center">
-                    <p className="text-sm font-bold text-blue-700">{contributionCount}</p>
-                    <p className="text-xs text-blue-400">Contributions</p>
-                </div>
-            </div>
-        </ManagementCard>
+            </ManagementCard>
+        </div>
     );
 };
 
@@ -499,8 +459,9 @@ const SalaryPackages = () => {
     const [selectedPkg, setSelectedPkg] = useState(null);
     const [showForm, setShowForm] = useState(false);
     const [editPkg, setEditPkg] = useState(null);
-    const [deletePkg, setDeletePkg] = useState(null);
     const [activeActionMenu, setActiveActionMenu] = useState(null);
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [bulkDeleteScope, setBulkDeleteScope] = useState(null); // 'selected' | 'all' | null
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [windowWidth, setWindowWidth] = useState(() =>
         typeof window !== 'undefined' ? window.innerWidth : 1440
@@ -560,6 +521,16 @@ const SalaryPackages = () => {
 
     const contentWidth = windowWidth - sidebarOffset;
 
+    // Clear selection when packages change
+    useEffect(() => {
+        setSelectedIds(prev => new Set([...prev].filter(id => packages.some(p => p.id === id))));
+    }, [packages]);
+
+    const allVisibleSelected = useMemo(
+        () => packages.length > 0 && packages.every(p => selectedIds.has(p.id)),
+        [packages, selectedIds]
+    );
+
     const fetchPackages = useCallback(async (page = pagination.page, search = debouncedSearch, resetLoading = true) => {
         if (fetchInProgress.current) return;
         fetchInProgress.current = true;
@@ -597,7 +568,7 @@ const SalaryPackages = () => {
     const fetchComponents = useCallback(async () => {
         try {
             const company = JSON.parse(localStorage.getItem('company'));
-            const response = await apiCall('/salary/components/list', 'GET', null, company?.id);
+            const response = await apiCall('/salary/components/list?is_active=true', 'GET', null, company?.id);
             const result = await response.json();
             if (result.success) setAvailableComponents(result.data || []);
         } catch (e) {
@@ -642,6 +613,10 @@ const SalaryPackages = () => {
                 ? ['/salary/components/update-package', 'PUT']
                 : ['/salary/components/create-package', 'POST'];
 
+            if (body.components) {
+                body.components = body.components.map(id => Number(id));
+            }
+
             const response = await apiCall(endpoint, method, body, company?.id);
             const result = await response.json();
 
@@ -656,25 +631,60 @@ const SalaryPackages = () => {
         }
     };
 
-    const handleDelete = async (pkgId) => {
+    const handleBulkDelete = async () => {
+        if (bulkDeleteScope === null) return;
         setDeleting(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
-            const response = await apiCall('/salary/components/delete-package', 'DELETE', { package_id: pkgId }, company?.id);
+            const body = bulkDeleteScope === 'all'
+                ? { ids: 'all' }
+                : { ids: [...selectedIds] };
+
+            const response = await apiCall('/salary/components/delete-package', 'DELETE', body, company?.id);
             const result = await response.json();
-            if (!result.success) throw new Error(result.message);
-            toast.success('Package deleted successfully');
-            setDeletePkg(null);
-            fetchPackages(1, debouncedSearch, true);
+            if (result.success) {
+                toast.success(
+                    bulkDeleteScope === 'all'
+                        ? 'All packages deleted!'
+                        : `${result.deleted_count || selectedIds.size} package(s) deleted!`
+                );
+                setSelectedIds(new Set());
+                setBulkDeleteScope(null);
+                fetchPackages(1, debouncedSearch, true);
+            } else {
+                throw new Error(result.message || 'Delete failed');
+            }
         } catch (e) {
-            toast.error(e.message || 'Delete failed');
-        } finally {
-            setDeleting(false);
+            toast.error(e.message || 'Failed to delete packages');
+        } finally { setDeleting(false); }
+    };
+
+    const toggleSelectId = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAllVisible = () => {
+        if (allVisibleSelected) {
+            setSelectedIds(new Set());
+        } else {
+            const allIds = new Set(packages.map(p => p.id));
+            setSelectedIds(allIds);
         }
     };
 
     const openEdit = (pkg) => { setEditPkg(pkg); setShowForm(true); };
     const openCreate = () => { setEditPkg(null); setShowForm(true); };
+
+    // Single delete from row action or detail modal
+    const openSingleDelete = (pkg) => {
+        setSelectedIds(new Set([pkg.id]));
+        setBulkDeleteScope('selected');
+    };
 
     // Responsive column visibility — use contentWidth (excludes mini-sidebar)
     const showCode = contentWidth >= 480;
@@ -701,13 +711,26 @@ const SalaryPackages = () => {
         {
             label: 'Delete',
             icon: <FaTrash size={13} />,
-            onClick: () => setDeletePkg(pkg),
+            onClick: () => openSingleDelete(pkg),
             className: 'text-red-600 hover:text-red-700 hover:bg-red-50',
         },
     ]);
 
     // Column definitions for ManagementTable
     const packageColumns = [
+        {
+            key: 'checkbox',
+            label: '',
+            className: 'w-10',
+            render: (pkg) => (
+                <button onClick={(e) => { e.stopPropagation(); toggleSelectId(pkg.id); }} className="focus:outline-none">
+                    {selectedIds.has(pkg.id)
+                        ? <FaCheckSquare className="text-blue-600" size={16} />
+                        : <FaRegSquare className="text-gray-400" size={16} />
+                    }
+                </button>
+            ),
+        },
         {
             key: 'name',
             label: 'Package',
@@ -865,7 +888,6 @@ const SalaryPackages = () => {
                     transition={{ delay: 0.1 }}
                     className="flex flex-col lg:flex-row lg:items-center md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-2"
                 >
-                    {/* Left Section: Search & Result Info */}
                     <div className="flex flex-col md:flex-row md:items-center gap-4 flex-1">
                         <div className="relative flex-1 w-full">
                             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
@@ -885,10 +907,7 @@ const SalaryPackages = () => {
                                 </button>
                             )}
                         </div>
-
                     </div>
-
-                    {/* Right Section: Controls */}
                     <div className="flex items-center justify-end">
                         <ManagementViewSwitcher
                             viewMode={viewMode}
@@ -897,6 +916,22 @@ const SalaryPackages = () => {
                         />
                     </div>
                 </motion.div>
+
+                {/* Select All / Deselect All */}
+                {!loading && packages.length > 0 && (
+                    <div className="flex items-center gap-3 mb-1">
+                        <button
+                            type="button"
+                            onClick={toggleSelectAllVisible}
+                            className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                        >
+                            {allVisibleSelected
+                                ? <><FaCheckSquare size={13} /> Deselect all</>
+                                : <><FaCheck size={13} /> Select all</>
+                            }
+                        </button>
+                    </div>
+                )}
 
                 {/* Loading skeleton */}
                 {loading && !packages.length && <SkeletonComponent />}
@@ -929,9 +964,11 @@ const SalaryPackages = () => {
                                 index={index}
                                 onView={setSelectedPkg}
                                 onEdit={openEdit}
-                                onDelete={setDeletePkg}
+                                onDelete={openSingleDelete}
                                 activeId={activeActionMenu}
                                 onToggle={(e, id) => setActiveActionMenu(curr => curr === id ? null : id)}
+                                isSelected={selectedIds.has(pkg.id)}
+                                onToggleSelect={toggleSelectId}
                             />
                         ))}
                     </ManagementGrid>
@@ -950,18 +987,83 @@ const SalaryPackages = () => {
                 )}
             </div>
 
-            {/* Modals */}
+            {/* ── FLOATING BOTTOM BAR ── */}
+            <AnimatePresence>
+                {selectedIds.size > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 100 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 100 }}
+                        className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-8 sm:bottom-8 z-[100] flex flex-wrap items-center gap-2 sm:gap-4 rounded-2xl border border-white/20 bg-white/90 px-4 py-3 sm:px-6 sm:py-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)] backdrop-blur-md"
+                    >
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Bulk Actions</span>
+                            <span className="text-sm font-black text-slate-800">{selectedIds.size} Selected</span>
+                        </div>
+
+                        <div className="hidden sm:block mx-1 h-10 w-px bg-gray-200" />
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedIds(new Set())}
+                                className="px-3 py-1.5 text-xs font-bold text-gray-500 transition-colors hover:text-gray-700"
+                            >
+                                Clear
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setBulkDeleteScope('all')}
+                                disabled={!allVisibleSelected}
+                                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${allVisibleSelected
+                                    ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                    : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                                    }`}
+                                title={allVisibleSelected ? 'Delete all packages (across all pages)' : 'Select all visible packages to enable'}
+                            >
+                                <FaTrashAlt size={11} />
+                                All
+                            </button>
+                            <ManagementButton
+                                tone="rose"
+                                variant="solid"
+                                leftIcon={<FaTrash />}
+                                onClick={() => setBulkDeleteScope('selected')}
+                                className="shadow-lg shadow-rose-200 !text-xs !px-3 !py-1.5"
+                            >
+                                Delete
+                            </ManagementButton>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ── Bulk Delete Confirm Modal ── */}
+            <AnimatePresence>
+                {bulkDeleteScope && (
+                    <BulkDeleteConfirmModal
+                        scope={bulkDeleteScope}
+                        count={bulkDeleteScope === 'all' ? pagination.total : selectedIds.size}
+                        onClose={() => setBulkDeleteScope(null)}
+                        onConfirm={handleBulkDelete}
+                        deleting={deleting}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* Detail Modal */}
             <AnimatePresence>
                 {selectedPkg && (
                     <PackageDetailModal
                         pkg={selectedPkg}
                         onClose={() => setSelectedPkg(null)}
                         onEdit={(p) => { setEditPkg(p); setShowForm(true); }}
-                        onDelete={(p) => setDeletePkg(p)}
+                        onDelete={(p) => openSingleDelete(p)}
                     />
                 )}
             </AnimatePresence>
 
+            {/* Form Modal */}
             <AnimatePresence>
                 {showForm && (
                     <PackageFormModal
@@ -969,17 +1071,6 @@ const SalaryPackages = () => {
                         availableComponents={availableComponents}
                         onClose={() => { setShowForm(false); setEditPkg(null); }}
                         onSave={handleSave}
-                    />
-                )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-                {deletePkg && (
-                    <DeleteModal
-                        pkg={deletePkg}
-                        onClose={() => setDeletePkg(null)}
-                        onConfirm={handleDelete}
-                        deleting={deleting}
                     />
                 )}
             </AnimatePresence>
