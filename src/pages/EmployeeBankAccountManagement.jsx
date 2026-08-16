@@ -175,10 +175,12 @@ const MobileEmployeeBankCard = ({ account, onView }) => (
     </div>
 
     <div className="mt-4 space-y-2">
-      {account.employee_id && (
+      {account.employee_code && (
         <div className="flex items-center justify-between p-3 bg-blue-50/50 rounded-xl border border-blue-100/50">
           <span className="text-[10px] font-bold text-blue-600 uppercase">Employee ID</span>
-          <span className="text-xs font-black text-blue-700 font-mono">{account.employee_id}</span>
+          <span className="text-xs font-black text-blue-700 font-mono">
+            {account.employee_code || account.employee_id}
+          </span>
         </div>
       )}
       {account.account_type === 'upi' && (
@@ -190,7 +192,9 @@ const MobileEmployeeBankCard = ({ account, onView }) => (
       {account.account_number && isBankAccount(account.account_type) && (
         <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
           <span className="text-[10px] font-bold text-slate-400 uppercase">Account No.</span>
-          <span className="text-xs font-black text-slate-700 font-mono">{maskAccount(account.account_number)}</span>
+          <span className="text-xs font-black text-slate-700 font-mono">
+            {account.account_number_masked || maskAccount(account.account_number)}
+          </span>
         </div>
       )}
       {account.ifsc_code && isBankAccount(account.account_type) && (
@@ -603,8 +607,8 @@ const EmployeeBankAccountManagement = () => {
           </div>
           <div className="min-w-0">
             <div className="font-semibold text-slate-800 text-sm truncate">{account.employee_name || account.account_holder_name}</div>
-            {account.employee_id && (
-              <div className="text-[10px] text-slate-400 font-mono italic">{account.employee_id}</div>
+            {account.employee_code && (
+              <div className="text-[10px] text-slate-400 font-mono italic">{account.employee_code}</div>
             )}
           </div>
         </div>
@@ -640,7 +644,9 @@ const EmployeeBankAccountManagement = () => {
       visible: visibleColumns.showAccountNumber,
       render: (account) => (
         <span className="font-mono text-sm text-slate-600">
-          {account.account_type === 'upi' ? account.upi_id : (account.account_number ? maskAccount(account.account_number) : '—')}
+          {account.account_type === 'upi'
+            ? account.upi_id
+            : (account.account_number_masked || (account.account_number ? maskAccount(account.account_number) : '—'))}
         </span>
       ),
     },
@@ -741,14 +747,25 @@ const EmployeeBankAccountManagement = () => {
               </div>
               <div className="w-[150px]">
                 <SelectField
-                  options={[{ value: '', label: 'All Types' }, { value: 'savings', label: 'Savings' }, { value: 'current', label: 'Current' }, { value: 'upi', label: 'UPI' }]}
+                  options={[
+                    { value: '', label: 'All Types' },
+                    { value: 'savings', label: 'Savings' },
+                    { value: 'current', label: 'Current' },
+                    { value: 'upi', label: 'UPI' },
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'loan', label: 'Loan' },
+                  ]}
                   value={filterAccountType || { value: '', label: 'All Types' }}
                   onChange={opt => { setFilterAccountType(opt.value ? opt : null); goToPage(1); }}
                 />
               </div>
               <div className="w-[140px]">
                 <SelectField
-                  options={[{ value: '', label: 'All Primary' }, { value: '1', label: 'Primary Only' }, { value: '0', label: 'Non-Primary' }]}
+                  options={[
+                    { value: '', label: 'All Primary' },
+                    { value: 'true', label: 'Primary Only' },
+                    { value: 'false', label: 'Non-Primary' },
+                  ]}
                   value={filterIsPrimary || { value: '', label: 'All Primary' }}
                   onChange={opt => { setFilterIsPrimary(opt.value ? opt : null); goToPage(1); }}
                 />
@@ -773,7 +790,7 @@ const EmployeeBankAccountManagement = () => {
           <ManagementTable
             rows={paginatedData}
             columns={columns}
-            rowKey={(row) => row.bank_id}
+            rowKey={(row) => row.bank_account_id}
             onRowClick={(row) => setViewModal({ open: true, account: row })}
             getActions={(row) => [
               { label: 'View Details', icon: <FaEye size={13} />, onClick: () => setViewModal({ open: true, account: row }), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
@@ -784,7 +801,7 @@ const EmployeeBankAccountManagement = () => {
           <ManagementGrid viewMode={viewMode}>
             {paginatedData.map((account) => (
               <MobileEmployeeBankCard
-                key={account.bank_id}
+                key={account.bank_account_id}
                 account={account}
                 onView={(r) => setViewModal({ open: true, account: r })}
               />
@@ -834,8 +851,8 @@ const EmployeeBankAccountManagement = () => {
             <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 col-span-1 sm:col-span-2">
               <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-blue-400">Employee Information</p>
               <p className="font-bold text-sm text-blue-700">{viewModal.account?.employee_name}</p>
-              {viewModal.account?.employee_id && (
-                <p className="font-mono text-xs font-semibold text-blue-600 mt-1">{viewModal.account.employee_id}</p>
+              {viewModal.account?.employee_code && (
+                <p className="font-mono text-xs font-semibold text-blue-600 mt-1">{viewModal.account.employee_code}</p>
               )}
             </div>
 
@@ -847,7 +864,7 @@ const EmployeeBankAccountManagement = () => {
             ) : (
               <>
                 {[
-                  { label: 'Account No.', value: viewModal.account?.account_number ? maskAccount(viewModal.account.account_number) : '—' },
+                  { label: 'Account No.', value: viewModal.account?.account_number_masked || (viewModal.account?.account_number ? maskAccount(viewModal.account.account_number) : '—') },
                   { label: 'IFSC Code', value: viewModal.account?.ifsc_code || '—' },
                   { label: 'Branch', value: viewModal.account?.branch_name || '—' },
                 ].map(({ label, value }) => (
@@ -875,7 +892,6 @@ const EmployeeBankAccountManagement = () => {
           </div>
         </div>
       </Modal>
-
 
     </ManagementHub>
   );
