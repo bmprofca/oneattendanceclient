@@ -5,7 +5,8 @@ import {
   FaEye, FaSpinner,
   FaChevronDown, FaCog, FaUniversity, FaStar,
   FaMoneyBillWave, FaChartBar,
-  FaBuilding, FaShieldAlt, FaExclamationTriangle, FaQrcode, FaEllipsisV
+  FaBuilding, FaShieldAlt, FaExclamationTriangle, FaQrcode, FaEllipsisV,
+  FaCheckSquare, FaRegSquare, FaTrashAlt
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import apiCall from '../utils/api';
@@ -16,6 +17,7 @@ import usePermissionAccess from '../hooks/usePermissionAccess';
 import ManagementGrid from '../components/ManagementGrid';
 import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import { fetchIfscDetails } from '../utils/ifscLookup';
+import SelectField from '../components/SelectField';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -43,19 +45,20 @@ const getBankAccountsListCacheKey = (companyId) => String(companyId ?? 'no-compa
 const BANK_ACCOUNT_TYPES = ['bank', 'savings', 'current', 'loan'];
 const isBankAccount = (type) => BANK_ACCOUNT_TYPES.includes(type);
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Badges ──────────────────────────────────────────────────────────────────
 
 const AccountTypeBadge = ({ type, compact = false }) => {
   const isCash = type === 'cash';
   const isUpi = type === 'upi';
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full font-semibold ${isCash
-        ? 'bg-amber-100 border border-amber-200 text-amber-700'
-        : isUpi
+      className={`inline-flex items-center gap-1 rounded-full font-semibold ${
+        isCash
+          ? 'bg-amber-100 border border-amber-200 text-amber-700'
+          : isUpi
           ? 'bg-emerald-100 border border-emerald-200 text-emerald-700'
           : 'bg-indigo-100 border border-indigo-200 text-indigo-700'
-        } ${compact ? 'px-2 py-0.5 text-[10px] font-bold' : 'px-2.5 py-1 text-xs'}`}
+      } ${compact ? 'px-2 py-0.5 text-[10px] font-bold' : 'px-2.5 py-1 text-xs'}`}
     >
       {isCash ? <FaMoneyBillWave size={compact ? 8 : 10} /> : isUpi ? <FaQrcode size={compact ? 8 : 10} /> : <FaUniversity size={compact ? 8 : 10} />}
       {isCash ? 'CASH' : isUpi ? 'UPI' : 'BANK'}
@@ -67,10 +70,11 @@ const StatusBadge = ({ status, compact = false }) => {
   const isActive = status === 'active';
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full font-semibold ${isActive
-        ? 'bg-emerald-100 border border-emerald-200 text-emerald-700'
-        : 'bg-slate-100 border border-slate-200 text-slate-500'
-        } ${compact ? 'px-2 py-0.5 text-[10px] font-bold' : 'px-2.5 py-1 text-xs'}`}
+      className={`inline-flex items-center gap-1 rounded-full font-semibold ${
+        isActive
+          ? 'bg-emerald-100 border border-emerald-200 text-emerald-700'
+          : 'bg-slate-100 border border-slate-200 text-slate-500'
+      } ${compact ? 'px-2 py-0.5 text-[10px] font-bold' : 'px-2.5 py-1 text-xs'}`}
     >
       {isActive ? <FaCheck size={compact ? 7 : 9} /> : <FaTimes size={compact ? 7 : 9} />}
       {isActive ? 'ACTIVE' : 'INACTIVE'}
@@ -80,8 +84,9 @@ const StatusBadge = ({ status, compact = false }) => {
 
 const PrimaryBadge = ({ compact = false }) => (
   <span
-    className={`inline-flex items-center gap-1 rounded-full bg-violet-100 border border-violet-200 text-violet-700 font-bold ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'
-      }`}
+    className={`inline-flex items-center gap-1 rounded-full bg-violet-100 border border-violet-200 text-violet-700 font-bold ${
+      compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'
+    }`}
   >
     <FaStar size={compact ? 7 : 9} /> PRIMARY
   </span>
@@ -93,12 +98,9 @@ const maskAccount = (num) => {
   return '••••' + num.slice(-4);
 };
 
-// ─── Action Menu (inline) ──────────────────────────────────────────────────────
+// ─── Action Menu ──────────────────────────────────────────────────────────────
 
-const ActionMenu = ({
-  account, onEdit, onDelete, onView,
-  editDisabled, deleteDisabled, editMessage, deleteMessage,
-}) => {
+const ActionMenu = ({ account, onEdit, onDelete, onView, editDisabled, deleteDisabled, editMessage, deleteMessage }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -112,9 +114,7 @@ const ActionMenu = ({
     <div className="relative" ref={ref}>
       <button
         onClick={(e) => { e.stopPropagation(); setOpen((p) => !p); }}
-        className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200
-                       bg-white text-gray-500 transition-all hover:border-blue-300
-                       hover:text-blue-600 hover:shadow-sm active:scale-95"
+        className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-all hover:border-blue-300 hover:text-blue-600 hover:shadow-sm active:scale-95"
       >
         <FaEllipsisV size={14} />
       </button>
@@ -124,7 +124,7 @@ const ActionMenu = ({
             initial={{ opacity: 0, scale: 0.95, y: -4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
-            className="absolute right-0 top-full z-[100] mt-1 w-44 p-1.5  rounded-xl border border-slate-100 bg-white shadow-xl overflow-hidden"
+            className="absolute right-0 top-full z-[100] mt-1 w-44 p-1.5 rounded-xl border border-slate-100 bg-white shadow-xl overflow-hidden"
           >
             {[
               { label: 'View Details', icon: <FaEye size={13} />, onClick: () => { onView(account); setOpen(false); }, disabled: false, className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
@@ -149,68 +149,82 @@ const ActionMenu = ({
   );
 };
 
-// ─── Mobile Card ───────────────────────────────────────────────────────────────
+// ─── Mobile Card (with optional selection checkbox) ─────────────────────────
 
-const MobileBankCard = ({ account, onEdit, onDelete, onView, editDisabled, deleteDisabled, editMessage, deleteMessage }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 12 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 cursor-pointer hover:shadow-md transition-all duration-300 group h-full flex flex-col"
-    onClick={() => onView(account)}
-  >
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 flex items-center justify-center text-violet-600 shrink-0">
-          {account.account_type === 'cash' ? <FaMoneyBillWave size={18} /> : <FaUniversity size={18} />}
+const MobileBankCard = ({ account, onEdit, onDelete, onView, editDisabled, deleteDisabled, editMessage, deleteMessage, selected, onToggleSelect }) => {
+  const showSelect = typeof onToggleSelect === 'function';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-all duration-300 group h-full flex flex-col ${
+        selected ? 'border-violet-400 ring-2 ring-violet-100' : 'border-slate-100'
+      }`}
+      onClick={() => onView(account)}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 flex items-center justify-center text-violet-600 shrink-0">
+            {account.account_type === 'cash' ? <FaMoneyBillWave size={18} /> : account.account_type === 'upi' ? <FaQrcode size={18} /> : <FaUniversity size={18} />}
+          </div>
+          <div className="min-w-0">
+            <h3 className="truncate font-bold text-slate-800">{account.account_holder_name}</h3>
+            <p className="text-[10px] text-slate-400 font-mono italic">
+              {account.account_type === 'upi' ? (account.upi_id || 'UPI ID') : (account.bank_name || 'Cash Account')}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <h3 className="truncate font-bold text-slate-800">{account.account_holder_name}</h3>
-          <p className="text-[10px] text-slate-400 font-mono italic">
-            {account.account_type === 'upi' ? (account.upi_id || 'UPI ID') : (account.bank_name || 'Cash Account')}
-          </p>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {showSelect && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleSelect(account.bank_id); }}
+              className="p-2 rounded-lg hover:bg-violet-50 transition-colors"
+            >
+              {selected ? <FaCheckSquare className="text-violet-600" size={16} /> : <FaRegSquare className="text-gray-400" size={16} />}
+            </button>
+          )}
+          <ActionMenu account={account} onEdit={onEdit} onDelete={onDelete} onView={onView}
+            editDisabled={editDisabled} deleteDisabled={deleteDisabled}
+            editMessage={editMessage} deleteMessage={deleteMessage} />
         </div>
       </div>
-      <div onClick={(e) => e.stopPropagation()}>
-        <ActionMenu account={account} onEdit={onEdit} onDelete={onDelete} onView={onView}
-          editDisabled={editDisabled} deleteDisabled={deleteDisabled}
-          editMessage={editMessage} deleteMessage={deleteMessage} />
+
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        <AccountTypeBadge type={account.account_type} compact />
+        <StatusBadge status={account.status} compact />
+        {account.is_primary && <PrimaryBadge compact />}
       </div>
-    </div>
 
-    <div className="mt-4 flex flex-wrap gap-1.5">
-      <AccountTypeBadge type={account.account_type} compact />
-      <StatusBadge status={account.status} compact />
-      {account.is_primary && <PrimaryBadge compact />}
-    </div>
-
-    <div className="mt-4 space-y-2">
-      {account.account_type === 'upi' && (
-        <div className="flex items-center justify-between p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50">
-          <span className="text-[10px] font-bold text-emerald-600 uppercase">UPI ID</span>
-          <span className="text-xs font-black text-emerald-700 font-mono">{account.upi_id}</span>
-        </div>
-      )}
-      {account.account_number && isBankAccount(account.account_type) && (
-        <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
-          <span className="text-[10px] font-bold text-slate-400 uppercase">Account No.</span>
-          <span className="text-xs font-black text-slate-700 font-mono">{maskAccount(account.account_number)}</span>
-        </div>
-      )}
-      {account.ifsc_code && isBankAccount(account.account_type) && (
-        <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
-          <span className="text-[10px] font-bold text-slate-400 uppercase">IFSC</span>
-          <span className="text-xs font-black text-slate-700 font-mono">{account.ifsc_code}</span>
-        </div>
-      )}
-      {account.branch_name && isBankAccount(account.account_type) && (
-        <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
-          <span className="text-[10px] font-bold text-slate-400 uppercase">Branch</span>
-          <span className="text-xs font-bold text-slate-700">{account.branch_name}</span>
-        </div>
-      )}
-    </div>
-  </motion.div>
-);
+      <div className="mt-4 space-y-2">
+        {account.account_type === 'upi' && (
+          <div className="flex items-center justify-between p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50">
+            <span className="text-[10px] font-bold text-emerald-600 uppercase">UPI ID</span>
+            <span className="text-xs font-black text-emerald-700 font-mono">{account.upi_id}</span>
+          </div>
+        )}
+        {account.account_number && isBankAccount(account.account_type) && (
+          <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Account No.</span>
+            <span className="text-xs font-black text-slate-700 font-mono">{maskAccount(account.account_number)}</span>
+          </div>
+        )}
+        {account.ifsc_code && isBankAccount(account.account_type) && (
+          <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">IFSC</span>
+            <span className="text-xs font-black text-slate-700 font-mono">{account.ifsc_code}</span>
+          </div>
+        )}
+        {account.branch_name && isBankAccount(account.account_type) && (
+          <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Branch</span>
+            <span className="text-xs font-bold text-slate-700">{account.branch_name}</span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
 
 // ─── Form Field ────────────────────────────────────────────────────────────────
 
@@ -251,6 +265,9 @@ const BankAccountManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState(null);
+  const [filterAccountType, setFilterAccountType] = useState(null);
+  const [filterIsPrimary, setFilterIsPrimary] = useState(null);
   const [totalServerItems, setTotalServerItems] = useState(0);
   const [viewModal, setViewModal] = useState({ open: false, account: null });
   const [showModal, setShowModal] = useState(false);
@@ -264,6 +281,11 @@ const BankAccountManagement = () => {
   const ifscLookupRequestRef = useRef(0);
   const ifscLookupTimerRef = useRef(null);
   const lastIfscLookupRef = useRef('');
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleteScope, setBulkDeleteScope] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const getEffectiveWidth = () => {
     const width = window.innerWidth;
@@ -281,6 +303,7 @@ const BankAccountManagement = () => {
   const [visibleColumns, setVisibleColumns] = useState(() => getVisibleColumns(getEffectiveWidth()));
 
   const { pagination, goToPage, changeLimit } = usePagination(1, ITEMS_PER_PAGE);
+
   const createAccess = checkActionAccess('bankAccountManagement', 'create');
   const updateAccess = checkActionAccess('bankAccountManagement', 'update');
   const deleteAccess = checkActionAccess('bankAccountManagement', 'delete');
@@ -313,8 +336,7 @@ const BankAccountManagement = () => {
     };
   }, [getVisibleColumns]);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────────
-
+  // ── Debounce search ────────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
@@ -322,18 +344,23 @@ const BankAccountManagement = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // ── Fetch ────────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async ({ force = false } = {}) => {
     const companyId = getCompanyId();
+    if (!companyId) return;
+
     const params = new URLSearchParams({
       page: pagination.page,
-      limit: pagination.limit
+      limit: pagination.limit,
     });
-    if (debouncedSearchTerm) {
-      params.append('search', debouncedSearchTerm);
-    }
+    if (debouncedSearchTerm) params.append('search', debouncedSearchTerm);
+    if (filterStatus?.value) params.append('status', filterStatus.value);
+    if (filterAccountType?.value) params.append('account_type', filterAccountType.value);
+    if (filterIsPrimary?.value !== undefined && filterIsPrimary?.value !== '') params.append('is_primary', filterIsPrimary.value);
+
     const queryString = params.toString();
     const cacheKey = getBankAccountsListCacheKey(companyId) + '-' + queryString;
-    
+
     let requestPromise = force ? null : bankAccountsListRequestCache.get(cacheKey);
 
     if (!requestPromise) {
@@ -349,7 +376,7 @@ const BankAccountManagement = () => {
     try {
       const result = await requestPromise;
       if (!isMountedRef.current) return;
-      
+
       if (result.success) {
         setAccounts(result.data || []);
         setTotalServerItems(result.meta?.total || result.total || result.data?.length || 0);
@@ -369,13 +396,37 @@ const BankAccountManagement = () => {
         bankAccountsListRequestCache.delete(cacheKey);
       }
     }
-  }, [debouncedSearchTerm, pagination.page, pagination.limit]);
+  }, [debouncedSearchTerm, filterStatus, filterAccountType, filterIsPrimary, pagination.page, pagination.limit]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const initialDone = useRef(false);
+  const prevDep = useRef('');
 
-  // ── Filter ───────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const dep = `${debouncedSearchTerm}|${filterStatus?.value || ''}|${filterAccountType?.value || ''}|${filterIsPrimary?.value || ''}|${pagination.page}|${pagination.limit}`;
+    if (!initialDone.current || prevDep.current !== dep) {
+      fetchData();
+      initialDone.current = true;
+      prevDep.current = dep;
+    }
+  }, [debouncedSearchTerm, filterStatus, filterAccountType, filterIsPrimary, pagination.page, pagination.limit, fetchData]);
 
-  useEffect(() => { goToPage(1); }, [debouncedSearchTerm, goToPage]);
+  // Reset page on filter/search change
+  useEffect(() => {
+    goToPage(1);
+  }, [debouncedSearchTerm, filterStatus, filterAccountType, filterIsPrimary, goToPage]);
+
+  // Clear selection when data changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [accounts, debouncedSearchTerm, filterStatus, filterAccountType, filterIsPrimary, pagination.page]);
+
+  // ── Stats ────────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => [
+    { label: 'Total Accounts', value: totalServerItems, icon: FaUniversity, color: 'violet', isCount: true },
+    { label: 'Active Accounts', value: accounts.filter(a => a.status === 'active').length, icon: FaCheck, color: 'emerald', isCount: true },
+    { label: 'Bank Accounts', value: accounts.filter(a => isBankAccount(a.account_type)).length, icon: FaBuilding, color: 'indigo', isCount: true },
+    { label: 'Cash Accounts', value: accounts.filter(a => a.account_type === 'cash').length, icon: FaMoneyBillWave, color: 'amber', isCount: true },
+  ], [accounts, totalServerItems]);
 
   const totalItems = totalServerItems;
   const totalPages = Math.max(1, Math.ceil(totalItems / pagination.limit));
@@ -384,19 +435,30 @@ const BankAccountManagement = () => {
     if (pagination.page > totalPages && totalPages > 0) goToPage(totalPages);
   }, [goToPage, pagination.page, totalPages]);
 
-  const paginatedData = accounts;
+  // ── Selection helpers ─────────────────────────────────────────────────────
+  const toggleSelectId = useCallback((id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
-  // ── Stats ────────────────────────────────────────────────────────────────────
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedIds(prev => {
+      const allSelected = accounts.length > 0 && accounts.every(a => prev.has(a.bank_id));
+      if (allSelected) return new Set();
+      return new Set(accounts.map(a => a.bank_id));
+    });
+  }, [accounts]);
 
-  const stats = useMemo(() => [
-    { label: 'Total Accounts', value: accounts.length, icon: FaUniversity, color: 'violet', isCount: true },
-    { label: 'Active Accounts', value: accounts.filter(a => a.status === 'active').length, icon: FaCheck, color: 'emerald', isCount: true },
-    { label: 'Bank Accounts', value: accounts.filter(a => isBankAccount(a.account_type)).length, icon: FaBuilding, color: 'indigo', isCount: true },
-    { label: 'Cash Accounts', value: accounts.filter(a => a.account_type === 'cash').length, icon: FaMoneyBillWave, color: 'amber', isCount: true },
-  ], [accounts]);
+  const allVisibleSelected = useMemo(
+    () => accounts.length > 0 && accounts.every(a => selectedIds.has(a.bank_id)),
+    [accounts, selectedIds]
+  );
 
   // ── Modal helpers ─────────────────────────────────────────────────────────────
-
   const openModal = (mode, account = null) => {
     if (mode === 'create' && createAccess.disabled) return;
     if (mode === 'edit' && updateAccess.disabled) return;
@@ -554,8 +616,7 @@ const BankAccountManagement = () => {
     };
   }, [applyIfscLookup, formData.account_type, formData.ifsc_code, modalMode, showModal]);
 
-  // ── Action ───────────────────────────────────────────────────────────────────
-
+  // ── Action (create / edit / single delete) ───────────────────────────────
   const handleAction = async () => {
     if (modalMode !== 'delete') {
       if (!formData.account_holder_name.trim()) { toast.error('Account holder name is required'); return; }
@@ -607,7 +668,7 @@ const BankAccountManagement = () => {
         };
         response = await apiCall('/bank-accounts/update', 'PUT', payload, companyId);
       } else if (modalMode === 'delete') {
-        response = await apiCall('/bank-accounts/delete', 'DELETE', { bank_id: selectedAccount.bank_id }, companyId);
+        response = await apiCall('/bank-accounts/delete', 'DELETE', { ids: selectedAccount.bank_id }, companyId);
       }
 
       const result = await response.json();
@@ -623,15 +684,64 @@ const BankAccountManagement = () => {
     }
   };
 
-  const handlePageChange = useCallback((page) => { goToPage(page); window.scrollTo({ top: 0, behavior: 'smooth' }); }, [goToPage]);
+  // ── Bulk Delete ──────────────────────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    if (bulkDeleteScope === null) return;
+    setDeleting(true);
+    try {
+      const companyId = getCompanyId();
+      const body = bulkDeleteScope === 'all'
+        ? { ids: 'all' }
+        : { ids: [...selectedIds] };
+
+      const response = await apiCall('/bank-accounts/delete', 'DELETE', body, companyId);
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Delete failed');
+
+      toast.success(
+        bulkDeleteScope === 'all'
+          ? 'All company bank accounts deleted!'
+          : `${result.deleted_count || selectedIds.size} account(s) deleted!`
+      );
+      setSelectedIds(new Set());
+      setBulkDeleteScope(null);
+      await fetchData({ force: true });
+    } catch (error) {
+      toast.error(error.message || 'Failed to delete accounts');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handlePageChange = useCallback((page) => {
+    goToPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [goToPage]);
 
   const isBankType = ['savings', 'current', 'loan'].includes(formData.account_type);
   const isUpiType = formData.account_type === 'upi';
   const isCashType = formData.account_type === 'cash';
 
   // ── Table columns ─────────────────────────────────────────────────────────────
-
   const columns = [
+    // Checkbox column (only if delete allowed)
+    ...(deleteAccess.enabled ? [{
+      key: 'checkbox',
+      label: '',
+      width: '40px',
+      visible: true,
+      render: (account) => (
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleSelectId(account.bank_id); }}
+          className="focus:outline-none"
+        >
+          {selectedIds.has(account.bank_id)
+            ? <FaCheckSquare className="text-violet-600" size={16} />
+            : <FaRegSquare className="text-gray-400" size={16} />
+          }
+        </button>
+      ),
+    }] : []),
     {
       key: 'account',
       label: 'Account',
@@ -742,46 +852,95 @@ const BankAccountManagement = () => {
           </motion.div>
         )}
 
-        {/* ─── Consolidated Filter & View Bar ─── */}
+        {/* ─── Filter & View Bar ─── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex flex-col lg:flex-row lg:items-center md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-2"
+          className="flex flex-col lg:flex-row gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-2"
         >
-          {/* Left Section: Search */}
-          <div className="flex flex-col md:flex-row md:items-center gap-4 flex-1">
-            <div className="relative flex-1 w-full">
-              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search by holder name, bank, account number, IFSC..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-violet-500/10 focus:border-violet-400 outline-none shadow-sm transition-all text-sm font-medium min-h-[42px]"
-              />
-            </div>
-
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] lg:max-w-[40%]">
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by holder name, bank, account number, IFSC..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none transition-all text-sm min-h-[42px]"
+            />
           </div>
 
-          {/* Right Section: View Switcher */}
-          <div className="flex items-center justify-end">
-            <div className="h-8 w-px bg-gray-200 hidden lg:block mx-1"></div>
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-[130px]">
+              <SelectField
+                options={[{ value: '', label: 'All Status' }, { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]}
+                value={filterStatus || { value: '', label: 'All Status' }}
+                onChange={(opt) => { setFilterStatus(opt.value ? opt : null); goToPage(1); }}
+              />
+            </div>
+            <div className="w-[150px]">
+              <SelectField
+                options={[
+                  { value: '', label: 'All Types' },
+                  { value: 'cash', label: 'Cash' },
+                  { value: 'savings', label: 'Savings' },
+                  { value: 'current', label: 'Current' },
+                  { value: 'upi', label: 'UPI' },
+                  { value: 'loan', label: 'Loan' },
+                ]}
+                value={filterAccountType || { value: '', label: 'All Types' }}
+                onChange={(opt) => { setFilterAccountType(opt.value ? opt : null); goToPage(1); }}
+              />
+            </div>
+            <div className="w-[140px]">
+              <SelectField
+                options={[
+                  { value: '', label: 'All Primary' },
+                  { value: 'true', label: 'Primary Only' },
+                  { value: 'false', label: 'Non-Primary' },
+                ]}
+                value={filterIsPrimary || { value: '', label: 'All Primary' }}
+                onChange={(opt) => { setFilterIsPrimary(opt.value ? opt : null); goToPage(1); }}
+              />
+            </div>
+          </div>
+
+          {/* View Switcher */}
+          <div className="flex items-center justify-end lg:ml-auto">
             <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="violet" />
           </div>
         </motion.div>
 
+        {/* ── Select All / Deselect All ── */}
+        {!loading && accounts.length > 0 && deleteAccess.enabled && (
+          <div className="flex items-center gap-3 mb-1">
+            <button
+              type="button"
+              onClick={toggleSelectAllVisible}
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 transition hover:bg-violet-100"
+            >
+              {allVisibleSelected
+                ? <><FaCheckSquare size={13} /> Deselect all</>
+                : <><FaCheck size={13} /> Select all</>
+              }
+            </button>
+          </div>
+        )}
+
+        {/* ── Content ── */}
         {totalItems === 0 && !loading ? (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-100">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300"><FaUniversity size={24} /></div>
             <p className="text-slate-500 font-bold">No accounts found</p>
             <p className="text-slate-400 text-sm mt-1 mx-auto max-w-xs">
-              {searchTerm ? `No results matching "${searchTerm}"` : 'Add a bank account to get started.'}
+              {debouncedSearchTerm ? `No results matching "${debouncedSearchTerm}"` : 'Add a bank account to get started.'}
             </p>
           </motion.div>
         ) : viewMode === 'table' ? (
           <ManagementTable
-            rows={paginatedData}
+            rows={accounts}
             columns={columns}
             rowKey={(row) => row.bank_id}
             onRowClick={(row) => setViewModal({ open: true, account: row })}
@@ -793,8 +952,8 @@ const BankAccountManagement = () => {
             accent="violet"
           />
         ) : (
-          <ManagementGrid viewMode={viewMode}>
-            {paginatedData.map((account) => (
+          <ManagementGrid viewMode="card">
+            {accounts.map((account) => (
               <MobileBankCard
                 key={account.bank_id}
                 account={account}
@@ -805,11 +964,14 @@ const BankAccountManagement = () => {
                 deleteDisabled={deleteAccess.disabled}
                 editMessage={updateMessage}
                 deleteMessage={deleteMessage}
+                selected={selectedIds.has(account.bank_id)}
+                onToggleSelect={deleteAccess.enabled ? toggleSelectId : undefined}
               />
             ))}
           </ManagementGrid>
         )}
 
+        {/* ── Pagination ── */}
         {totalItems > 0 && (
           <div className="mt-8">
             <Pagination
@@ -824,7 +986,129 @@ const BankAccountManagement = () => {
         )}
       </div>
 
-      {/* View Modal */}
+      {/* ── FLOATING BOTTOM BAR (bulk delete) ── */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && deleteAccess.enabled && (
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-8 sm:bottom-8 z-[100] flex flex-wrap items-center gap-2 sm:gap-4 rounded-2xl border border-white/20 bg-white/90 px-4 py-3 sm:px-6 sm:py-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)] backdrop-blur-md"
+          >
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Bulk Actions</span>
+              <span className="text-sm font-black text-slate-800">{selectedIds.size} Selected</span>
+            </div>
+
+            <div className="hidden sm:block mx-1 h-10 w-px bg-gray-200" />
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="px-3 py-1.5 text-xs font-bold text-gray-500 transition-colors hover:text-gray-700"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkDeleteScope('all')}
+                disabled={!allVisibleSelected}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                  allVisibleSelected
+                    ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                }`}
+                title={allVisibleSelected ? 'Delete all company bank accounts (across all pages)' : 'Select all visible accounts to enable'}
+              >
+                <FaTrashAlt size={11} />
+                All
+              </button>
+              <ManagementButton
+                tone="rose"
+                variant="solid"
+                leftIcon={<FaTrash />}
+                onClick={() => setBulkDeleteScope('selected')}
+                className="shadow-lg shadow-rose-200 !text-xs !px-3 !py-1.5"
+              >
+                Delete
+              </ManagementButton>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Bulk Delete Confirm Modal ── */}
+      <AnimatePresence>
+        {bulkDeleteScope && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex justify-center items-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -20 }}
+              className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 shadow-sm border border-rose-100">
+                    <FaExclamationTriangle className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Delete Accounts</h2>
+                    <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">
+                      {bulkDeleteScope === 'all' ? 'All records' : `${selectedIds.size} selected`}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setBulkDeleteScope(null)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-all">
+                  <FaTimes className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="p-6 text-center space-y-4">
+                <motion.div
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 200 }}
+                  className="w-16 h-16 bg-gradient-to-br from-rose-50 to-red-50 rounded-full flex items-center justify-center mx-auto border-4 border-white shadow-lg shadow-rose-100/50"
+                >
+                  <FaExclamationTriangle className="text-2xl text-rose-500" />
+                </motion.div>
+
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-slate-900">Are you sure?</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed px-4">
+                    {bulkDeleteScope === 'all'
+                      ? 'This will permanently delete all company bank accounts. This action cannot be undone.'
+                      : `Permanently delete ${selectedIds.size} bank account${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`
+                    }
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 bg-slate-50 px-5 py-3.5 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteScope(null)}
+                  className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest hover:from-rose-700 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-rose-200"
+                >
+                  {deleting ? <FaSpinner className="animate-spin" /> : <FaTrash />}
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── View Modal ── */}
       <Modal
         isOpen={viewModal.open && !!viewModal.account}
         onClose={closeViewModal}
@@ -832,7 +1116,7 @@ const BankAccountManagement = () => {
         subtitle={viewModal.account?.account_type === 'upi' ? viewModal.account?.upi_id : (viewModal.account?.bank_name || 'Cash Account')}
         icon={viewModal.account?.account_type === 'cash' ? <FaMoneyBillWave size={20} /> : viewModal.account?.account_type === 'upi' ? <FaQrcode size={20} /> : <FaUniversity size={20} />}
         size="lg"
-        footer={(
+        footer={
           <>
             <button
               onClick={closeViewModal}
@@ -857,7 +1141,7 @@ const BankAccountManagement = () => {
               <FaEdit /> Edit Account
             </button>
           </>
-        )}
+        }
       >
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2">
@@ -904,7 +1188,7 @@ const BankAccountManagement = () => {
         </div>
       </Modal>
 
-      {/* Create / Edit / Delete Modal */}
+      {/* ── Create / Edit / Delete Modal ── */}
       <Modal
         isOpen={showModal}
         onClose={closeModal}
@@ -1073,33 +1357,35 @@ const BankAccountManagement = () => {
                     className={lockedInputClass(autoLockedFields.branch_name)}
                   />
                 </FormField>
-
-                {modalMode === 'edit' && (
-                  <FormField label="Status">
-                    <div className="relative">
-                      <select value={formData.status} onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))} className={selectCls}>
-                        {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                      </select>
-                      <FaChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={11} />
-                    </div>
-                  </FormField>
-                )}
-
-                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                  <div>
-                    <p className="text-sm font-bold text-slate-700">Set as Primary Account</p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">Mark this as the default account for transactions</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setFormData((p) => ({ ...p, is_primary: !p.is_primary }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.is_primary ? 'bg-violet-500' : 'bg-slate-300'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${formData.is_primary ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                </div>
               </motion.div>
             )}
+
+            {/* Status (only in edit mode) */}
+            {modalMode === 'edit' && (
+              <FormField label="Status">
+                <div className="relative">
+                  <select value={formData.status} onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))} className={selectCls}>
+                    {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                  </select>
+                  <FaChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={11} />
+                </div>
+              </FormField>
+            )}
+
+            {/* Primary toggle (for all account types) */}
+            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <div>
+                <p className="text-sm font-bold text-slate-700">Set as Primary Account</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">Mark this as the default account for transactions</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, is_primary: !p.is_primary }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.is_primary ? 'bg-violet-500' : 'bg-slate-300'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${formData.is_primary ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
           </div>
         )}
       </Modal>
