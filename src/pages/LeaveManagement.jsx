@@ -415,7 +415,7 @@ const LeaveManagement = () => {
                 leave_config_id: String(createForm.leave_config_id),
                 start_date: createForm.start_date,
                 end_date: createForm.end_date,
-                is_half_day: createForm.is_half_day ? 1 : 0,
+                is_half_day: createForm.is_half_day ? true : false,
                 attachments: createForm.attachments.map((file) => file.url),
                 remarks: createForm.remarks,
             };

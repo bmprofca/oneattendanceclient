@@ -533,7 +533,7 @@ const LeaveFormModal = ({ open, title, leaveTypes, balances, initialLeave, onClo
         leave_config_id: form.leave_config_id,
         start_date: form.start_date,
         end_date: form.end_date,
-        is_half_day: form.is_half_day ? 1 : 0,
+        is_half_day: form.is_half_day ? true : false,
         reason: form.reason,
         attachments: form.attachments.map((a) => a.url),
       };
