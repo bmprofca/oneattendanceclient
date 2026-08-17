@@ -8,7 +8,7 @@ import {
     FaTh, FaListUl, FaShieldAlt, FaPlus, FaEdit,
     FaTrash, FaHistory, FaMoneyBillWave, FaPercentage,
     FaCalculator, FaCalendarPlus, FaCalendarCheck,
-    FaExchangeAlt, FaSave, FaBan, FaExclamationCircle
+    FaExchangeAlt, FaSave, FaBan, FaExclamationCircle, FaSync
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import apiCall from '../utils/api';
@@ -160,9 +160,28 @@ const normalizeDateFilterSelection = (result) => {
 };
 
 const salaryOverlapsDateFilter = (salary, filter) => {
-    if (!filter || (!filter.date && !filter.from_date && !filter.to_date)) return true;
+    if (!filter || (!filter.date && !filter.from_date && !filter.to_date && !filter.month && !filter.year)) return true;
     const effectiveFrom = salary.effective_from ? new Date(salary.effective_from) : null;
     const effectiveTo = salary.effective_to ? new Date(salary.effective_to) : null;
+    
+    // Handle month/year filtering
+    if (filter.month && filter.year) {
+        const filterMonth = Number(filter.month);
+        const filterYear = Number(filter.year);
+        
+        // If no effective dates, show all
+        if (!effectiveFrom && !effectiveTo) return true;
+        
+        // Check if salary is active in the selected month/year
+        const monthStart = new Date(filterYear, filterMonth - 1, 1);
+        const monthEnd = new Date(filterYear, filterMonth, 0, 23, 59, 59, 999);
+        
+        const start = effectiveFrom || monthStart;
+        const end = effectiveTo || monthEnd;
+        
+        return start <= monthEnd && end >= monthStart;
+    }
+    
     if (filter.date) {
         const selected = new Date(`${filter.date}T00:00:00`);
         const dayEnd = new Date(`${filter.date}T23:59:59.999`);
@@ -1258,8 +1277,11 @@ const SalaryManagement = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [viewMode, setViewMode] = useState('table');
-    const [dateFilterLabel, setDateFilterLabel] = useState('Filter by date');
-    const [dateFilterValue, setDateFilterValue] = useState({});
+    const [dateFilterLabel, setDateFilterLabel] = useState(formatMonthYearLabel(new Date().getMonth() + 1, new Date().getFullYear()));
+    const [dateFilterValue, setDateFilterValue] = useState({
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear()
+    });
     const [selectedSalary, setSelectedSalary] = useState(null);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -1274,7 +1296,10 @@ const SalaryManagement = () => {
 
     const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
     const fetchInProgress = useRef(false);
-    const salaryDateFilterRef = useRef({});
+    const salaryDateFilterRef = useRef({
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear()
+    });
 
     useEffect(() => {
         const t = setTimeout(() => setDebouncedSearch(searchTerm), 500);
@@ -1332,16 +1357,19 @@ const SalaryManagement = () => {
     }, [debouncedSearch, fetchSalaries, goToPage, pagination.page]);
 
     const clearDateFilter = useCallback(() => {
-        salaryDateFilterRef.current = {};
-        setDateFilterValue({});
-        setDateFilterLabel('Filter by date');
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
+        const resetParams = { month: currentMonth, year: currentYear };
+        salaryDateFilterRef.current = resetParams;
+        setDateFilterValue(resetParams);
+        setDateFilterLabel(formatMonthYearLabel(currentMonth, currentYear));
         if (pagination.page !== 1) goToPage(1);
-        else fetchSalaries(1, debouncedSearch, true, {});
+        else fetchSalaries(1, debouncedSearch, true, resetParams);
     }, [debouncedSearch, fetchSalaries, goToPage, pagination.page]);
 
     const visibleSalaries = useMemo(() => {
         const filter = salaryDateFilterRef.current;
-        if (!filter || (!filter.date && !filter.from_date && !filter.to_date)) return salaries;
+        if (!filter || (!filter.date && !filter.from_date && !filter.to_date && !filter.month && !filter.year)) return salaries;
         return salaries.filter((salary) => salaryOverlapsDateFilter(salary, filter));
     }, [salaries, dateFilterLabel]);
 
@@ -1522,6 +1550,7 @@ const SalaryManagement = () => {
                             <p className="text-sm text-gray-500 hidden xl:block">
                                 <span className="font-semibold text-gray-800">{visibleSalaries.length}</span> of <span className="font-semibold text-gray-800">{stats.total}</span> records
                                 {debouncedSearch && <span className="ml-1 text-green-600">· "{debouncedSearch}"</span>}
+                                {dateFilterValue.month && dateFilterValue.year && <span className="ml-1 text-blue-600">· {dateFilterLabel}</span>}
                             </p>
                         )}
                     </div>
@@ -1531,15 +1560,10 @@ const SalaryManagement = () => {
                             <AdvancedDateFilter
                                 value={dateFilterValue}
                                 onChange={handleDateFilterApply}
-                                placeholder={dateFilterLabel}
+                                placeholder="Filter by month"
                                 buttonClassName="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 min-w-[200px]"
-                                tabOptions={["date", "month", "range"]}
+                                tabOptions={["month"]}
                             />
-                            {dateFilterLabel !== 'Filter by date' && (
-                                <button type="button" onClick={clearDateFilter} className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-red-200 hover:bg-red-50 transition-all" title="Clear date filter">
-                                    <FaTimes size={14} />
-                                </button>
-                            )}
                         </div>
                         <div className="h-8 w-px bg-gray-200 hidden lg:block mx-1"></div>
                         <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="green" />
@@ -1554,7 +1578,7 @@ const SalaryManagement = () => {
                     <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16 bg-white rounded-xl shadow-xl border border-gray-100">
                         <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4"><FaMoneyBillWave className="text-4xl text-gray-300" /></div>
                         <p className="text-xl font-semibold text-gray-600">No salary records found</p>
-                        <p className="text-gray-400 mt-2 text-sm">{debouncedSearch ? `No results for "${debouncedSearch}"` : dateFilterLabel !== 'Filter by date' ? `No results for ${dateFilterLabel}` : 'Click "Assign Salary" to get started'}</p>
+                        <p className="text-gray-400 mt-2 text-sm">{debouncedSearch ? `No results for "${debouncedSearch}"` : `No results for ${dateFilterLabel}`}</p>
                         {debouncedSearch && (<button onClick={() => setSearchTerm('')} className="mt-4 px-4 py-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all text-sm font-medium">Clear Search</button>)}
                         {!debouncedSearch && (<button onClick={() => setShowAssignModal(true)} className="mt-4 px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all text-sm font-medium">Assign Salary</button>)}
                     </motion.div>
