@@ -603,6 +603,7 @@ const EditSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency }
         </Modal>
     );
 };
+// ─── Revise Salary Modal ──────────────────────────────────────────────────────
 
 // ─── Revise Salary Modal ──────────────────────────────────────────────────────
 
@@ -614,6 +615,7 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
 
     const [formData, setFormData] = useState({
         base_amount: '',
+        effective_from: getCurrentMonthDate(),
         component_package_id: '',
         components: []
     });
@@ -622,6 +624,7 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
         if (isOpen && salary) {
             setFormData({
                 base_amount: salary.base_amount || '',
+                effective_from: getCurrentMonthDate(),
                 component_package_id: '',
                 components: (salary.components || []).map(c => ({
                     component_id: c.id,
@@ -666,12 +669,14 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.base_amount) { toast.warning('Please fill base amount'); return; }
+        if (!formData.effective_from) { toast.warning('Please select an effective from date'); return; }
         setSubmitting(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
             const payload = {
                 employee_id: salary.employee?.id,
                 base_amount: parseFloat(formData.base_amount),
+                effective_from: formData.effective_from,
                 components: formData.components.map(o => ({
                     component_id: o.component_id,
                     calc_type: o.calc_type,
@@ -713,6 +718,26 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Effective From *</label>
+                        <AdvancedDateFilter
+                            tabOptions={["month"]}
+                            value={formData.effective_from ? { month: parseInt(formData.effective_from.split('-')[1]), year: parseInt(formData.effective_from.split('-')[0]) } : null}
+                            onChange={(val) => {
+                                if (val && val.month && val.year) {
+                                    const firstDate = `${val.year}-${String(val.month).padStart(2, '0')}-01`;
+                                    setFormData({ ...formData, effective_from: firstDate });
+                                } else {
+                                    setFormData({ ...formData, effective_from: '' });
+                                }
+                            }}
+                            placeholder="Select month"
+                            buttonClassName="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 outline-none text-left text-sm"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Salary Package (Quick Fill)</label>
                         <SelectField
                             value={formData.component_package_id ? { value: formData.component_package_id, label: packages.find(p => String(p.id) === String(formData.component_package_id))?.name || 'Custom / Manual' } : null}
@@ -731,7 +756,7 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
                                 const val = e.target.value.replace(/[^0-9.]/g, '');
                                 if (val === '' || /^\d*\.?\d*$/.test(val)) setFormData({ ...formData, base_amount: val });
                             }}
-                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-sm font-semibold"
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 outline-none transition-all text-sm font-semibold"
                         />
                     </div>
                 </div>
@@ -786,7 +811,7 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
                                                             setFormData({ ...formData, components: updated, component_package_id: '' });
                                                         }
                                                     }}
-                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none text-sm font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none text-sm font-bold focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all"
                                                 />
                                             </div>
                                             <div className="md:col-span-2 flex justify-end pb-0.5">
