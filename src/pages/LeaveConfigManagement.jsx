@@ -23,6 +23,9 @@ import {
   FaTh,
   FaListUl,
   FaCog,
+  FaTrashAlt,
+  FaCheckSquare,
+  FaRegSquare,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import apiCall from '../utils/api';
@@ -35,7 +38,6 @@ import ManagementGrid from '../components/ManagementGrid';
 import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
 
 const DEFAULT_FORM = {
   code: '',
@@ -81,11 +83,12 @@ const updateLeaveType = async (body) => {
   return json;
 };
 
-const deleteLeaveTypeAPI = async (id) => {
-  const res = await apiCall('/leave/delete', 'DELETE', { id }, getCompanyId());
+// Modified to accept array or 'all'
+const deleteLeaveTypesAPI = async (ids) => {
+  const res = await apiCall('/leave/delete', 'DELETE', { ids }, getCompanyId());
   if (!res.ok) throw new Error(`Server error: ${res.status}`);
   const json = await res.json();
-  if (!json.success) throw new Error(json.message || 'Failed to delete leave type');
+  if (!json.success) throw new Error(json.message || 'Failed to delete leave type(s)');
   return json;
 };
 
@@ -153,12 +156,14 @@ const ToggleSwitch = ({ checked, onChange, label, sublabel }) => (
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${checked ? 'bg-violet-600' : 'bg-gray-300'
-        }`}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+        checked ? 'bg-violet-600' : 'bg-gray-300'
+      }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'
-          }`}
+        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
       />
     </button>
   </div>
@@ -360,7 +365,7 @@ const InfoItem = ({ label, value }) => (
   </div>
 );
 
-// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+// ─── Delete Confirm Modal (Single) ───────────────────────────────────────────
 
 const DeleteModal = ({ leaveType, onConfirm, onClose, loading, submitDisabled = false, submitTitle = '' }) => (
   <motion.div
@@ -425,6 +430,71 @@ const DeleteModal = ({ leaveType, onConfirm, onClose, loading, submitDisabled = 
   </motion.div>
 );
 
+// ─── Bulk Delete Confirm Modal ───────────────────────────────────────────────
+
+const BulkDeleteModal = ({ count, onConfirm, onClose, loading, submitDisabled = false, submitTitle = '' }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4"
+    onClick={onClose}
+  >
+    <ModalScrollLock />
+    <motion.div
+      initial={{ scale: 0.9, opacity: 0, y: 20 }}
+      animate={{ scale: 1, opacity: 1, y: 0, transition: { type: 'spring', duration: 0.5 } }}
+      exit={{ scale: 0.9, opacity: 0, y: 20, transition: { duration: 0.3 } }}
+      className="relative bg-white backdrop-blur-xl w-full max-w-md max-h-[80vh] rounded-xl shadow-2xl border border-gray-100 m-auto flex flex-col overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-5 sticky top-0 z-[10]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-rose-200">
+            <FaTrashAlt className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Bulk Delete Leave Types</h2>
+            <p className="text-sm text-slate-500">{count} selected</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-all"
+        >
+          <FaTimes className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 py-6">
+        <p className="text-gray-600 text-sm leading-relaxed text-center">
+          Are you sure you want to delete{' '}
+          <span className="font-semibold text-gray-800">{count}</span> leave type(s)? This action
+          cannot be undone.
+        </p>
+      </div>
+      <div className="flex gap-3 px-6 py-5 border-t border-gray-100">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={loading || submitDisabled}
+          title={submitDisabled ? submitTitle : ''}
+          className="flex-1 py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-medium hover:from-red-700 hover:to-rose-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Deleting…' : 'Delete Selected'}
+        </button>
+      </div>
+    </motion.div>
+  </motion.div>
+);
+
 // ─── Form Modal ───────────────────────────────────────────────────────────────
 
 const FormModal = ({
@@ -440,10 +510,11 @@ const FormModal = ({
   const [form, setForm] = useState(
     isEdit
       ? {
-        ...editRecord,
-        max_balance: String(Math.round(editRecord.max_balance || 0)),
-        carry_forward_limit: String(Math.round(editRecord.carry_forward_limit || 0)),
-      }
+          ...editRecord,
+          max_balance: String(Math.round(editRecord.max_balance || 0)),
+          carry_forward_limit: String(Math.round(editRecord.carry_forward_limit || 0)),
+          is_active: editRecord.is_active, // ensure is_active is present (it is from spread, but explicit for clarity)
+        }
       : { ...DEFAULT_FORM }
   );
   const [saving, setSaving] = useState(false);
@@ -494,9 +565,10 @@ const FormModal = ({
   };
 
   const inputCls = (field) =>
-    `w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-4 bg-white ${errors[field]
-      ? 'border-red-300 focus:border-red-400 focus:ring-red-100'
-      : 'border-gray-200 focus:border-slate-400 focus:ring-slate-200'
+    `w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-4 bg-white ${
+      errors[field]
+        ? 'border-red-300 focus:border-red-400 focus:ring-red-100'
+        : 'border-gray-200 focus:border-slate-400 focus:ring-slate-200'
     }`;
 
   return (
@@ -559,10 +631,11 @@ const FormModal = ({
                         set('name', opt.label);
                       }}
                       title={opt.description}
-                      className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${form.code === opt.value.toUpperCase()
-                        ? 'border-violet-500 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md'
-                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-violet-50 hover:border-violet-300'
-                        }`}
+                      className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+                        form.code === opt.value.toUpperCase()
+                          ? 'border-violet-500 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md'
+                          : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-violet-50 hover:border-violet-300'
+                      }`}
                     >
                       <span className="font-bold">{opt.value}</span> — {opt.label}
                     </button>
@@ -582,8 +655,9 @@ const FormModal = ({
                   Code <span className="text-red-400">*</span>
                 </label>
                 <div
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm bg-gray-50 ${form.code ? 'text-gray-800 font-semibold border-gray-200' : 'text-gray-400 border-gray-200'
-                    }`}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm bg-gray-50 ${
+                    form.code ? 'text-gray-800 font-semibold border-gray-200' : 'text-gray-400 border-gray-200'
+                  }`}
                 >
                   {form.code || 'Select a type above'}
                 </div>
@@ -594,8 +668,9 @@ const FormModal = ({
                   Name <span className="text-red-400">*</span>
                 </label>
                 <div
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm bg-gray-50 ${form.name ? 'text-gray-800 font-semibold border-gray-200' : 'text-gray-400 border-gray-200'
-                    }`}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm bg-gray-50 ${
+                    form.name ? 'text-gray-800 font-semibold border-gray-200' : 'text-gray-400 border-gray-200'
+                  }`}
                 >
                   {form.name || 'Select a type above'}
                 </div>
@@ -670,6 +745,15 @@ const FormModal = ({
                 label="Exclude Weekends"
                 sublabel="Weekends not counted in leave duration"
               />
+              {/* Only show Active/Inactive toggle when editing */}
+              {isEdit && (
+                <ToggleSwitch
+                  checked={form.is_active}
+                  onChange={(v) => set('is_active', v)}
+                  label="Active"
+                  sublabel="Leave type visible and usable"
+                />
+              )}
             </div>
           </div>
         </div>
@@ -708,20 +792,20 @@ const LeaveConfigManagement = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterIsActive, setFilterIsActive] = useState('');
+  const [filterIsPaid, setFilterIsPaid] = useState('');
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-
-  const [formModal, setFormModal] = useState({ open: false, record: null });
-  const [viewModal, setViewModal] = useState({ open: false, record: null });
-  const [deleteModal, setDeleteModal] = useState({ open: false, record: null });
-  const [deleting, setDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleteScope, setBulkDeleteScope] = useState(null); // 'selected' | 'all' | null
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [viewMode, setViewMode] = useState('table');
   const [windowWidth, setWindowWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1440
   );
   const constantsLoadedRef = useRef(false);
   const initialFetchStartedRef = useRef(false);
-  const fetchInProgress = useRef(false);
+  const requestIdRef = useRef(0);
 
   const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, ITEMS_PER_PAGE);
   const createAccess = checkActionAccess('leaveConfig', 'create');
@@ -731,6 +815,12 @@ const LeaveConfigManagement = () => {
   const updateMessage = getAccessMessage(updateAccess);
   const deleteMessage = getAccessMessage(deleteAccess);
 
+  const [formModal, setFormModal] = useState({ open: false, record: null });
+  const [viewModal, setViewModal] = useState({ open: false, record: null });
+  const [deleteModal, setDeleteModal] = useState({ open: false, record: null });
+  const [deleting, setDeleting] = useState(false);
+
+  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedSearch(searchTerm);
@@ -738,6 +828,7 @@ const LeaveConfigManagement = () => {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  // Window resize
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
@@ -749,7 +840,6 @@ const LeaveConfigManagement = () => {
   useEffect(() => {
     if (constantsLoadedRef.current) return;
     constantsLoadedRef.current = true;
-
     fetchConstants()
       .then((data) => {
         const typeOpts = (data.leave_types || []).map((item) => ({
@@ -759,13 +849,13 @@ const LeaveConfigManagement = () => {
         }));
         setLeaveTypeOptions(typeOpts);
       })
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
+  // Load records with request sequencing
   const loadRecords = useCallback(
     async (page = pagination.page, search = debouncedSearch, resetLoading = true) => {
-      if (fetchInProgress.current) return;
-      fetchInProgress.current = true;
+      const requestId = ++requestIdRef.current;
       if (resetLoading) setLoading(true);
       setError(null);
 
@@ -776,6 +866,8 @@ const LeaveConfigManagement = () => {
           limit: pagination.limit.toString(),
         });
         if (search) params.append('search', search);
+        if (filterIsActive) params.append('is_active', filterIsActive);
+        if (filterIsPaid) params.append('is_paid', filterIsPaid);
 
         const response = await apiCall(
           `/leave/company?${params.toString()}`,
@@ -789,6 +881,9 @@ const LeaveConfigManagement = () => {
         }
         const result = await response.json();
 
+        // Ignore stale responses
+        if (requestId !== requestIdRef.current) return;
+
         if (result.success) {
           const fetchedRecords = result.data || [];
           setRecords(fetchedRecords);
@@ -799,11 +894,11 @@ const LeaveConfigManagement = () => {
           const total = Number(meta.total ?? result.total ?? fetchedRecords.length ?? 0);
           const totalPages = Number(
             meta.total_pages ??
-            result.last_page ??
-            result.total_pages ??
-            Math.max(1, Math.ceil(total / perPage))
+              result.last_page ??
+              result.total_pages ??
+              Math.max(1, Math.ceil(total / perPage))
           );
-          const isLastPage = meta.is_last_page ?? result.is_last_page ?? (currentPage >= totalPages);
+          const isLastPage = meta.is_last_page ?? result.is_last_page ?? currentPage >= totalPages;
 
           updatePagination({
             page: currentPage,
@@ -812,33 +907,26 @@ const LeaveConfigManagement = () => {
             total_pages: totalPages,
             is_last_page: isLastPage,
           });
+
+          // Clear selection after fresh load
+          setSelectedIds(new Set());
         }
       } catch (err) {
-        setError(err.message);
-        toast.error(err.message || 'Failed to load leave types');
+        if (requestId === requestIdRef.current) {
+          setError(err.message);
+          toast.error(err.message || 'Failed to load leave types');
+        }
       } finally {
-        setLoading(false);
-        setIsInitialLoad(false);
-        fetchInProgress.current = false;
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          setIsInitialLoad(false);
+        }
       }
     },
-    [pagination.page, pagination.limit, debouncedSearch, updatePagination]
+    [pagination.page, pagination.limit, debouncedSearch, filterIsActive, filterIsPaid, updatePagination]
   );
 
-  useEffect(() => {
-    if (!isInitialLoad && !fetchInProgress.current) {
-      loadRecords(pagination.page, debouncedSearch, true);
-    }
-  }, [pagination.page, pagination.limit, debouncedSearch]); // eslint-disable-line
-
-  useEffect(() => {
-    if (!isInitialLoad) {
-      if (pagination.page !== 1) goToPage(1);
-      else loadRecords(1, debouncedSearch, true);
-    }
-  }, [debouncedSearch]); // eslint-disable-line
-
-  // Initial data load
+  // Initial load
   useEffect(() => {
     const company = JSON.parse(localStorage.getItem('company'));
     if (company?.id && !initialFetchStartedRef.current) {
@@ -848,17 +936,36 @@ const LeaveConfigManagement = () => {
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [loadRecords, isInitialLoad]); // eslint-disable-line
+  }, [loadRecords, isInitialLoad]);
+
+  // Fetch when page/limit/search/filters change
+  useEffect(() => {
+    if (!isInitialLoad) {
+      loadRecords(pagination.page, debouncedSearch, true);
+    }
+  }, [pagination.page, pagination.limit, debouncedSearch, filterIsActive, filterIsPaid]); // eslint-disable-line
+
+  // Reset to page 1 when search or filters change
+  useEffect(() => {
+    if (!isInitialLoad) {
+      if (pagination.page !== 1) {
+        goToPage(1);
+      } else {
+        loadRecords(1, debouncedSearch, true);
+      }
+    }
+  }, [debouncedSearch, filterIsActive, filterIsPaid]); // eslint-disable-line
 
   const handlePageChange = (page) => {
     goToPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Single delete
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await deleteLeaveTypeAPI(deleteModal.record.id);
+      await deleteLeaveTypesAPI([deleteModal.record.id]);
       toast.success('Leave type deleted');
       setDeleteModal({ open: false, record: null });
       loadRecords(pagination.page, debouncedSearch, false);
@@ -866,6 +973,28 @@ const LeaveConfigManagement = () => {
       toast.error(err.message || 'Failed to delete');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    if (bulkDeleteScope === null) return;
+    setBulkDeleting(true);
+    try {
+      const ids = bulkDeleteScope === 'all' ? 'all' : [...selectedIds];
+      await deleteLeaveTypesAPI(ids);
+      toast.success(
+        bulkDeleteScope === 'all'
+          ? 'All leave types deleted!'
+          : `${selectedIds.size} leave type(s) deleted!`
+      );
+      setSelectedIds(new Set());
+      setBulkDeleteScope(null);
+      await loadRecords(pagination.page, debouncedSearch, false);
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete selected leave types');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -884,6 +1013,30 @@ const LeaveConfigManagement = () => {
     setDeleteModal({ open: true, record });
   };
 
+  // Selection helpers
+  const toggleSelectId = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allSelected = records.length > 0 && records.every((r) => prev.has(r.id));
+      if (allSelected) return new Set();
+      return new Set(records.map((r) => r.id));
+    });
+  }, [records]);
+
+  const allVisibleSelected = useMemo(
+    () => records.length > 0 && records.every((r) => selectedIds.has(r.id)),
+    [records, selectedIds]
+  );
+
+  // Responsive column visibility
   const showMaxBalance = windowWidth >= 540;
   const showCarryFwd = windowWidth >= 768;
   const showAccrual = windowWidth >= 1024;
@@ -959,6 +1112,28 @@ const LeaveConfigManagement = () => {
               )}
             </div>
 
+            {/* Filters */}
+            <div className="flex items-center gap-2">
+              <select
+                value={filterIsActive}
+                onChange={(e) => setFilterIsActive(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none transition-all min-h-[42px]"
+              >
+                <option value="">All Status</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+              <select
+                value={filterIsPaid}
+                onChange={(e) => setFilterIsPaid(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none transition-all min-h-[42px]"
+              >
+                <option value="">All Types</option>
+                <option value="true">Paid</option>
+                <option value="false">Unpaid</option>
+              </select>
+            </div>
+
             {!loading && records.length > 0 && (
               <p className="text-sm text-gray-500 hidden xl:block">
                 <span className="font-semibold text-gray-800">{records.length}</span> of{' '}
@@ -968,10 +1143,44 @@ const LeaveConfigManagement = () => {
           </div>
 
           <div className="flex items-center justify-end gap-4">
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkDeleteScope('selected')}
+                disabled={deleteAccess.disabled || bulkDeleting}
+                title={deleteAccess.disabled ? deleteMessage : ''}
+                className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <FaTrashAlt size={14} />
+                Delete ({selectedIds.size})
+              </button>
+            )}
+
             <div className="h-8 w-px bg-gray-200 hidden lg:block mx-1"></div>
             <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="violet" />
           </div>
         </motion.div>
+
+        {/* Select all / deselect all bar */}
+        {!loading && records.length > 0 && deleteAccess.enabled && (
+          <div className="flex items-center gap-3 mb-1">
+            <button
+              type="button"
+              onClick={toggleSelectAllVisible}
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 transition hover:bg-violet-100"
+            >
+              {allVisibleSelected ? (
+                <>
+                  <FaCheckSquare size={13} /> Deselect all
+                </>
+              ) : (
+                <>
+                  <FaRegSquare size={13} /> Select all
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -980,7 +1189,7 @@ const LeaveConfigManagement = () => {
             {error}
             <button
               type="button"
-              onClick={loadRecords}
+              onClick={() => loadRecords(pagination.page, debouncedSearch, true)}
               className="ml-auto rounded-lg bg-red-100 px-3 py-1 text-xs font-medium hover:bg-red-200"
             >
               Retry
@@ -993,36 +1202,69 @@ const LeaveConfigManagement = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`${viewMode === 'table' ? 'block' : 'hidden'} rounded-xl bg-white shadow-xl`}
+            className={`${viewMode === 'table' ? 'block' : 'hidden'} rounded-xl bg-white shadow-xl overflow-hidden`}
           >
-            <div>
-              <table className="w-full text-left text-sm text-gray-700">
-                <thead className="xsm:hidden bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 uppercase text-xs">
-                  <tr>
-                    <th className="px-6 py-4">Code</th>
-                    <th className="px-6 py-4">Name</th>
-                    <th className="px-6 py-4">Type</th>
-                    {showMaxBalance && <th className="px-6 py-4">Max Balance</th>}
-                    {showCarryFwd && <th className="px-6 py-4">Carry Fwd</th>}
-                    {showAccrual && hasAccrualData && <th className="px-6 py-4">Accrual</th>}
-                    {showHalfDay && <th className="px-6 py-4">Half Day</th>}
-                    {showWeekends && <th className="px-6 py-4">Weekends</th>}
-                    {showStatus && <th className="px-6 py-4">Status</th>}
-                    <th className="px-6 py-4 text-center">
-                      <FaCog className="w-4 h-4 mx-auto" />
+            <table className="w-full text-left text-sm text-gray-700">
+              <thead className="bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 uppercase text-xs">
+                <tr>
+                  {deleteAccess.enabled && (
+                    <th className="px-4 py-4 w-10">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAllVisible}
+                        className="text-gray-400 hover:text-violet-600 transition-colors"
+                      >
+                        {allVisibleSelected ? (
+                          <FaCheckSquare size={16} className="text-violet-600" />
+                        ) : (
+                          <FaRegSquare size={16} />
+                        )}
+                      </button>
                     </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {records.map((record, index) => (
+                  )}
+                  <th className="px-6 py-4">Code</th>
+                  <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Type</th>
+                  {showMaxBalance && <th className="px-6 py-4">Max Balance</th>}
+                  {showCarryFwd && <th className="px-6 py-4">Carry Fwd</th>}
+                  {showAccrual && hasAccrualData && <th className="px-6 py-4">Accrual</th>}
+                  {showHalfDay && <th className="px-6 py-4">Half Day</th>}
+                  {showWeekends && <th className="px-6 py-4">Weekends</th>}
+                  {showStatus && <th className="px-6 py-4">Status</th>}
+                  <th className="px-6 py-4 text-center">
+                    <FaCog className="w-4 h-4 mx-auto" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {records.map((record, index) => {
+                  const isSelected = selectedIds.has(record.id);
+                  return (
                     <motion.tr
                       key={record.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.03 }}
-                      className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50"
+                      className={`cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 ${
+                        isSelected ? 'bg-violet-50' : ''
+                      }`}
                       onClick={() => setViewModal({ open: true, record })}
                     >
+                      {deleteAccess.enabled && (
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectId(record.id)}
+                            className="text-gray-400 hover:text-violet-600 transition-colors"
+                          >
+                            {isSelected ? (
+                              <FaCheckSquare size={16} className="text-violet-600" />
+                            ) : (
+                              <FaRegSquare size={16} />
+                            )}
+                          </button>
+                        </td>
+                      )}
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center justify-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
                           {record.code}
@@ -1066,8 +1308,9 @@ const LeaveConfigManagement = () => {
                       {showWeekends && (
                         <td className="px-6 py-4">
                           <span
-                            className={`text-xs font-medium ${record.exclude_weekends ? 'text-amber-600' : 'text-gray-400'
-                              }`}
+                            className={`text-xs font-medium ${
+                              record.exclude_weekends ? 'text-amber-600' : 'text-gray-400'
+                            }`}
                           >
                             {record.exclude_weekends ? 'Excluded' : 'Included'}
                           </span>
@@ -1091,91 +1334,112 @@ const LeaveConfigManagement = () => {
                         />
                       </td>
                     </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })}
+              </tbody>
+            </table>
           </motion.div>
         )}
 
         {/* Grid View */}
         {records.length > 0 && (
           <ManagementGrid viewMode={viewMode}>
-            {records.map((record, index) => (
-              <motion.div
-                key={record.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.04 }}
-                className="bg-white rounded-xl shadow-md border border-gray-100 p-5 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group"
-                onClick={() => setViewModal({ open: true, record })}
-              >
-                <div className="mb-3 flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
-                      {record.code}
-                    </span>
-                    <div>
-                      <h3 className="font-bold text-gray-800">{record.name}</h3>
-                      <p className="mt-0.5 text-xs text-gray-400">
-                        {formatDate(record.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <PaidBadge isPaid={record.is_paid} />
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <ActionMenu
-                        record={record}
-                        onView={(r) => setViewModal({ open: true, record: r })}
-                        onEdit={openEditModal}
-                        onDelete={openDeleteModal}
-                        editDisabled={updateAccess.disabled}
-                        deleteDisabled={deleteAccess.disabled}
-                        editMessage={updateMessage}
-                        deleteMessage={deleteMessage}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
-                  <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
-                    <FaLayerGroup className="text-slate-400" />
-                    Max: <strong className="ml-1 text-gray-800">{formatDays(record.max_balance)}d</strong>
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
-                    <FaRegClock className="text-slate-400" />
-                    Carry: <strong className="ml-1 text-gray-800">{formatDays(record.carry_forward_limit)}d</strong>
-                  </div>
-                  {hasAccrualData && (
-                    <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
-                      <FaCalendarCheck className="text-slate-400" />
-                      <span className="capitalize">{record.accrual_type || '—'}</span>
-                      {record.accrual_type && record.accrual_type !== 'none' && (
-                        <span className="text-gray-400 ml-1">({formatDays(record.accrual_rate)}d)</span>
+            {records.map((record, index) => {
+              const isSelected = selectedIds.has(record.id);
+              return (
+                <motion.div
+                  key={record.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.04 }}
+                  className={`bg-white rounded-xl shadow-md border border-gray-100 p-5 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group ${
+                    isSelected ? 'ring-2 ring-violet-500' : ''
+                  }`}
+                  onClick={() => setViewModal({ open: true, record })}
+                >
+                  <div className="mb-3 flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      {deleteAccess.enabled && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectId(record.id);
+                          }}
+                          className="text-gray-400 hover:text-violet-600 transition-colors"
+                        >
+                          {isSelected ? (
+                            <FaCheckSquare size={16} className="text-violet-600" />
+                          ) : (
+                            <FaRegSquare size={16} />
+                          )}
+                        </button>
                       )}
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
+                        {record.code}
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-gray-800">{record.name}</h3>
+                        <p className="mt-0.5 text-xs text-gray-400">
+                          {formatDate(record.created_at)}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
-                    <FaCoins className="text-amber-400" />
-                    Half day:{' '}
-                    <span className="ml-1">
-                      <BoolCell value={record.allow_half_day} />
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <PaidBadge isPaid={record.is_paid} />
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <ActionMenu
+                          record={record}
+                          onView={(r) => setViewModal({ open: true, record: r })}
+                          onEdit={openEditModal}
+                          onDelete={openDeleteModal}
+                          editDisabled={updateAccess.disabled}
+                          deleteDisabled={deleteAccess.disabled}
+                          editMessage={updateMessage}
+                          deleteMessage={deleteMessage}
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex flex-wrap gap-1.5">
-                  <ActiveBadge isActive={record.is_active} />
-                  {record.exclude_weekends && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200">
-                      Excl. Weekends
-                    </span>
-                  )}
-                </div>
-              </motion.div>
-            ))}
+                  <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
+                    <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
+                      <FaLayerGroup className="text-slate-400" />
+                      Max: <strong className="ml-1 text-gray-800">{formatDays(record.max_balance)}d</strong>
+                    </div>
+                    <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
+                      <FaRegClock className="text-slate-400" />
+                      Carry: <strong className="ml-1 text-gray-800">{formatDays(record.carry_forward_limit)}d</strong>
+                    </div>
+                    {hasAccrualData && (
+                      <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
+                        <FaCalendarCheck className="text-slate-400" />
+                        <span className="capitalize">{record.accrual_type || '—'}</span>
+                        {record.accrual_type && record.accrual_type !== 'none' && (
+                          <span className="text-gray-400 ml-1">({formatDays(record.accrual_rate)}d)</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-2">
+                      <FaCoins className="text-amber-400" />
+                      Half day:{' '}
+                      <span className="ml-1">
+                        <BoolCell value={record.allow_half_day} />
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <ActiveBadge isActive={record.is_active} />
+                    {record.exclude_weekends && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200">
+                        Excl. Weekends
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
           </ManagementGrid>
         )}
 
@@ -1201,11 +1465,11 @@ const LeaveConfigManagement = () => {
             <FaUmbrellaBeach className="mx-auto mb-4 text-5xl text-gray-200" />
             <p className="text-lg font-semibold text-gray-500">No leave types found</p>
             <p className="mt-1 text-sm text-gray-400 mb-6">
-              {debouncedSearch
-                ? 'Try adjusting your search.'
+              {debouncedSearch || filterIsActive || filterIsPaid
+                ? 'Try adjusting your search or filters.'
                 : 'Get started by creating your first leave type.'}
             </p>
-            {!debouncedSearch && (
+            {!debouncedSearch && !filterIsActive && !filterIsPaid && (
               <button
                 type="button"
                 onClick={openCreateModal}
@@ -1219,6 +1483,59 @@ const LeaveConfigManagement = () => {
           </motion.div>
         )}
       </div>
+
+      {/* Floating bottom bar for bulk actions */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && deleteAccess.enabled && (
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-8 sm:bottom-8 z-[100] flex flex-wrap items-center gap-2 sm:gap-4 rounded-2xl border border-white/20 bg-white/90 px-4 py-3 sm:px-6 sm:py-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)] backdrop-blur-md"
+          >
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Bulk Actions</span>
+              <span className="text-sm font-black text-slate-800">{selectedIds.size} Selected</span>
+            </div>
+
+            <div className="hidden sm:block mx-1 h-10 w-px bg-gray-200" />
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="px-3 py-1.5 text-xs font-bold text-gray-500 transition-colors hover:text-gray-700"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkDeleteScope('selected')}
+                disabled={deleteAccess.disabled || bulkDeleting}
+                title={deleteAccess.disabled ? deleteMessage : ''}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FaTrashAlt size={11} />
+                Delete Selected
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkDeleteScope('all')}
+                disabled={!allVisibleSelected || deleteAccess.disabled || bulkDeleting}
+                title={!allVisibleSelected ? 'Select all visible to enable deleting all' : deleteAccess.disabled ? deleteMessage : ''}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                  allVisibleSelected && !deleteAccess.disabled
+                    ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                    : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <FaTrashAlt size={11} />
+                Delete All
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modals */}
       <AnimatePresence>
@@ -1257,6 +1574,17 @@ const LeaveConfigManagement = () => {
             onClose={() => setDeleteModal({ open: false, record: null })}
             onConfirm={handleDelete}
             loading={deleting}
+            submitDisabled={deleteAccess.disabled}
+            submitTitle={deleteMessage}
+          />
+        )}
+        {bulkDeleteScope && (
+          <BulkDeleteModal
+            key="bulk-delete-modal"
+            count={bulkDeleteScope === 'all' ? pagination.total : selectedIds.size}
+            onClose={() => setBulkDeleteScope(null)}
+            onConfirm={handleBulkDelete}
+            loading={bulkDeleting}
             submitDisabled={deleteAccess.disabled}
             submitTitle={deleteMessage}
           />
