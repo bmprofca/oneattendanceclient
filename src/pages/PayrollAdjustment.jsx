@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     FaPlus, FaSpinner, FaCalendarAlt, FaCalculator,
-    FaMoneyBillWave, FaCoins, FaEdit, FaEye, FaTrash
+    FaMoneyBillWave, FaCoins, FaEdit, FaEye, FaTrash,
+    FaCheckSquare, FaRegSquare
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -18,25 +19,12 @@ import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import AdvancedDateFilter from '../components/AdvancedDateFilter';
 import useEmployeeNavigation from '../hooks/useEmployeeNavigation';
 
-const ToggleSwitch = ({ isOn, onToggle, accent = "blue" }) => (
-    <div
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        className={`w-10 h-5 flex items-center rounded-full p-1 cursor-pointer transition-all duration-300 ${isOn ? `bg-${accent}-500 shadow-inner` : 'bg-gray-300'}`}
-    >
-        <motion.div
-            className="bg-white w-3 h-3 rounded-full shadow-md"
-            initial={false}
-            animate={{ x: isOn ? 20 : 0 }}
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-        />
-    </div>
-);
-
 export default function PayrollAdjustment() {
     const navigateToEmployeeProfile = useEmployeeNavigation();
     const { checkActionAccess, getAccessMessage } = usePermissionAccess();
     const createAccess = checkActionAccess('payrollAdjustment', 'create');
     const updateAccess = checkActionAccess('payrollAdjustment', 'update');
+    const deleteAccess = checkActionAccess('payrollAdjustment', 'delete');
 
     const [adjustments, setAdjustments] = useState([]);
     const [summary, setSummary] = useState(null);
@@ -59,11 +47,10 @@ export default function PayrollAdjustment() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAdjustment, setEditingAdjustment] = useState(null);
     const [detailAdjustment, setDetailAdjustment] = useState(null);
-    const [deleteConfirmState, setDeleteConfirmState] = useState(null); // { type: 'single' | 'bulk', id?: number, ids?: number[] }
+    const [deleteConfirmState, setDeleteConfirmState] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [activeMenuId, setActiveMenuId] = useState(null);
 
-    const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState([]);
 
     const [formData, setFormData] = useState({
@@ -227,64 +214,13 @@ export default function PayrollAdjustment() {
         }
     };
 
-    const handleDeleteClick = (id) => {
-        setDeleteConfirmState({ type: 'single', id });
-    };
-
-    const handleBulkDeleteClick = () => {
-        if (selectedIds.length === 0) return;
-        setDeleteConfirmState({ type: 'bulk', ids: selectedIds });
-    };
-
-    const confirmDelete = async () => {
-        if (!deleteConfirmState) return;
-
-        setSubmitting(true);
-        try {
-            const company = JSON.parse(localStorage.getItem('company'));
-            const idsToDelete = deleteConfirmState.type === 'single'
-                ? [deleteConfirmState.id]
-                : deleteConfirmState.ids;
-
-            const response = await apiCall('/payroll/adjustments/delete', 'DELETE', {
-                ids: idsToDelete
-            }, company?.id);
-
-            const result = await response.json();
-            if (result.success) {
-                toast.success(deleteConfirmState.type === 'single'
-                    ? 'Adjustment deleted successfully!'
-                    : `${idsToDelete.length} adjustments deleted successfully!`
-                );
-
-                if (deleteConfirmState.type === 'bulk') {
-                    setSelectedIds([]);
-                    setIsSelectionMode(false);
-                } else {
-                    setSelectedIds(prev => prev.filter(id => id !== deleteConfirmState.id));
-                }
-
-                setDeleteConfirmState(null);
-                fetchAdjustments(deleteConfirmState.type === 'bulk' ? 1 : pagination.page);
-            } else {
-                throw new Error(result.message || 'Failed to delete adjustment');
-            }
-        } catch (e) {
-            toast.error(e.message || 'Failed to delete');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const toggleSelectionMode = () => {
-        setIsSelectionMode(prev => {
-            if (prev) setSelectedIds([]);
-            return !prev;
-        });
-    };
+    // ─── Selection helpers ────────────────────────────────────────────────
+    const allVisibleSelected = useMemo(() => {
+        return adjustments.length > 0 && adjustments.every(adj => selectedIds.includes(adj.id));
+    }, [adjustments, selectedIds]);
 
     const toggleSelectAll = () => {
-        if (selectedIds.length === adjustments.length && adjustments.length > 0) {
+        if (allVisibleSelected) {
             setSelectedIds([]);
         } else {
             setSelectedIds(adjustments.map(adj => adj.id));
@@ -294,6 +230,66 @@ export default function PayrollAdjustment() {
     const toggleSelectRow = (e, id) => {
         e.stopPropagation();
         setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const clearSelection = () => {
+        setSelectedIds([]);
+    };
+
+    // ─── Delete handlers ──────────────────────────────────────────────────
+    const handleDeleteClick = (id) => {
+        setDeleteConfirmState({ type: 'single', id });
+    };
+
+    const handleBulkDeleteSelected = () => {
+        if (selectedIds.length === 0) return;
+        setDeleteConfirmState({ type: 'selected', ids: selectedIds });
+    };
+
+    const handleBulkDeleteAllVisible = () => {
+        if (!allVisibleSelected || adjustments.length === 0) return;
+        setDeleteConfirmState({ type: 'allVisible', ids: adjustments.map(adj => adj.id) });
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteConfirmState) return;
+
+        setSubmitting(true);
+        try {
+            const company = JSON.parse(localStorage.getItem('company'));
+            let idsToDelete = [];
+
+            if (deleteConfirmState.type === 'single') {
+                idsToDelete = [deleteConfirmState.id];
+            } else {
+                idsToDelete = deleteConfirmState.ids;
+            }
+
+            const response = await apiCall('/payroll/adjustments/delete', 'DELETE', {
+                ids: idsToDelete
+            }, company?.id);
+
+            const result = await response.json();
+            if (result.success) {
+                const deletedCount = idsToDelete.length;
+                toast.success(
+                    deleteConfirmState.type === 'single'
+                        ? 'Adjustment deleted successfully!'
+                        : `${deletedCount} adjustments deleted successfully!`
+                );
+
+                setSelectedIds([]);
+                setDeleteConfirmState(null);
+
+                fetchAdjustments(1);
+            } else {
+                throw new Error(result.message || 'Failed to delete adjustment(s)');
+            }
+        } catch (e) {
+            toast.error(e.message || 'Failed to delete');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const formatCurrency = (amount) => {
@@ -334,8 +330,8 @@ export default function PayrollAdjustment() {
             label: 'Delete',
             icon: <FaTrash size={13} />,
             onClick: () => handleDeleteClick(adj.id),
-            disabled: updateAccess.disabled,
-            title: updateAccess.disabled ? getAccessMessage(updateAccess) : 'Delete adjustment',
+            disabled: deleteAccess.disabled,
+            title: deleteAccess.disabled ? getAccessMessage(deleteAccess) : 'Delete adjustment',
             className: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50'
         }
     ];
@@ -343,27 +339,10 @@ export default function PayrollAdjustment() {
     const columns = useMemo(() => [
         {
             key: 'employee',
-            label: (
-                <div className="flex items-center gap-4">
-                    {isSelectionMode && (
-                        <input
-                            type="checkbox"
-                            checked={selectedIds.length > 0 && selectedIds.length === adjustments.length}
-                            onChange={toggleSelectAll}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                        />
-                    )}
-                    <ToggleSwitch
-                        isOn={isSelectionMode}
-                        onToggle={toggleSelectionMode}
-                        accent="blue"
-                    />
-                    <span>Employee</span>
-                </div>
-            ),
+            label: <span>Employee</span>,   // ✅ Removed the header checkbox
             render: (adj) => (
                 <div className="flex items-center gap-4">
-                    {isSelectionMode && (
+                    {deleteAccess.enabled && (
                         <div onClick={(e) => e.stopPropagation()}>
                             <input
                                 type="checkbox"
@@ -438,7 +417,7 @@ export default function PayrollAdjustment() {
                 </span>
             )
         }
-    ], [isSelectionMode, selectedIds, adjustments]);
+    ], [selectedIds, deleteAccess.enabled, adjustments]);
 
     return (
         <ManagementHub
@@ -509,10 +488,7 @@ export default function PayrollAdjustment() {
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"
                 >
-                    {/* LG Layout */}
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-
-                        {/* Employee Select */}
                         <div className="w-full">
                             <EmployeeSelect
                                 value={selectedEmployeeId}
@@ -520,14 +496,8 @@ export default function PayrollAdjustment() {
                                 placeholder="All Employees"
                             />
                         </div>
-
-                        {/* Right Section */}
                         <div className="flex flex-col lg:flex-row gap-3 w-full justify-end">
-
-                            {/* MD & SM: Filters Row */}
                             <div className="flex flex-col sm:flex-row gap-3 lg:items-center">
-
-                                {/* Date Filter */}
                                 <div className="flex-1 lg:flex-none min-w-0">
                                     <AdvancedDateFilter
                                         tabOptions={["month"]}
@@ -547,15 +517,11 @@ export default function PayrollAdjustment() {
                                         buttonClassName="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 outline-none hover:border-gray-300 transition-all flex items-center justify-between cursor-pointer"
                                     />
                                 </div>
-
-                                {/* Adjustment Type */}
                                 <div className="flex-1 lg:flex-none text-center min-w-0">
                                     <SelectField
                                         options={typeOptions}
                                         value={selectedTypeOption}
-                                        onChange={(opt) =>
-                                            setAdjustmentType(opt ? opt.value : "")
-                                        }
+                                        onChange={(opt) => setAdjustmentType(opt ? opt.value : "")}
                                         isClearable={false}
                                         placeholder="Adjustment Type"
                                         styles={{
@@ -568,8 +534,6 @@ export default function PayrollAdjustment() {
                                     />
                                 </div>
                             </div>
-
-                            {/* Switcher */}
                             <div className="flex justify-start lg:justify-end">
                                 <ManagementViewSwitcher
                                     viewMode={viewMode}
@@ -580,6 +544,27 @@ export default function PayrollAdjustment() {
                         </div>
                     </div>
                 </motion.div>
+
+                {/* Select all / Deselect all bar */}
+                {!loading && adjustments.length > 0 && deleteAccess.enabled && (
+                    <div className="flex items-center gap-3 mb-1">
+                        <button
+                            type="button"
+                            onClick={toggleSelectAll}
+                            className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                        >
+                            {allVisibleSelected ? (
+                                <>
+                                    <FaCheckSquare size={13} /> Deselect all
+                                </>
+                            ) : (
+                                <>
+                                    <FaRegSquare size={13} /> Select all
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {loading && !adjustments.length ? (
                     <SkeletonComponent />
@@ -614,7 +599,7 @@ export default function PayrollAdjustment() {
                                         hoverable
                                         eyebrow={
                                             <div className="flex items-center gap-2">
-                                                {isSelectionMode && (
+                                                {deleteAccess.enabled && (
                                                     <div onClick={(e) => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
@@ -687,7 +672,7 @@ export default function PayrollAdjustment() {
                     </>
                 )}
 
-                {/* Selection Action Bar (Bottom Right Floating) */}
+                {/* Selection Action Bar (Floating) */}
                 <AnimatePresence>
                     {selectedIds.length > 0 && (
                         <motion.div
@@ -703,20 +688,40 @@ export default function PayrollAdjustment() {
                             <div className="h-10 w-px bg-gray-200 mx-2"></div>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => { setSelectedIds([]); setIsSelectionMode(false); }}
+                                    onClick={clearSelection}
                                     className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
                                 >
-                                    Close
+                                    Clear
                                 </button>
                                 <ManagementButton
                                     tone="rose"
                                     variant="solid"
                                     size="sm"
                                     leftIcon={<FaTrash />}
-                                    onClick={handleBulkDeleteClick}
+                                    onClick={handleBulkDeleteSelected}
+                                    disabled={deleteAccess.disabled}
+                                    title={deleteAccess.disabled ? getAccessMessage(deleteAccess) : 'Delete selected adjustments'}
                                     className="shadow-lg shadow-rose-200"
                                 >
                                     Delete Selected
+                                </ManagementButton>
+                                <ManagementButton
+                                    tone="rose"
+                                    variant="outline"
+                                    size="sm"
+                                    leftIcon={<FaTrash />}
+                                    onClick={handleBulkDeleteAllVisible}
+                                    disabled={!allVisibleSelected || deleteAccess.disabled}
+                                    title={
+                                        !allVisibleSelected
+                                            ? 'Select all rows to enable deleting all visible'
+                                            : deleteAccess.disabled
+                                                ? getAccessMessage(deleteAccess)
+                                                : 'Delete all rows on this page'
+                                    }
+                                    className="shadow-lg"
+                                >
+                                    Delete All
                                 </ManagementButton>
                             </div>
                         </motion.div>
@@ -883,8 +888,7 @@ export default function PayrollAdjustment() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setAdjustmentToDelete(detailAdjustment);
-                                        setShowDeleteModal(true);
+                                        setDeleteConfirmState({ type: 'single', id: detailAdjustment.id });
                                         setDetailAdjustment(null);
                                     }}
                                     disabled={deleteAccess.disabled}
@@ -994,7 +998,7 @@ export default function PayrollAdjustment() {
                         }
                     >
                         <div className="rounded-xl bg-rose-50 border border-rose-100 p-4 text-sm text-rose-800 leading-relaxed">
-                            <span className="font-bold">Warning:</span> This action is permanent and cannot be undone. The payroll adjustment record will be deleted from the system immediately.
+                            <span className="font-bold">Warning:</span> This action is permanent and cannot be undone. The payroll adjustment record(s) will be deleted from the system immediately.
                         </div>
                     </Modal>
                 )}
