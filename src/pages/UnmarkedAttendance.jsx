@@ -182,6 +182,20 @@ const formatMinutes = (minutes = 0) => {
 const getInitials = (name = '') =>
   name.split(' ').filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 2) || 'NA';
 
+const buildLeaveOptions = (configs, isPaid) => {
+  const options = configs.map((config) => ({
+    value: config.code,
+    label: `${config.code} - ${config.name}`,
+  }));
+
+  if (isPaid) {
+    options.push({ value: 'holiday', label: 'Holiday' });
+    options.push({ value: 'weekend', label: 'Weekend' });
+  }
+
+  return options;
+};
+
 // ─── Data normalisation ───────────────────────────────────────────────────────
 
 const mapEmployee = (employee) => {
@@ -554,15 +568,7 @@ const ManageAttendanceModal = ({ employee, initialStatus, isOpen, onClose, onSav
   const [notes, setNotes] = useState(employee?.remark || '');
 
   const { configs: leaveConfigs, loading: leaveConfigsLoading } = useLeaveConfigs(leaveType === 'paid', isOpen && status === 'leave');
-  const leaveOptions = useMemo(() => {
-    const options = leaveConfigs.map((c) => ({
-      value: c.code,
-      label: `${c.code} - ${c.name}`
-    }));
-    options.push({ value: 'holiday', label: 'Holiday' });
-    options.push({ value: 'weekend', label: 'Weekend' });
-    return options;
-  }, [leaveConfigs]);
+  const leaveOptions = useMemo(() => buildLeaveOptions(leaveConfigs, leaveType === 'paid'), [leaveConfigs, leaveType]);
 
   useEffect(() => {
     const targetStatus = initialStatus || 'present';
@@ -815,10 +821,7 @@ const BulkApprovalPanel = ({
   bulkNotes, setBulkNotes,
 }) => {
   const { configs: leaveConfigs, loading: leaveConfigsLoading } = useLeaveConfigs(bulkLeaveType === 'paid', bulkMode === 'leave');
-  const leaveOptions = useMemo(() => leaveConfigs.map((c) => ({
-    value: c.code,
-    label: `${c.code} - ${c.name}`
-  })), [leaveConfigs]);
+  const leaveOptions = useMemo(() => buildLeaveOptions(leaveConfigs, bulkLeaveType === 'paid'), [leaveConfigs, bulkLeaveType]);
 
   return (
     <div className="space-y-4">
