@@ -856,11 +856,25 @@ export default function PayrollAdjustment() {
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 uppercase mb-1.5">Period *</label>
-                                <input
-                                    type="date"
-                                    value={formData.adjustment_period}
-                                    onChange={(e) => setFormData({ ...formData, adjustment_period: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-700 font-semibold"
+                                <AdvancedDateFilter
+                                    tabOptions={["month"]}
+                                    value={{
+                                        date: "",
+                                        month: Number(formData.adjustment_period?.split("-")[1] || currentDate.getMonth() + 1),
+                                        year: Number(formData.adjustment_period?.split("-")[0] || currentDate.getFullYear()),
+                                        from_date: "",
+                                        to_date: ""
+                                    }}
+                                    onChange={(value) => {
+                                        if (value?.month && value?.year) {
+                                            setFormData({
+                                                ...formData,
+                                                adjustment_period: `${value.year}-${String(value.month).padStart(2, "0")}-01`
+                                            });
+                                        }
+                                    }}
+                                    placeholder="Select period"
+                                    buttonClassName="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-700 font-semibold"
                                 />
                             </div>
                         </div>
