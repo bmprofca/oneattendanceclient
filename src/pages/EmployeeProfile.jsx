@@ -49,8 +49,15 @@ const PROFILE_TAB_IDS = new Set(TABS.map((tab) => tab.key));
 const DEFAULT_PROFILE_TAB = "attendance";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const fmt = (str) =>
-  str ? str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—";
+const getEnumValue = (value) => {
+  if (value && typeof value === "object") return value.label || value.value || "";
+  return value;
+};
+
+const fmt = (value) => {
+  const str = getEnumValue(value);
+  return str ? String(str).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—";
+};
 
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -77,8 +84,10 @@ const getCurrentMonthDate = () => {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
 };
 
-const getInitials = (name) =>
-  name?.trim().split(" ").filter(Boolean).map((w) => w[0].toUpperCase()).slice(0, 2).join("") || "?";
+const getInitials = (name) => {
+  const normalizedName = String(getEnumValue(name) || "");
+  return normalizedName.trim().split(" ").filter(Boolean).map((w) => w[0].toUpperCase()).slice(0, 2).join("") || "?";
+};
 
 const AVATAR_GRADIENTS = [
   "from-blue-500 to-indigo-600", "from-purple-500 to-pink-600",
@@ -120,14 +129,53 @@ const downloadBlob = (blob, filename) => {
 
 function parseTime(timeStr) {
   if (!timeStr) return null;
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const normalizedTime = String(timeStr).trim();
+  const match = normalizedTime.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
   if (!match) return null;
   let [, h, m, period] = match;
   h = parseInt(h, 10);
   m = parseInt(m, 10);
-  if (period.toUpperCase() === "PM" && h !== 12) h += 12;
-  if (period.toUpperCase() === "AM" && h === 12) h = 0;
+  if (period) {
+    if (period.toUpperCase() === "PM" && h !== 12) h += 12;
+    if (period.toUpperCase() === "AM" && h === 12) h = 0;
+  }
+  if (h > 23 || m > 59) return null;
   return h * 60 + m;
+}
+
+function formatTimeValue(value) {
+  if (!value) return "—";
+  const minutes = parseTime(value);
+  return minutes == null ? String(value) : minutesToTimeStr(minutes);
+}
+
+function diffTimeMinutes(start, end) {
+  const startMinutes = parseTime(start);
+  const endMinutes = parseTime(end);
+  if (startMinutes == null || endMinutes == null) return 0;
+  const difference = endMinutes - startMinutes;
+  return difference >= 0 ? difference : difference + 24 * 60;
+}
+function normalizeAttendanceRecord(record) {
+  const breaks = Array.isArray(record.breaks) ? record.breaks : [];
+  const breakMinutes = breaks.reduce(
+    (total, item) => total + diffTimeMinutes(item.start_time, item.end_time),
+    0
+  );
+  const grossMinutes = diffTimeMinutes(record.start_time, record.end_time);
+  const workedMinutes = Math.max(0, grossMinutes - breakMinutes);
+  const overtimeMinutes = Number(record.flags?.overtime?.minutes || 0);
+  const deductibleMinutes = Number(record.flags?.deductible?.minutes || 0);
+
+  return {
+    ...record,
+    worked_minutes: record.worked_minutes ?? workedMinutes,
+    break_minutes: record.break_minutes ?? breakMinutes,
+    overtime_minutes: record.overtime_minutes ?? overtimeMinutes,
+    deductible_minutes: record.deductible_minutes ?? deductibleMinutes,
+    is_overtime: Boolean(record.is_overtime || record.flags?.overtime?.enabled),
+    is_half_day: Boolean(record.is_half_day || record.flags?.half_day?.enabled),
+  };
 }
 
 function minutesToTimeStr(mins) {
@@ -407,7 +455,7 @@ const CalendarEmployeeInfo = ({ employee, shift, statistics }) => {
               )}
               {employee.designation && (
                 <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-lg">
-                  <FaBriefcase size={10} /> {employee.designation.replace(/_/g, " ")}
+                  <FaBriefcase size={10} /> {fmt(employee.designation)}
                 </span>
               )}
             </div>
@@ -1084,15 +1132,11 @@ function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "atten
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Shift Start</label>
-                <p className="mt-0.5 text-sm font-semibold text-slate-800">
-                  {shift.shift_start_time ? new Date(shift.shift_start_time.replace(" ", "T")).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
-                </p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{formatTimeValue(shift.shift_start_time)}</p>
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Shift End</label>
-                <p className="mt-0.5 text-sm font-semibold text-slate-800">
-                  {shift.shift_end_time ? new Date(shift.shift_end_time.replace(" ", "T")).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
-                </p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{formatTimeValue(shift.shift_end_time)}</p>
               </div>
             </div>
           </div>
@@ -1423,10 +1467,7 @@ function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "atten
         return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
       };
 
-      const parseShiftTime = (t) => {
-        if (!t) return "—";
-        return new Date(t.replace(" ", "T")).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      };
+      const parseShiftTime = formatTimeValue;
 
       const dayStatus = item.day_status;
       const statusStyle = CALENDAR_STATUS_STYLES[dayStatus] || CALENDAR_STATUS_STYLES.upcoming;
@@ -2029,10 +2070,7 @@ function usePayrollConfig(onView, onDownloadPdf, onSendEmail, width) {
 // ─── SHIFTS CONFIG (updated for new API structure) ────────────────────────────
 
 function useShiftConfig(onView, width) {
-  const parseShiftTime = (t) => {
-    if (!t) return null;
-    return new Date(t.replace(" ", "T")).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-  };
+  const parseShiftTime = (t) => (t ? formatTimeValue(t) : null);
 
   const columns = [
     {
@@ -2528,14 +2566,17 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
       }
 
       const dataArr = Array.isArray(rawData) ? rawData : rawData && typeof rawData === "object" ? [rawData] : [];
+      const normalizedRows = normalizedTabKey === "attendance"
+        ? dataArr.map(normalizeAttendanceRecord)
+        : dataArr;
       const meta = json.meta?.[normalizedTabKey] ?? json.meta?.[tabKey] ?? json.meta ?? {};
 
       if (mountedRef.current) {
-        setRows(Array.isArray(dataArr) ? dataArr : []);
+        setRows(normalizedRows);
         updatePagination({
           page: Number(meta.page ?? page),
           limit: Number(meta.limit ?? limit),
-          total: Number(meta.total ?? dataArr.length),
+          total: Number(meta.total ?? normalizedRows.length),
           total_pages: Number(meta.total_pages ?? 1),
           is_last_page: meta.is_last_page ?? true,
         });
