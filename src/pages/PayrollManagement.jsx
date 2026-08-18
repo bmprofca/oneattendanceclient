@@ -82,6 +82,7 @@ const downloadBlob = (blob, filename) => {
     setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
 };
 
+// Normalize the entire payroll list (handles both array and {generated_payrolls, preview_payrolls} shapes)
 const normalizePayrollList = (data) => {
     if (Array.isArray(data)) {
         return data.map(item => ({
@@ -97,6 +98,64 @@ const normalizePayrollList = (data) => {
         ...generatedPayrolls.map(item => ({ ...item, rowType: PAYROLL_ROW_TYPES.GENERATED })),
         ...previewPayrolls.map(item => ({ ...item, rowType: PAYROLL_ROW_TYPES.PREVIEW })),
     ];
+};
+
+// Normalize a single payroll item to ensure consistent structure for attendance and work
+const normalizePayrollItem = (item) => {
+    const payroll = item?.payroll;
+    if (!payroll) return item;
+
+    // Normalize attendance
+    let attendance;
+    if (payroll.attendance && typeof payroll.attendance === 'object') {
+        attendance = payroll.attendance;
+    } else {
+        attendance = {
+            working_days: payroll.working_days ?? 0,
+            present_days: payroll.present_days ?? 0,
+            absent_days: payroll.absent_days ?? 0,
+            paid_leave_days: payroll.paid_leave_days ?? 0,
+            unpaid_leave_days: payroll.unpaid_leave_days ?? 0,
+        };
+    }
+
+    // Normalize work (convert minutes to hours where needed)
+    let work;
+    if (payroll.work && typeof payroll.work === 'object') {
+        work = {
+            worked_hours: (payroll.work.worked_minutes ?? 0) / 60,
+            overtime_hours: (payroll.work.overtime_minutes ?? 0) / 60,
+            deduction_minutes: payroll.work.deduction_minutes ?? 0,
+        };
+    } else {
+        work = {
+            worked_hours: (payroll.worked_minutes ?? 0) / 60,
+            overtime_hours: (payroll.overtime_minutes ?? 0) / 60,
+            deduction_minutes: payroll.deduction_minutes ?? 0,
+        };
+    }
+
+    // Ensure month/year are present (extract from payroll_period if missing)
+    let month = payroll.month;
+    let year = payroll.year;
+    if (!month || !year) {
+        const period = payroll.payroll_period ? new Date(payroll.payroll_period) : null;
+        if (period && !isNaN(period.getTime())) {
+            month = period.getMonth() + 1;
+            year = period.getFullYear();
+        }
+    }
+
+    return {
+        ...item,
+        payroll: {
+            ...payroll,
+            attendance,
+            work,
+            month: month || undefined,
+            year: year || undefined,
+        },
+    };
 };
 
 // ─── Helper Components ───────────────────────────────────────────────────────
@@ -279,7 +338,8 @@ const PayrollManagement = () => {
             }
 
             if (result.success) {
-                const normalizedPayrolls = normalizePayrollList(result.data);
+                // Normalize the list: first convert shape, then normalize each item
+                const normalizedPayrolls = normalizePayrollList(result.data).map(normalizePayrollItem);
                 setPayrollList(normalizedPayrolls);
                 
                 const currentPage = Number(result.pagination?.page ?? result.meta?.page ?? result.page ?? page);
@@ -1810,7 +1870,7 @@ const PayrollManagement = () => {
                                     <>
                                         <h4 className="font-semibold text-gray-800 text-base">{selectedPayroll.employee.name}</h4>
                                         <p className="text-sm text-gray-600 mb-1">
-                                            Payslip for <span className="font-medium text-gray-800">{getMonthName(selectedMonth)} {selectedYear}</span>
+                                            Payslip for <span className="font-medium text-gray-800">{getMonthName(selectedPayroll.payroll?.month ?? selectedMonth)} {selectedPayroll.payroll?.year ?? selectedYear}</span>
                                         </p>
                                         <p className="text-xs text-gray-500 font-mono">
                                             Default Email: <span className="text-gray-700 font-medium">{selectedPayroll.employee.email || 'N/A'}</span>
