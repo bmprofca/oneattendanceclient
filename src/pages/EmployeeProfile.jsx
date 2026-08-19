@@ -29,6 +29,8 @@ import ProfileAvatar from "../components/common/ProfileAvatar";
 import AdvancedDateFilter from "../components/AdvancedDateFilter";
 import CategoryPermissionSelector from "../components/common/CategoryPermissionSelector";
 import SelectField from "../components/SelectField";
+import TimePickerField from "../components/TimePicker";
+import { ManageAttendanceModal } from "./UnmarkedAttendance";
 import CompanyLedger from "./CompanyLedger";
 import SkeletonComponent from "../components/SkeletonComponent";
 import { EditSalaryModal, ReviseSalaryModal, DeleteConfirmModal } from "../pages/SalaryManagement";
@@ -514,7 +516,7 @@ const CalendarEmployeeInfo = ({ employee, shift, statistics }) => {
 
 // ─── CALENDAR DAY DETAILS MODAL ───────────────────────────────────────────────
 
-const CalendarDayDetailsModal = ({ cell, onClose, shift }) => {
+const CalendarDayDetailsModal = ({ cell, onClose, shift, onManage }) => {
   if (!cell) return null;
   const { date, data } = cell;
   const status = getDayStatus(data);
@@ -703,10 +705,275 @@ const CalendarDayDetailsModal = ({ cell, onClose, shift }) => {
               </div>
             )}
         </div>
+
+        <div className="shrink-0 border-t border-gray-100 bg-gray-50/80 px-5 py-4">
+          <button
+            type="button"
+            onClick={() => onManage?.(cell)}
+            disabled={status === "not_joined"}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FaCalendarCheck size={12} /> Manage Attendance
+          </button>
+        </div>
       </motion.div>
     </motion.div>
   );
 };
+
+const getCalendarActivityTime = (activities, type) => {
+  const activity = (activities || []).find((item) => item.type === type);
+  return activity?.time ? String(activity.time).slice(0, 5) : "";
+};
+
+const formatCalendarDate = (date) => (
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+);
+
+const getCalendarEmployeeRecord = (employee, shift, cell) => {
+  const data = cell?.data || {};
+  const status = getDayStatus(data);
+  const activityTime = (type) => (data.activities || []).find((item) => item.type === type)?.time || "";
+  return {
+    ...employee,
+    employee_id: employee?.id,
+    attendance_date: formatCalendarDate(cell.date),
+    day_status: status || "unmarked",
+    half_day_session: data.half_day_type || "first_half",
+    leave_type: data.is_leave?.type || "",
+    leave_sub_type: data.is_leave?.code || "",
+    punch_in_time: activityTime("PUNCH_IN"),
+    punch_out_time: activityTime("PUNCH_OUT"),
+    shift_start: shift?.start_time || employee?.shift_start,
+    shift_end: shift?.end_time || employee?.shift_end,
+    expected_work_minutes: shift?.expected_work_minutes || employee?.expected_work_minutes,
+    grace_minutes: shift?.grace_minutes || employee?.grace_minutes,
+  };
+};
+
+function CalendarAttendanceModal({ cell, employee, shift, onClose, onSaved }) {
+  const data = cell?.data;
+  const existingStatus = getDayStatus(data);
+  const initialStatus = ["present", "half_day", "absent", "leave"].includes(existingStatus) ? existingStatus : "present";
+  const shiftStart = shift?.start_time || employee?.shift_start || "09:00:00";
+  const shiftEnd = shift?.end_time || employee?.shift_end || "18:00:00";
+  const [status, setStatus] = useState(initialStatus);
+  const [halfDayType, setHalfDayType] = useState(data?.half_day_type || "first_half");
+  const [leaveType, setLeaveType] = useState(data?.is_leave?.type === "paid" ? "paid" : "unpaid");
+  const [leaveCode, setLeaveCode] = useState(data?.is_leave?.code || "");
+  const [leaveOptions, setLeaveOptions] = useState([]);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [startTime, setStartTime] = useState(getCalendarActivityTime(data?.activities, "PUNCH_IN") || String(shiftStart).slice(0, 5));
+  const [endTime, setEndTime] = useState(getCalendarActivityTime(data?.activities, "PUNCH_OUT") || String(shiftEnd).slice(0, 5));
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (status !== "leave") return undefined;
+    let mounted = true;
+    setLeaveLoading(true);
+    const company = localStorage.getItem("company");
+    const companyId = company ? JSON.parse(company)?.id : null;
+    apiCall(`/leave/company?is_paid=${leaveType === "paid"}`, "GET", null, companyId)
+      .then((response) => response.json())
+      .then((result) => {
+        if (mounted && result.success) setLeaveOptions((result.data || []).map((item) => ({ value: item.code, label: `${item.code} - ${item.name}` })));
+      })
+      .catch(() => { if (mounted) setLeaveOptions([]); })
+      .finally(() => { if (mounted) setLeaveLoading(false); });
+    return () => { mounted = false; };
+  }, [leaveType, status]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (status === "leave" && !leaveCode) {
+      toast.error("Leave code is required");
+      return;
+    }
+    const company = localStorage.getItem("company");
+    const companyId = company ? JSON.parse(company)?.id : null;
+    setSaving(true);
+    try {
+      const payload = {
+        employee_id: employee?.id,
+        date: formatCalendarDate(cell.date),
+        type: "attendance",
+        status,
+        notes,
+        ...(status === "present" || status === "half_day" ? { start_time: startTime, end_time: endTime } : {}),
+        ...(status === "half_day" ? { half_day_type: halfDayType } : {}),
+        ...(status === "leave" ? { leave_type: leaveType, leave_type_value: leaveCode } : {}),
+        is_overtime: false,
+        is_deductible: false,
+      };
+      const response = await apiCall("/attendance/mark", "POST", payload, companyId);
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error(result.message || "Failed to update attendance");
+      toast.success(result.message || "Attendance updated successfully");
+      onSaved();
+    } catch (error) {
+      toast.error(error.message || "Failed to update attendance");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!cell) return null;
+  return (
+    <Modal
+      isOpen={!!cell}
+      onClose={onClose}
+      title="Manage Attendance"
+      subtitle={`${employee?.name || "Employee"} | ${cell.date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`}
+      icon={<FaCalendarCheck className="text-blue-600" />}
+      size="2xl"
+      footer={(
+        <>
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+          <button type="submit" form="calendar-attendance-form" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+            {saving ? <FaSpinner className="animate-spin" /> : <FaSave />} Save Attendance
+          </button>
+        </>
+      )}
+    >
+      <form id="calendar-attendance-form" onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[{ value: "present", label: "Present", icon: FaCheckCircle }, { value: "half_day", label: "Half Day", icon: FaHourglassHalf }, { value: "absent", label: "Absent", icon: FaTimesCircle }, { value: "leave", label: "Leave", icon: FaUmbrellaBeach }].map((option) => {
+            const Icon = option.icon;
+            return <button key={option.value} type="button" onClick={() => setStatus(option.value)} className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-bold transition ${status === option.value ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}><Icon size={12} /> {option.label}</button>;
+          })}
+        </div>
+
+        {(status === "present" || status === "half_day") && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TimePickerField label="Punch In" value={startTime} onChange={setStartTime} initialValue={shiftStart} required />
+            <TimePickerField label="Punch Out" value={endTime} onChange={setEndTime} initialValue={shiftEnd} required />
+          </div>
+        )}
+
+        {status === "half_day" && (
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Half Day Session</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[{ value: "first_half", label: "First Half" }, { value: "second_half", label: "Second Half" }].map((option) => <button key={option.value} type="button" onClick={() => setHalfDayType(option.value)} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${halfDayType === option.value ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{option.label}</button>)}
+            </div>
+          </div>
+        )}
+
+        {status === "leave" && (
+          <div className="space-y-4 rounded-xl border border-violet-100 bg-violet-50/50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Paid Leave</span>
+              <button type="button" onClick={() => { setLeaveType((value) => value === "paid" ? "unpaid" : "paid"); setLeaveCode(""); }} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${leaveType === "paid" ? "bg-indigo-600" : "bg-slate-300"}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${leaveType === "paid" ? "translate-x-6" : "translate-x-1"}`} /></button>
+            </div>
+            <SelectField value={leaveOptions.find((option) => option.value === leaveCode) || null} onChange={(option) => setLeaveCode(option?.value || "")} options={leaveOptions} isLoading={leaveLoading} placeholder="Select leave code" isClearable menuPortalTarget={document.body} />
+          </div>
+        )}
+
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Add a remark" className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10" />
+      </form>
+    </Modal>
+  );
+}
+
+function ProfileLeaveActionModal({ leave, action, onClose, onSubmit, submitting }) {
+  const [startDate, setStartDate] = useState(leave?.start_date ? String(leave.start_date).slice(0, 10) : "");
+  const [endDate, setEndDate] = useState(leave?.end_date ? String(leave.end_date).slice(0, 10) : "");
+  const [isHalfDay, setIsHalfDay] = useState(Boolean(leave?.is_half_day));
+  const [halfDayType, setHalfDayType] = useState(leave?.half_day_type || "first_half");
+  const [remarks, setRemarks] = useState("");
+
+  useEffect(() => {
+    if (!leave) return;
+    setStartDate(leave.start_date ? String(leave.start_date).slice(0, 10) : "");
+    setEndDate(leave.end_date ? String(leave.end_date).slice(0, 10) : "");
+    setIsHalfDay(Boolean(leave.is_half_day));
+    setHalfDayType(leave.half_day_type || "first_half");
+    setRemarks("");
+  }, [leave]);
+
+  if (!leave) return null;
+  const isApprove = action === "approve";
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (!remarks.trim() && !isApprove) {
+      toast.error("Rejection reason is required");
+      return;
+    }
+    if (isApprove && (!startDate || !endDate || endDate < startDate)) {
+      toast.error("Valid leave dates are required");
+      return;
+    }
+    if (isApprove && isHalfDay && startDate !== endDate) {
+      toast.error("Half day leave must be for one date");
+      return;
+    }
+    onSubmit({
+      id: leave.id,
+      start_date: startDate,
+      end_date: endDate,
+      is_half_day: isHalfDay,
+      half_day_type: halfDayType,
+      remarks: remarks.trim(),
+    });
+  };
+
+  return (
+    <Modal
+      isOpen={!!leave}
+      onClose={onClose}
+      title={isApprove ? "Approve / Edit Leave" : "Reject Leave"}
+      subtitle={`${leave.leave_name || leave.leave_type || "Leave"} | ${fmtDate(leave.start_date)}`}
+      icon={isApprove ? <FaCheckCircle className="text-emerald-600" /> : <FaTimesCircle className="text-rose-600" />}
+      size="lg"
+      footer={(
+        <>
+          <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+          <button type="submit" form="profile-leave-action-form" disabled={submitting} className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${isApprove ? "bg-gradient-to-r from-emerald-600 to-green-600 shadow-emerald-200 hover:from-emerald-700 hover:to-green-700" : "bg-gradient-to-r from-rose-600 to-red-600 shadow-rose-200 hover:from-rose-700 hover:to-red-700"}`}>
+            {submitting ? <FaSpinner className="animate-spin" /> : isApprove ? <FaCheck /> : <FaTimes />}
+            {isApprove ? "Confirm Approve" : "Reject Leave"}
+          </button>
+        </>
+      )}
+    >
+      <form id="profile-leave-action-form" onSubmit={handleSubmit} className="space-y-5">
+        {isApprove ? (
+          <>
+            <p className="text-gray-600 text-sm leading-relaxed">Approve this leave request. You can adjust the date range or convert it to a half-day before approving.</p>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Leave Date Range</label>
+              <AdvancedDateFilter
+                value={{
+                  date: startDate && startDate === endDate ? startDate : "",
+                  from_date: startDate && startDate !== endDate ? startDate : "",
+                  to_date: endDate && startDate !== endDate ? endDate : "",
+                }}
+                onChange={(result) => {
+                  const nextStart = result?.date || result?.from_date || "";
+                  const nextEnd = result?.date || result?.to_date || nextStart;
+                  setStartDate(nextStart);
+                  setEndDate(nextEnd);
+                }}
+                tabOptions={["date", "range"]}
+                placeholder="Select leave date range"
+                buttonClassName="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+              />
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Half Day</p><p className="mt-1 text-xs text-slate-400">Convert this request to a half-day leave.</p></div>
+                <button type="button" onClick={() => setIsHalfDay((value) => !value)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isHalfDay ? "bg-emerald-600" : "bg-slate-300"}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isHalfDay ? "translate-x-6" : "translate-x-1"}`} /></button>
+              </div>
+              {isHalfDay && <div className="mt-4 grid grid-cols-2 gap-3">{[{ value: "first_half", label: "First Half" }, { value: "second_half", label: "Second Half" }].map((option) => <button key={option.value} type="button" onClick={() => setHalfDayType(option.value)} className={`rounded-xl border px-4 py-3 text-sm font-semibold ${halfDayType === option.value ? "border-emerald-200 bg-white text-emerald-700 shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{option.label}</button>)}</div>}
+            </div>
+          </>
+        ) : null}
+        <textarea value={remarks} onChange={(event) => setRemarks(event.target.value)} rows={4} placeholder={isApprove ? "Approval remarks (optional)" : "Rejection reason (required)"} className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10" />
+      </form>
+    </Modal>
+  );
+}
 
 // ─── EMPLOYEE ATTENDANCE CALENDAR ─────────────────────────────────────────────
 
@@ -717,6 +984,8 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
+  const [manageCell, setManageCell] = useState(null);
+  const [savingCalendarAttendance, setSavingCalendarAttendance] = useState(false);
   const lastFetchedKeyRef = useRef(null);
 
   const month = currentDate.getMonth() + 1;
@@ -796,6 +1065,46 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
   const meta = data?.meta || {};
   const shift = data?.shift || null;
   const statistics = data?.statistics || null;
+  const manageEmployee = manageCell ? getCalendarEmployeeRecord(employee, shift, manageCell) : null;
+
+  const handleCalendarAttendanceSave = async (formPayload) => {
+    const companyStr = localStorage.getItem("company");
+    const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
+    const sourceEmployee = manageEmployee;
+    const payload = {
+      employee_id: sourceEmployee.employee_id,
+      date: sourceEmployee.attendance_date,
+      type: "attendance",
+      status: formPayload.status,
+      notes: formPayload.notes || "",
+      is_overtime: Boolean(formPayload.is_overtime),
+      is_deductible: Boolean(formPayload.is_deductible),
+    };
+    if (formPayload.status === "present" || formPayload.status === "half_day") {
+      payload.start_time = String(formPayload.punch_in || "").slice(0, 5);
+      payload.end_time = String(formPayload.punch_out || "").slice(0, 5);
+    }
+    if (formPayload.status === "half_day") payload.half_day_type = formPayload.half_day_session;
+    if (formPayload.status === "leave") {
+      payload.leave_type = formPayload.leave_type;
+      payload.leave_type_value = formPayload.leave_sub_type;
+      payload.leave_day_overtime = formPayload.leave_day_overtime;
+    }
+
+    setSavingCalendarAttendance(true);
+    try {
+      const response = await apiCall("/attendance/mark", "POST", payload, companyId);
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error(result.message || "Failed to update attendance");
+      toast.success(result.message || "Attendance updated successfully");
+      setManageCell(null);
+      fetchCalendar(month, year);
+    } catch (error) {
+      toast.error(error.message || "Failed to update attendance");
+    } finally {
+      setSavingCalendarAttendance(false);
+    }
+  };
 
   return (
     <div className="max-w-screen-2xl mx-auto pb-8">
@@ -892,9 +1201,18 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
             cell={selectedCell}
             onClose={() => setSelectedCell(null)}
             shift={shift}
+            onManage={(cell) => { setSelectedCell(null); setManageCell(cell); }}
           />
         )}
       </AnimatePresence>
+      <ManageAttendanceModal
+        isOpen={!!manageCell}
+        employee={manageEmployee}
+        initialStatus={manageEmployee?.day_status === "unmarked" ? "present" : manageEmployee?.day_status}
+        onClose={() => setManageCell(null)}
+        onSave={handleCalendarAttendanceSave}
+        saving={savingCalendarAttendance}
+      />
     </div>
   );
 }
@@ -1032,7 +1350,7 @@ function Pill({ value, className = "" }) {
 
 // ─── DETAIL MODAL ─────────────────────────────────────────────────────────────
 
-function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "attendance" }) {
+function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "attendance", onApproveLeave, onRejectLeave }) {
   const attendanceTypeConfig = getAttendanceTypeConfig(subType);
   if (!isOpen || !item) return null;
 
@@ -1626,9 +1944,29 @@ function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "atten
       subtitle="Record information and detailed logs"
       size={(tabKey === "attendance" || tabKey === "shifts" || tabKey === "payroll") ? "4xl" : "md"}
       footer={
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
-          Close
-        </button>
+        <div className="flex w-full justify-end gap-3">
+          {tabKey === "leaves" && item.status === "pending" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onRejectLeave?.(item)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-rose-200 transition-all hover:from-rose-700 hover:to-red-700"
+              >
+                <FaTrash size={13} /> Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => onApproveLeave?.(item)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-200 transition-all hover:from-emerald-700 hover:to-green-700"
+              >
+                <FaCheck size={13} /> Approve / Edit
+              </button>
+            </>
+          )}
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
+            Close
+          </button>
+        </div>
       }
     >
       {renderFields()}
@@ -2195,7 +2533,7 @@ function useShiftConfig(onView, width) {
   return { columns, cardRenderer, rowKey: "id" };
 }
 
-function useLeaveConfig(onView, width) {
+function useLeaveConfig(onView, onApprove, onReject, width) {
   const columns = [
     { key: "leave_type", label: "Leave Type", render: (l) => <span className="inline-flex whitespace-nowrap rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{l.leave_type || l.type || "—"}</span> },
     width > 600 && { key: "start_date", label: "Start Date", render: (l) => <span className="text-sm text-gray-600">{fmtDate(l.start_date || l.from_date || l.from)}</span> },
@@ -2204,16 +2542,24 @@ function useLeaveConfig(onView, width) {
     width > 800 && { key: "status", label: "Status", render: (l) => <Pill value={l.status} /> },
   ].filter(Boolean);
 
+  const getActions = (leave) => [
+    { label: "View Details", icon: <FaEye size={12} />, onClick: () => onView(leave), className: "text-blue-600 hover:bg-blue-50" },
+    ...(leave.status === "pending" ? [
+      { label: "Approve / Edit", icon: <FaCheckCircle size={12} />, onClick: () => onApprove(leave), className: "text-emerald-600 hover:bg-emerald-50" },
+      { label: "Reject", icon: <FaTimesCircle size={12} />, onClick: () => onReject(leave), className: "text-rose-600 hover:bg-rose-50" },
+    ] : []),
+  ];
+
   const cardRenderer = (l, index, activeId, onToggle) => (
     <ManagementCard key={l.id || index} accent="amber" delay={index * 0.04} onClick={() => onView(l)} activeId={activeId} onToggle={onToggle} menuId={`lv-${l.id || index}`}
-      actions={[{ label: "View Details", icon: <FaEye size={12} />, onClick: () => onView(l), className: "text-blue-600 hover:bg-blue-50" }]}
+      actions={getActions(l)}
       hoverable title={l.leave_type || l.type || "Leave"} subtitle={`${fmtDate(l.start_date || l.from_date || l.from)} → ${fmtDate(l.end_date || l.to_date || l.to)}`} eyebrow="Leave Record" badge={<Pill value={l.status} />}
       footer={<div className="flex w-full items-center justify-between text-xs text-gray-400"><span>{formatDays(l.total_days || l.days)} day(s)</span><span>{Array.isArray(l.attachments) ? `${l.attachments.length} attachment(s)` : "No attachments"}</span></div>}
     >
       {l.reason && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{l.reason}</p>}
     </ManagementCard>
   );
-  return { columns, cardRenderer, rowKey: "id" };
+  return { columns, cardRenderer, getActions, rowKey: "id" };
 }
 
 // ─── CREATE SALARY MODAL ─────────────────────────────────────────────────────
@@ -2492,6 +2838,8 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const [activeMenu, setActiveMenu] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedLogItem, setSelectedLogItem] = useState(null);
+  const [profileLeaveAction, setProfileLeaveAction] = useState(null);
+  const [profileLeaveSubmitting, setProfileLeaveSubmitting] = useState(false);
   const [showCreateSalaryModal, setShowCreateSalaryModal] = useState(false);
   const [showCreatePayrollModal, setShowCreatePayrollModal] = useState(false);
   const [showCreateLeaveModal, setShowCreateLeaveModal] = useState(false);
@@ -2632,6 +2980,33 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
 
   const onView = (item) => setSelectedItem(item);
   const onViewLogs = (item) => setSelectedLogItem(item);
+
+  const submitProfileLeaveAction = useCallback(async ({ id, start_date, end_date, is_half_day, half_day_type, remarks }) => {
+    if (!id) return;
+    setProfileLeaveSubmitting(true);
+    try {
+      const companyStr = localStorage.getItem("company");
+      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
+      const isApprove = profileLeaveAction?.action === "approve";
+      const response = await apiCall(
+        isApprove ? "/leave/management/approve-edit" : "/leave/management/bulk-approve-reject",
+        "PUT",
+        isApprove
+          ? { id, start_date, end_date, is_half_day, half_day_type, remarks }
+          : { ids: [id], action: "reject", remarks },
+        companyId
+      );
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || "Failed to update leave");
+      toast.success(result.message || (isApprove ? "Leave approved successfully" : "Leave rejected successfully"));
+      setProfileLeaveAction(null);
+      fetchData(pagination.page, pagination.limit);
+    } catch (error) {
+      toast.error(error.message || "Failed to update leave");
+    } finally {
+      setProfileLeaveSubmitting(false);
+    }
+  }, [fetchData, pagination.limit, pagination.page, profileLeaveAction]);
 
   const getPayrollPeriodLabel = useCallback((payroll) => {
     if (payroll?.month && payroll?.year) {
@@ -2893,11 +3268,17 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
 
 
   const payConfig = usePayrollConfig(onView, openPayrollDownloadModal, openPayrollEmailModal, effectiveWidth);
-  const leaveConfig = useLeaveConfig(onView, effectiveWidth);
+  const leaveConfig = useLeaveConfig(
+    onView,
+    (leave) => setProfileLeaveAction({ leave, action: "approve" }),
+    (leave) => setProfileLeaveAction({ leave, action: "reject" }),
+    effectiveWidth
+  );
   const shiftConfig = useShiftConfig(onView, effectiveWidth);
 
   const CONFIG_MAP = { permissions: permConfig, attendance: attConfig, salary: salConfig, payroll: payConfig, leaves: leaveConfig, shifts: shiftConfig };
-  const { columns, cardRenderer, rowKey } = CONFIG_MAP[normalizedTabKey] || permConfig;
+  const activeConfig = CONFIG_MAP[normalizedTabKey] || permConfig;
+  const { columns, cardRenderer, rowKey } = activeConfig;
   const hasToolbarActions = normalizedTabKey === "shifts" || normalizedTabKey === "leaves" || normalizedTabKey === "salary" || normalizedTabKey === "payroll";
 
   // Update getActions to include salary actions:
@@ -2905,6 +3286,12 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
     const base = [{ label: "View Details", icon: <FaEye size={13} />, onClick: () => setSelectedItem(row), className: "text-blue-600 hover:text-blue-700 hover:bg-blue-50" }];
     if (normalizedTabKey === "attendance") {
       base.push({ label: "View History", icon: <FaHistory size={13} />, onClick: () => setSelectedLogItem(row), className: "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" });
+    }
+    if (normalizedTabKey === "leaves" && row.status === "pending") {
+      base.push(
+        { label: "Approve / Edit", icon: <FaCheckCircle size={13} />, onClick: () => setProfileLeaveAction({ leave: row, action: "approve" }), className: "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" },
+        { label: "Reject", icon: <FaTimesCircle size={13} />, onClick: () => setProfileLeaveAction({ leave: row, action: "reject" }), className: "text-rose-600 hover:text-rose-700 hover:bg-rose-50" }
+      );
     }
     if (normalizedTabKey === "salary") {
       if (row.payroll_used) {
@@ -3335,12 +3722,22 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
             tabKey={tabKey}
             tabLabel={tabLabel}
             subType={subType}
+            onApproveLeave={(leave) => { setSelectedItem(null); setProfileLeaveAction({ leave, action: "approve" }); }}
+            onRejectLeave={(leave) => { setSelectedItem(null); setProfileLeaveAction({ leave, action: "reject" }); }}
           />
         )}
       </AnimatePresence>
       <AnimatePresence>
         {selectedLogItem && <AttendanceLogsModal id={selectedLogItem.id} type={subType} onClose={() => setSelectedLogItem(null)} />}
       </AnimatePresence>
+
+      <ProfileLeaveActionModal
+        leave={profileLeaveAction?.leave}
+        action={profileLeaveAction?.action}
+        onClose={() => !profileLeaveSubmitting && setProfileLeaveAction(null)}
+        onSubmit={submitProfileLeaveAction}
+        submitting={profileLeaveSubmitting}
+      />
 
       <AnimatePresence>
         {showEditSalaryModal && salaryToEdit && normalizedTabKey === "salary" && (

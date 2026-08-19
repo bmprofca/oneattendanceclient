@@ -523,7 +523,7 @@ const useLeaveConfigs = (isPaid, enabled = true) => {
 
 // ─── Manage Attendance Modal ──────────────────────────────────────────────────
 
-const ManageAttendanceModal = ({ employee, initialStatus, isOpen, onClose, onSave, saving = false }) => {
+export const ManageAttendanceModal = ({ employee, initialStatus, isOpen, onClose, onSave, saving = false }) => {
   const hasActualTime = Boolean(employee?.punch_in_time || employee?.punch_out_time);
   const hasCompleteActualTime = Boolean(employee?.punch_in_time && employee?.punch_out_time);
 
