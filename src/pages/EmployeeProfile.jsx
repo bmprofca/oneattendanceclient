@@ -13,7 +13,7 @@ import {
   FaComment, FaCog, FaMapPin, FaServer, FaInfoCircle,
   FaSpinner, FaSignInAlt, FaSignOutAlt, FaHourglassHalf,
   FaChevronLeft, FaFilePdf, FaPlus, FaSave,
-  FaDownload, FaEdit, FaTrash, FaUniversity,
+  FaDownload, FaEdit, FaTrash, FaUniversity,FaCircle ,
   FaCoffee, FaCoins
 } from "react-icons/fa";
 import apiCall from "../utils/api";
@@ -522,45 +522,6 @@ const CalendarEmployeeInfo = ({ employee, shift, statistics }) => {
 // ─── CALENDAR DAY DETAILS MODAL ───────────────────────────────────────────────
 
 const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, onViewLogs }) => {
-  const [fetchedBreaks, setFetchedBreaks] = useState([]);
-  const [loadingBreaks, setLoadingBreaks] = useState(false);
-  const [fetchedLogs, setFetchedLogs] = useState([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
-
-  useEffect(() => {
-    if (!cell?.date || !employeeId) return;
-    const dateStr = formatCalendarDate(cell.date);
-    const companyStr = localStorage.getItem("company");
-    const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-
-    setLoadingBreaks(true);
-    apiCall(`/attendance/list?employee_id=${employeeId}&type=break&from_date=${dateStr}&to_date=${dateStr}`, "GET", null, companyId)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) setFetchedBreaks(json.data || []);
-      })
-      .catch((err) => console.error("Failed to fetch break details", err))
-      .finally(() => setLoadingBreaks(false));
-
-    setLoadingLogs(true);
-    const attendanceId = cell.data?.id || cell.data?.attendance_id;
-    const logUrl = attendanceId
-      ? `/attendance/logs?id=${attendanceId}&type=attendance`
-      : `/attendance/logs?employee_id=${employeeId}&from_date=${dateStr}&to_date=${dateStr}`;
-
-    apiCall(logUrl, "GET", null, companyId)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          const logsList = json.data?.logs || json.logs || (Array.isArray(json.data) ? json.data : []);
-          setFetchedLogs(logsList);
-        }
-      })
-      .catch((err) => console.error("Failed to fetch attendance logs", err))
-      .finally(() => setLoadingLogs(false));
-  }, [cell, employeeId]);
-
-  if (!cell) return null;
   const { date, data } = cell;
   const status = getDayStatus(data);
   const workStats = data ? computeWorkStats(data) : null;
@@ -569,6 +530,7 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
+  // ── Helper components ─────────────────────────────────────────────────────
   const InfoRow = ({ label, value, icon: Icon, colorClass }) => (
     <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
       <div className="flex items-center gap-2.5">
@@ -581,12 +543,33 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
     </div>
   );
 
-  const sessions = workStats?.sessions || [];
-  const breaks = data?.breaks || [];
+  // ── Build timeline events (punches + breaks) in chronological order ──────
+  const buildTimeline = () => {
+    const events = [];
+    const pushEvent = (e) => {
+      if (!e?.time) return;
+      events.push({
+        ...e,
+        time: e.time,
+        type: e.type,
+        sortTime: parseTime(e.time) ?? 0,
+      });
+    };
 
+    (data?.activities || []).forEach(pushEvent);
+    (data?.breaks || []).forEach(pushEvent);
+
+    // Sort by time (if two events same time, keep original order)
+    events.sort((a, b) => a.sortTime - b.sortTime || a.originalIndex - b.originalIndex);
+    return events;
+  };
+
+  const timelineEvents = buildTimeline();
+
+  // Pair breaks for display in the timeline
   const breakPairs = [];
   let breakIn = null;
-  for (const b of breaks) {
+  for (const b of data?.breaks || []) {
     if (b.type === "BREAK_START") {
       breakIn = b;
     } else if (b.type === "BREAK_END" && breakIn) {
@@ -594,11 +577,16 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
       breakIn = null;
     }
   }
-  if (breakIn) {
-    breakPairs.push({ start: breakIn, end: null });
-  }
+  if (breakIn) breakPairs.push({ start: breakIn, end: null });
 
   const attendanceId = data?.id || data?.attendance_id;
+  const hasWorkData = workStats && (workStats.grossMinutes > 0 || (data?.activities || []).length > 0);
+  const hasBreakData = (data?.breaks || []).length > 0;
+  const logs = data?.logs || [];
+  const hasLogData = logs.length > 0;
+
+  // State for showing all logs vs. summary
+  const [showAllLogs, setShowAllLogs] = useState(false);
 
   return (
     <motion.div
@@ -612,6 +600,7 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
         initial={{ scale: 0.95, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 16 }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="p-5 border-b border-gray-100 flex items-start justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">{formattedDate}</p>
@@ -635,8 +624,36 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
           </button>
         </div>
 
+        {/* Body */}
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
-          {workStats && workStats.grossMinutes > 0 && (
+          {/* Approval / status flags */}
+          {(data?.is_approved === false || data?.is_overtime || data?.is_deductible) && (
+            <div className="flex flex-wrap gap-2">
+              {data?.is_approved === false && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                  <FaInfoCircle size={10} /> Pending Approval
+                </span>
+              )}
+              {data?.is_approved === true && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  <FaCheckCircle size={10} /> Approved
+                </span>
+              )}
+              {data?.is_overtime && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                  <FaClock size={10} /> Overtime
+                </span>
+              )}
+              {data?.is_deductible && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                  <FaExclamationCircle size={10} /> Deductible
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Work Summary (if any) */}
+          {hasWorkData && (
             <div className="space-y-2">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Work Summary</p>
               <div className="grid grid-cols-2 gap-2">
@@ -658,150 +675,63 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
                   colorClass="bg-gray-100 text-gray-500"
                 />
               )}
-              {data?.is_approved === false && (
-                <div className="flex items-center gap-2 p-2.5 bg-orange-50 border border-orange-100 rounded-xl">
-                  <FaInfoCircle size={12} className="text-orange-500" />
-                  <span className="text-[11px] font-bold text-orange-600">Attendance pending approval</span>
-                </div>
-              )}
-              {data?.is_approved === true && (
-                <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
-                  <FaCheckCircle size={12} className="text-emerald-500" />
-                  <span className="text-[11px] font-bold text-emerald-600">Attendance approved</span>
-                </div>
-              )}
             </div>
           )}
 
-          {/* SESSIONS SECTION */}
-          {sessions.length > 0 && (
+          {/* Timeline (punches + breaks) */}
+          {timelineEvents.length > 0 && (
             <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sessions</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Timeline</p>
               <div className="space-y-1.5">
-                {sessions.map((s, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs">
-                    <div className="flex items-center gap-1.5 text-emerald-600">
-                      <FaSignInAlt size={11} />
-                      <span className="font-bold">{s.in?.time || "—"}</span>
-                    </div>
-                    <div className="flex-1 h-px bg-gray-200" />
-                    <div className="flex items-center gap-1.5 text-rose-500">
-                      <span className="font-bold">
-                        {s.out?.time
-                          ? s.out.time
-                          : <span className="text-indigo-400 animate-pulse">Active</span>
-                        }
-                      </span>
-                      <FaSignOutAlt size={11} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                {timelineEvents.map((event, idx) => {
+                  const isPunchIn = event.type === "PUNCH_IN";
+                  const isPunchOut = event.type === "PUNCH_OUT";
+                  const isBreakStart = event.type === "BREAK_START";
+                  const isBreakEnd = event.type === "BREAK_END";
+                  const isDayStatus = event.type === "day_status";
 
-          {/* BREAK DETAILS SECTION */}
-          {(breakPairs.length > 0 || fetchedBreaks.length > 0) && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-amber-700">
-                  <FaCoffee size={11} />
-                  Breaks ({fetchedBreaks.length || breakPairs.length})
-                </span>
-                {loadingBreaks && <FaSpinner className="animate-spin text-amber-500" size={10} />}
-              </p>
-              <div className="space-y-1.5">
-                {fetchedBreaks.length > 0 ? (
-                  fetchedBreaks.map((b, i) => (
-                    <div key={i} className="p-2.5 bg-amber-50/80 rounded-xl border border-amber-100/80 space-y-1 text-xs">
-                      <div className="flex items-center justify-between font-bold text-amber-900">
-                        <span className="flex items-center gap-1">
-                          <FaClock size={10} className="text-amber-600" />
-                          {b.start_time || b.break_start || "—"} → {b.end_time || b.break_end || "—"}
-                        </span>
-                        {(b.duration_minutes || b.duration) && (
-                          <span className="px-2 py-0.5 bg-amber-200/60 text-amber-800 rounded-md text-[10px] font-black">
-                            {b.duration_minutes || b.duration}m
-                          </span>
-                        )}
-                      </div>
-                      {(b.type || b.break_type || b.remark) && (
-                        <div className="flex items-center justify-between text-[11px] text-amber-700">
-                          {b.type || b.break_type ? (
-                            <span className="font-semibold uppercase tracking-wider text-[10px] text-amber-600 bg-amber-100/50 px-1.5 py-0.5 rounded">
-                              {String(b.type || b.break_type).replace(/_/g, " ")}
-                            </span>
-                          ) : <span />}
-                          {b.remark && <span className="italic opacity-80">{b.remark}</span>}
-                        </div>
+                  let icon = <FaCircle size={8} className="text-gray-300" />;
+                  let colorClass = "bg-slate-50 border-slate-100 text-slate-600";
+                  let label = event.type;
+
+                  if (isPunchIn) {
+                    icon = <FaSignInAlt size={10} className="text-emerald-500" />;
+                    colorClass = "bg-emerald-50 border-emerald-100 text-emerald-700";
+                    label = "Punch In";
+                  } else if (isPunchOut) {
+                    icon = <FaSignOutAlt size={10} className="text-rose-500" />;
+                    colorClass = "bg-rose-50 border-rose-100 text-rose-700";
+                    label = "Punch Out";
+                  } else if (isBreakStart) {
+                    icon = <FaCoffee size={10} className="text-amber-500" />;
+                    colorClass = "bg-amber-50 border-amber-100 text-amber-700";
+                    label = "Break Start";
+                  } else if (isBreakEnd) {
+                    icon = <FaCoffee size={10} className="text-teal-500" />;
+                    colorClass = "bg-teal-50 border-teal-100 text-teal-700";
+                    label = "Break End";
+                  } else if (isDayStatus) {
+                    icon = <FaTag size={10} className="text-indigo-500" />;
+                    colorClass = "bg-indigo-50 border-indigo-100 text-indigo-700";
+                    label = "Status";
+                  }
+
+                  return (
+                    <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${colorClass}`}>
+                      <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white shadow-sm">{icon}</span>
+                      <span className="font-bold uppercase tracking-wider text-[10px]">{label}</span>
+                      <span className="flex-1 text-right font-mono font-semibold">{event.time || "—"}</span>
+                      {event.attendance_method && (
+                        <span className="text-[9px] uppercase font-bold opacity-70">[{event.attendance_method}]</span>
                       )}
                     </div>
-                  ))
-                ) : (
-                  breakPairs.map((bp, i) => {
-                    const sTime = bp.start?.time ? parseTime(bp.start.time) : null;
-                    const eTime = bp.end?.time ? parseTime(bp.end.time) : null;
-                    let dur = null;
-                    if (sTime != null && eTime != null) {
-                      dur = eTime - sTime;
-                      if (dur < 0) dur += 24 * 60;
-                    }
-                    return (
-                      <div key={i} className="flex items-center justify-between p-2.5 bg-amber-50 rounded-xl border border-amber-100 text-xs">
-                        <span className="font-bold text-amber-800">
-                          {bp.start?.time || "—"} → {bp.end?.time || (bp.end === null ? "Active" : "—")}
-                        </span>
-                        {dur != null && dur > 0 && <span className="font-black text-amber-600 bg-amber-200/60 px-2 py-0.5 rounded text-[10px]">{dur}m</span>}
-                      </div>
-                    );
-                  })
-                )}
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* ATTENDANCE LOG DATA / HISTORY SECTION */}
-          <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-indigo-700">
-                <FaHistory size={11} />
-                Attendance Logs & Punch Entries ({fetchedLogs.length})
-              </span>
-              {loadingLogs && <FaSpinner className="animate-spin text-indigo-500" size={10} />}
-            </p>
-            {loadingLogs ? (
-              <div className="py-4 text-center text-xs text-gray-400">Loading log records...</div>
-            ) : fetchedLogs.length > 0 ? (
-              <div className="space-y-1.5">
-                {fetchedLogs.map((log, i) => (
-                  <div key={i} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 font-bold text-slate-800">
-                        <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${log.type === "PUNCH_IN" || log.punch_type === "in" ? "bg-emerald-100 text-emerald-700" : log.type === "PUNCH_OUT" || log.punch_type === "out" ? "bg-rose-100 text-rose-700" : "bg-indigo-100 text-indigo-700"}`}>
-                          {log.type || log.punch_type || "LOG"}
-                        </span>
-                        <span>{log.time || log.timestamp || log.punch_time || "—"}</span>
-                      </div>
-                      {(log.method || log.device || log.notes || log.remark) && (
-                        <p className="text-[10px] text-slate-500 mt-0.5">
-                          {log.method && <span className="font-semibold text-slate-600 mr-1.5">[{String(log.method).toUpperCase()}]</span>}
-                          {log.notes || log.remark || log.device || ""}
-                        </p>
-                      )}
-                    </div>
-                    {log.created_by_name && (
-                      <span className="text-[10px] font-semibold text-slate-400">By {log.created_by_name}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center text-[11px] text-gray-400">
-                No raw punch log entries recorded for this date.
-              </div>
-            )}
-          </div>
-
+          {/* Leave info */}
           {data?.is_leave && (
             <div className="p-4 bg-violet-50 rounded-xl border border-violet-100 flex flex-col items-center text-center">
               <div className="w-12 h-12 bg-violet-100 text-violet-600 rounded-xl flex items-center justify-center mb-3">
@@ -814,7 +744,47 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
             </div>
           )}
 
-          {!workStats?.grossMinutes && !data?.is_leave && !data?.is_holiday &&
+          {/* Raw Logs (collapsible) */}
+          {hasLogData && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAllLogs(!showAllLogs)}
+                className="w-full flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:bg-gray-100 transition"
+              >
+                <span className="flex items-center gap-2">
+                  <FaHistory size={11} className="text-indigo-500" />
+                  Raw Log Entries ({logs.length})
+                </span>
+                <FaChevronDown size={10} className={`transition-transform ${showAllLogs ? "rotate-180" : ""}`} />
+              </button>
+
+              {showAllLogs && (
+                <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {logs.map((log, i) => (
+                    <div key={i} className="p-2 bg-slate-50 rounded-lg border border-slate-100 text-xs flex items-center justify-between">
+                      <span className="font-bold text-slate-700">{log.log_type || "LOG"}</span>
+                      <span className="font-mono text-gray-500">{log.time || "—"}</span>
+                      {log.attendance_method && (
+                        <span className="text-[9px] uppercase text-gray-400">[{log.attendance_method}]</span>
+                      )}
+                      {log.created_by?.name && (
+                        <span className="text-[9px] text-gray-400">by {log.created_by.name}</span>
+                      )}
+                      {log.day_status && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">
+                          → {String(log.day_status).replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!hasWorkData && !data?.is_leave && !data?.is_holiday &&
             (status === "absent" || status === "upcoming" || status === "not_joined") && (
               <div className="py-8 flex flex-col items-center text-center text-gray-300">
                 <FaCalendarAlt size={36} className="mb-2 opacity-30" />
@@ -827,6 +797,7 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, o
             )}
         </div>
 
+        {/* Footer */}
         <div className="shrink-0 border-t border-gray-100 bg-gray-50/80 px-5 py-4 flex gap-2">
           {attendanceId && (
             <button
