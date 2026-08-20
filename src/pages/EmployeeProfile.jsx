@@ -521,15 +521,18 @@ const CalendarEmployeeInfo = ({ employee, shift, statistics }) => {
 
 // ─── CALENDAR DAY DETAILS MODAL ───────────────────────────────────────────────
 
-const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage }) => {
+const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage, onViewLogs }) => {
   const [fetchedBreaks, setFetchedBreaks] = useState([]);
   const [loadingBreaks, setLoadingBreaks] = useState(false);
+  const [fetchedLogs, setFetchedLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
     if (!cell?.date || !employeeId) return;
     const dateStr = formatCalendarDate(cell.date);
     const companyStr = localStorage.getItem("company");
     const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
+
     setLoadingBreaks(true);
     apiCall(`/attendance/list?employee_id=${employeeId}&type=break&from_date=${dateStr}&to_date=${dateStr}`, "GET", null, companyId)
       .then((res) => res.json())
@@ -538,6 +541,23 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
       })
       .catch((err) => console.error("Failed to fetch break details", err))
       .finally(() => setLoadingBreaks(false));
+
+    setLoadingLogs(true);
+    const attendanceId = cell.data?.id || cell.data?.attendance_id;
+    const logUrl = attendanceId
+      ? `/attendance/logs?id=${attendanceId}&type=attendance`
+      : `/attendance/logs?employee_id=${employeeId}&from_date=${dateStr}&to_date=${dateStr}`;
+
+    apiCall(logUrl, "GET", null, companyId)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) {
+          const logsList = json.data?.logs || json.logs || (Array.isArray(json.data) ? json.data : []);
+          setFetchedLogs(logsList);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch attendance logs", err))
+      .finally(() => setLoadingLogs(false));
   }, [cell, employeeId]);
 
   if (!cell) return null;
@@ -578,6 +598,8 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
     breakPairs.push({ start: breakIn, end: null });
   }
 
+  const attendanceId = data?.id || data?.attendance_id;
+
   return (
     <motion.div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
@@ -586,7 +608,7 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
     >
       <ModalScrollLock />
       <motion.div
-        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col"
+        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
         initial={{ scale: 0.95, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 16 }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -613,7 +635,7 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {workStats && workStats.grossMinutes > 0 && (
             <div className="space-y-2">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Work Summary</p>
@@ -651,6 +673,7 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
             </div>
           )}
 
+          {/* SESSIONS SECTION */}
           {sessions.length > 0 && (
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sessions</p>
@@ -677,20 +700,41 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
             </div>
           )}
 
+          {/* BREAK DETAILS SECTION */}
           {(breakPairs.length > 0 || fetchedBreaks.length > 0) && (
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                <span>Breaks ({fetchedBreaks.length || breakPairs.length})</span>
+                <span className="flex items-center gap-1.5 text-amber-700">
+                  <FaCoffee size={11} />
+                  Breaks ({fetchedBreaks.length || breakPairs.length})
+                </span>
                 {loadingBreaks && <FaSpinner className="animate-spin text-amber-500" size={10} />}
               </p>
               <div className="space-y-1.5">
                 {fetchedBreaks.length > 0 ? (
                   fetchedBreaks.map((b, i) => (
-                    <div key={i} className="flex items-center justify-between p-2.5 bg-amber-50 rounded-lg border border-amber-100 text-xs">
-                      <span className="font-bold text-amber-800">
-                        {b.start_time || b.break_start || "—"} → {b.end_time || b.break_end || "—"}
-                      </span>
-                      {b.remark && <span className="text-[10px] text-amber-600 italic">{b.remark}</span>}
+                    <div key={i} className="p-2.5 bg-amber-50/80 rounded-xl border border-amber-100/80 space-y-1 text-xs">
+                      <div className="flex items-center justify-between font-bold text-amber-900">
+                        <span className="flex items-center gap-1">
+                          <FaClock size={10} className="text-amber-600" />
+                          {b.start_time || b.break_start || "—"} → {b.end_time || b.break_end || "—"}
+                        </span>
+                        {(b.duration_minutes || b.duration) && (
+                          <span className="px-2 py-0.5 bg-amber-200/60 text-amber-800 rounded-md text-[10px] font-black">
+                            {b.duration_minutes || b.duration}m
+                          </span>
+                        )}
+                      </div>
+                      {(b.type || b.break_type || b.remark) && (
+                        <div className="flex items-center justify-between text-[11px] text-amber-700">
+                          {b.type || b.break_type ? (
+                            <span className="font-semibold uppercase tracking-wider text-[10px] text-amber-600 bg-amber-100/50 px-1.5 py-0.5 rounded">
+                              {String(b.type || b.break_type).replace(/_/g, " ")}
+                            </span>
+                          ) : <span />}
+                          {b.remark && <span className="italic opacity-80">{b.remark}</span>}
+                        </div>
+                      )}
                     </div>
                   ))
                 ) : (
@@ -703,11 +747,11 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
                       if (dur < 0) dur += 24 * 60;
                     }
                     return (
-                      <div key={i} className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-100 text-[11px]">
-                        <span className="font-bold text-amber-700">
+                      <div key={i} className="flex items-center justify-between p-2.5 bg-amber-50 rounded-xl border border-amber-100 text-xs">
+                        <span className="font-bold text-amber-800">
                           {bp.start?.time || "—"} → {bp.end?.time || (bp.end === null ? "Active" : "—")}
                         </span>
-                        {dur != null && dur > 0 && <span className="font-black text-amber-600">{dur}m</span>}
+                        {dur != null && dur > 0 && <span className="font-black text-amber-600 bg-amber-200/60 px-2 py-0.5 rounded text-[10px]">{dur}m</span>}
                       </div>
                     );
                   })
@@ -715,6 +759,48 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
               </div>
             </div>
           )}
+
+          {/* ATTENDANCE LOG DATA / HISTORY SECTION */}
+          <div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-indigo-700">
+                <FaHistory size={11} />
+                Attendance Logs & Punch Entries ({fetchedLogs.length})
+              </span>
+              {loadingLogs && <FaSpinner className="animate-spin text-indigo-500" size={10} />}
+            </p>
+            {loadingLogs ? (
+              <div className="py-4 text-center text-xs text-gray-400">Loading log records...</div>
+            ) : fetchedLogs.length > 0 ? (
+              <div className="space-y-1.5">
+                {fetchedLogs.map((log, i) => (
+                  <div key={i} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 font-bold text-slate-800">
+                        <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${log.type === "PUNCH_IN" || log.punch_type === "in" ? "bg-emerald-100 text-emerald-700" : log.type === "PUNCH_OUT" || log.punch_type === "out" ? "bg-rose-100 text-rose-700" : "bg-indigo-100 text-indigo-700"}`}>
+                          {log.type || log.punch_type || "LOG"}
+                        </span>
+                        <span>{log.time || log.timestamp || log.punch_time || "—"}</span>
+                      </div>
+                      {(log.method || log.device || log.notes || log.remark) && (
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {log.method && <span className="font-semibold text-slate-600 mr-1.5">[{String(log.method).toUpperCase()}]</span>}
+                          {log.notes || log.remark || log.device || ""}
+                        </p>
+                      )}
+                    </div>
+                    {log.created_by_name && (
+                      <span className="text-[10px] font-semibold text-slate-400">By {log.created_by_name}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center text-[11px] text-gray-400">
+                No raw punch log entries recorded for this date.
+              </div>
+            )}
+          </div>
 
           {data?.is_leave && (
             <div className="p-4 bg-violet-50 rounded-xl border border-violet-100 flex flex-col items-center text-center">
@@ -730,8 +816,8 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
 
           {!workStats?.grossMinutes && !data?.is_leave && !data?.is_holiday &&
             (status === "absent" || status === "upcoming" || status === "not_joined") && (
-              <div className="py-10 flex flex-col items-center text-center text-gray-300">
-                <FaCalendarAlt size={40} className="mb-3 opacity-30" />
+              <div className="py-8 flex flex-col items-center text-center text-gray-300">
+                <FaCalendarAlt size={36} className="mb-2 opacity-30" />
                 <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
                   {status === "not_joined" ? "Not yet joined"
                     : status === "absent" ? "No attendance recorded"
@@ -741,12 +827,21 @@ const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage })
             )}
         </div>
 
-        <div className="shrink-0 border-t border-gray-100 bg-gray-50/80 px-5 py-4">
+        <div className="shrink-0 border-t border-gray-100 bg-gray-50/80 px-5 py-4 flex gap-2">
+          {attendanceId && (
+            <button
+              type="button"
+              onClick={() => onViewLogs?.(attendanceId)}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-indigo-700 hover:bg-indigo-100 transition"
+            >
+              <FaHistory size={11} /> View Audit Log
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onManage?.(cell)}
             disabled={status === "not_joined"}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FaCalendarCheck size={12} /> Manage Attendance
           </button>
@@ -1020,6 +1115,7 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
   const [error, setError] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [manageCell, setManageCell] = useState(null);
+  const [logModal, setLogModal] = useState(null);
   const [savingCalendarAttendance, setSavingCalendarAttendance] = useState(false);
   const lastFetchedKeyRef = useRef(null);
 
@@ -1102,10 +1198,312 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
   const statistics = data?.statistics || null;
   const manageEmployee = manageCell ? getCalendarEmployeeRecord(employee, shift, manageCell) : null;
 
+  // ─── MANAGE ATTENDANCE & BREAK MODAL ───────────────────────────────────────────
+
+  const ManageAttendanceAndBreakModal = ({ employee, initialStatus, isOpen, onClose, onSave, saving = false }) => {
+    const [activeTab, setActiveTab] = useState("attendance");
+
+    const [status, setStatus] = useState(initialStatus || "present");
+    const [punchIn, setPunchIn] = useState(employee?.punch_in_time ? String(employee.punch_in_time).slice(0, 5) : "09:00");
+    const [punchOut, setPunchOut] = useState(employee?.punch_out_time ? String(employee.punch_out_time).slice(0, 5) : "18:00");
+    const [halfDaySession, setHalfDaySession] = useState(employee?.half_day_session || "first_half");
+    const [leaveType, setLeaveType] = useState(employee?.leave_type || "unpaid");
+    const [leaveCode, setLeaveCode] = useState(employee?.leave_sub_type || "");
+    const [notes, setNotes] = useState(employee?.remark || "");
+
+    const [breakStart, setBreakStart] = useState("13:00");
+    const [breakEnd, setBreakEnd] = useState("14:00");
+    const [breakType, setBreakType] = useState("lunch");
+    const [breakNotes, setBreakNotes] = useState("");
+
+    useEffect(() => {
+      if (employee) {
+        setStatus(initialStatus || "present");
+        setPunchIn(employee.punch_in_time ? String(employee.punch_in_time).slice(0, 5) : "09:00");
+        setPunchOut(employee.punch_out_time ? String(employee.punch_out_time).slice(0, 5) : "18:00");
+        setHalfDaySession(employee.half_day_session || "first_half");
+        setLeaveType(employee.leave_type || "unpaid");
+        setLeaveCode(employee.leave_sub_type || "");
+        setNotes(employee.remark || "");
+      }
+    }, [employee, initialStatus]);
+
+    if (!isOpen || !employee) return null;
+
+    const handleSaveAttendance = () => {
+      if ((status === "present" || status === "half_day") && (!punchIn || !punchOut)) {
+        toast.error("Punch in and punch out times are required");
+        return;
+      }
+      onSave({
+        mode: "attendance",
+        employee_id: employee.employee_id,
+        status,
+        punch_in: punchIn,
+        punch_out: punchOut,
+        half_day_session: status === "half_day" ? halfDaySession : "",
+        leave_type: status === "leave" ? leaveType : "",
+        leave_sub_type: status === "leave" ? leaveCode : "",
+        notes,
+      });
+    };
+
+    const handleSaveBreak = () => {
+      if (!breakStart) {
+        toast.error("Break start time is required");
+        return;
+      }
+      onSave({
+        mode: "break",
+        employee_id: employee.employee_id,
+        break_start: breakStart,
+        break_end: breakEnd,
+        break_type: breakType,
+        notes: breakNotes,
+      });
+    };
+
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Manage Attendance & Break"
+        subtitle={`${employee.name} (${employee.employee_code || "N/A"}) • ${employee.attendance_date || ""}`}
+        icon={<FaCalendarCheck className="h-5 w-5 text-blue-600" />}
+        size="xl"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition"
+            >
+              Cancel
+            </button>
+            {activeTab === "attendance" ? (
+              <button
+                type="button"
+                onClick={handleSaveAttendance}
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs uppercase tracking-widest hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-200 transition disabled:opacity-50"
+              >
+                {saving ? <FaSpinner className="animate-spin" size={12} /> : <FaCheckCircle size={12} />}
+                {saving ? "Saving..." : "Save Attendance"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSaveBreak}
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs uppercase tracking-widest hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-200 transition disabled:opacity-50"
+              >
+                {saving ? <FaSpinner className="animate-spin" size={12} /> : <FaCoffee size={12} />}
+                {saving ? "Saving..." : "Save Break"}
+              </button>
+            )}
+          </div>
+        }
+      >
+        <div className="space-y-5">
+          {/* Header 2 Sections / Tabs: Attendance & Break */}
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("attendance")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === "attendance"
+                  ? "bg-white text-blue-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+                }`}
+            >
+              <FaCalendarCheck size={12} />
+              <span>Attendance</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("break")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === "break"
+                  ? "bg-white text-amber-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+                }`}
+            >
+              <FaCoffee size={12} />
+              <span>Break</span>
+            </button>
+          </div>
+
+          {/* Tab 1: Attendance Section */}
+          {activeTab === "attendance" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { value: "present", label: "Present", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                  { value: "half_day", label: "Half Day", color: "bg-blue-50 text-blue-700 border-blue-200" },
+                  { value: "absent", label: "Absent", color: "bg-rose-50 text-rose-700 border-rose-200" },
+                  { value: "leave", label: "Leave", color: "bg-violet-50 text-violet-700 border-violet-200" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setStatus(opt.value)}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold uppercase transition ${status === opt.value
+                        ? `${opt.color} ring-2 ring-blue-100 shadow-sm`
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {(status === "present" || status === "half_day") && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <TimePickerField
+                    label="Punch In"
+                    value={punchIn}
+                    onChange={setPunchIn}
+                    initialValue="09:00"
+                    required
+                  />
+                  <TimePickerField
+                    label="Punch Out"
+                    value={punchOut}
+                    onChange={setPunchOut}
+                    initialValue="18:00"
+                    required
+                  />
+                </div>
+              )}
+
+              {status === "half_day" && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Half Day Session</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "first_half", label: "First Half" },
+                      { value: "second_half", label: "Second Half" },
+                    ].map((s) => (
+                      <button
+                        key={s.value}
+                        type="button"
+                        onClick={() => setHalfDaySession(s.value)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold uppercase transition ${halfDaySession === s.value
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes / Remarks</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Attendance notes (optional)"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 text-sm font-semibold text-slate-800 resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Break Section */}
+          {activeTab === "break" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <TimePickerField
+                  label="Break Start"
+                  value={breakStart}
+                  onChange={setBreakStart}
+                  initialValue="13:00"
+                  required
+                />
+                <TimePickerField
+                  label="Break End"
+                  value={breakEnd}
+                  onChange={setBreakEnd}
+                  initialValue="14:00"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Break Type</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { value: "lunch", label: "Lunch" },
+                    { value: "tea", label: "Tea" },
+                    { value: "official", label: "Official" },
+                    { value: "personal", label: "Personal" },
+                  ].map((b) => (
+                    <button
+                      key={b.value}
+                      type="button"
+                      onClick={() => setBreakType(b.value)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold uppercase transition ${breakType === b.value
+                          ? "border-amber-500 bg-amber-50 text-amber-700 shadow-sm ring-2 ring-amber-100"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        }`}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Break Notes</label>
+                <textarea
+                  value={breakNotes}
+                  onChange={(e) => setBreakNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Add details about break (optional)"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:ring-4 focus:ring-amber-500/10 focus:border-amber-400 text-sm font-semibold text-slate-800 resize-none"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+    );
+  };
+
   const handleCalendarAttendanceSave = async (formPayload) => {
     const companyStr = localStorage.getItem("company");
     const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
     const sourceEmployee = manageEmployee;
+
+    if (formPayload.mode === "break" || formPayload.type === "break") {
+      const payload = {
+        employee_id: sourceEmployee.employee_id,
+        date: sourceEmployee.attendance_date,
+        type: "break",
+        start_time: formPayload.break_start ? String(formPayload.break_start).slice(0, 5) : "",
+        end_time: formPayload.break_end ? String(formPayload.break_end).slice(0, 5) : "",
+        break_type: formPayload.break_type || "lunch",
+        notes: formPayload.notes || "",
+      };
+      setSavingCalendarAttendance(true);
+      try {
+        const response = await apiCall("/attendance/mark", "POST", payload, companyId);
+        const result = await response.json();
+        if (!response.ok || result.success === false) throw new Error(result.message || "Failed to record break");
+        toast.success(result.message || "Break recorded successfully");
+        setManageCell(null);
+        fetchCalendar(month, year);
+      } catch (error) {
+        toast.error(error.message || "Failed to record break");
+      } finally {
+        setSavingCalendarAttendance(false);
+      }
+      return;
+    }
+
     const payload = {
       employee_id: sourceEmployee.employee_id,
       date: sourceEmployee.attendance_date,
@@ -1238,10 +1636,20 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
             onClose={() => setSelectedCell(null)}
             shift={shift}
             onManage={(cell) => { setSelectedCell(null); setManageCell(cell); }}
+            onViewLogs={(attId) => { setSelectedCell(null); setLogModal({ id: attId, type: "attendance" }); }}
           />
         )}
       </AnimatePresence>
-      <ManageAttendanceModal
+      <AnimatePresence>
+        {logModal && (
+          <AttendanceLogsModal
+            id={logModal.id}
+            type={logModal.type || "attendance"}
+            onClose={() => setLogModal(null)}
+          />
+        )}
+      </AnimatePresence>
+      <ManageAttendanceAndBreakModal
         isOpen={!!manageCell}
         employee={manageEmployee}
         initialStatus={manageEmployee?.day_status === "unmarked" ? "present" : manageEmployee?.day_status}
@@ -1486,11 +1894,11 @@ function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "atten
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Shift Start</label>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{formatTimeValue(shift.shift_start_time)}</p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-800">{formatTimeValue(shift.shift_start_time)}</p>
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Shift End</label>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{formatTimeValue(shift.shift_end_time)}</p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-800">{formatTimeValue(shift.shift_end_time)}</p>
               </div>
             </div>
           </div>
@@ -4026,42 +4434,9 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
 
 // ─── ATTENDANCE SUB-TAB DISPATCHER ──────────────────────────────────────────
 function AttendanceSection({ employee, fallbackId, refreshKey }) {
-  const [subTab, setSubTab] = useState("calendar"); // "calendar" | "breaks"
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setSubTab("calendar")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
-            subTab === "calendar"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-600 hover:text-blue-700 hover:bg-blue-50"
-          }`}
-        >
-          <FaCalendarAlt size={12} />
-          <span>Calendar & Logs</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab("breaks")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
-            subTab === "breaks"
-              ? "bg-amber-500 text-white shadow-sm"
-              : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
-          }`}
-        >
-          <FaCoffee size={12} />
-          <span>Break Management</span>
-        </button>
-      </div>
-
-      {subTab === "calendar" ? (
-        <EmployeeAttendanceCalendar employee={employee} fallbackId={fallbackId} refreshKey={refreshKey} />
-      ) : (
-        <EmployeeBreaksTab employeeId={employee?.id || fallbackId} employeeName={employee?.name} />
-      )}
+      <EmployeeAttendanceCalendar employee={employee} fallbackId={fallbackId} refreshKey={refreshKey} />
     </div>
   );
 }
@@ -4076,11 +4451,10 @@ function PayrollSection({ employee, employeeId, refreshKey }) {
         <button
           type="button"
           onClick={() => setSubTab("records")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
-            subTab === "records"
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "records"
               ? "bg-emerald-600 text-white shadow-sm"
               : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
-          }`}
+            }`}
         >
           <FaCalendarAlt size={12} />
           <span>Payroll Records</span>
@@ -4088,11 +4462,10 @@ function PayrollSection({ employee, employeeId, refreshKey }) {
         <button
           type="button"
           onClick={() => setSubTab("adjustments")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
-            subTab === "adjustments"
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "adjustments"
               ? "bg-indigo-600 text-white shadow-sm"
               : "text-gray-600 hover:text-indigo-700 hover:bg-indigo-50"
-          }`}
+            }`}
         >
           <FaCoins size={12} />
           <span>Adjustments (Bonus / Fine)</span>
@@ -4124,11 +4497,10 @@ function LeavesSection({ employee, employeeId, refreshKey }) {
         <button
           type="button"
           onClick={() => setSubTab("requests")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
-            subTab === "requests"
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "requests"
               ? "bg-amber-500 text-white shadow-sm"
               : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
-          }`}
+            }`}
         >
           <FaUmbrellaBeach size={12} />
           <span>Leave Requests</span>
@@ -4136,11 +4508,10 @@ function LeavesSection({ employee, employeeId, refreshKey }) {
         <button
           type="button"
           onClick={() => setSubTab("balances")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
-            subTab === "balances"
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "balances"
               ? "bg-violet-600 text-white shadow-sm"
               : "text-gray-600 hover:text-violet-700 hover:bg-violet-50"
-          }`}
+            }`}
         >
           <FaCalendarPlus size={12} />
           <span>Leave Balances & Quotas</span>
@@ -4182,26 +4553,52 @@ export default function EmployeeProfilePage() {
   }, [activeTab, employeeId, location.pathname, location.search, navigate, requestedTab, tabKey]);
 
   const fetchProfile = useCallback(async (id) => {
-    if (!id) { if (mountedRef.current) { setError("Missing employee id"); setProfile(null); } return; }
+    if (!id) {
+      if (mountedRef.current) {
+        setError("Missing employee id");
+        setProfile(null);
+      }
+      return;
+    }
+
     try {
-      if (mountedRef.current) { setLoading(true); setError(null); setProfile(null); }
+      if (mountedRef.current) {
+        setLoading(true);
+        setError(null);
+        setProfile(null);
+      }
+
       const { res, json } = await runDedupedRequest(`employee-profile:${id}`, async () => {
         const companyStr = localStorage.getItem("company");
         const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-        const response = await apiCall(`/employees/${id}?include=basic`, "GET", null, companyId);
+
+        // 🔁 Changed from `/employees/${id}?include=basic` to just `/employees/${id}`
+        const response = await apiCall(`/employees/${id}`, "GET", null, companyId);
         const data = await response.json();
         return { res: response, json: data };
       });
-      if (!res.ok || !json.success) throw new Error(json.message || "Failed to fetch profile details");
-      const raw = json.data?.basic ?? json.data?.[0] ?? json.data ?? {};
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to fetch profile details");
+      }
+
+      // 🔁 Backend now returns `json.data` directly (employee object)
+      const raw = json.data ?? {};
+
       if (mountedRef.current) {
         setProfile({
-          employee: { ...raw, code: raw.employee_code || raw.code },
-          user: { ...raw, name: raw.user_name || raw.name },
+          employee: {
+            ...raw,
+            code: raw.employee_code || raw.code,
+          },
+          user: {
+            ...raw,
+            name: raw.name, // backend uses `name`, not `user_name`
+          },
           company: {
             ...raw,
-            name: raw.company_name || (raw.company?.name ?? "—"),
-            legal_name: raw.legal_name || (raw.company?.legal_name ?? "—"),
+            name: raw.company_name || raw.company?.name || "—",
+            legal_name: raw.legal_name || raw.company?.legal_name || "—",
             logo_url: raw.logo_url || raw.company?.logo_url,
             city: raw.city || raw.company?.city,
             state: raw.state || raw.company?.state,
@@ -4210,7 +4607,10 @@ export default function EmployeeProfilePage() {
         });
       }
     } catch (err) {
-      if (mountedRef.current) { setError(err.message || "Failed to load profile"); setProfile(null); }
+      if (mountedRef.current) {
+        setError(err.message || "Failed to load profile");
+        setProfile(null);
+      }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
