@@ -1,20 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FaSearch, FaTimes, FaCheck,
-  FaUser, FaSpinner,
-  FaUniversity, FaStar, FaPlus,
+  FaSearch, FaTimes, FaCheck, FaTrash, FaEdit,
+  FaUser, FaSpinner, FaUniversity, FaStar, FaPlus,
   FaMoneyBillWave, FaEye, FaQrcode, FaShieldAlt,
+  FaSave, FaExclamationTriangle,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import apiCall from '../utils/api';
+import { fetchIfscDetails } from '../utils/ifscLookup';
 import Pagination, { usePagination } from '../components/PaginationComponent';
 import Modal from '../components/Modal';
 import { ManagementTable } from '../components/common';
 import ManagementGrid from '../components/ManagementGrid';
 import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import SelectField from '../components/SelectField';
-
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +33,29 @@ const getCompanyId = () => {
   } catch {
     return null;
   }
+};
+
+const EMPTY_AUTO_LOCKED_FIELDS = {
+  bank_name: false,
+  branch_name: false,
+  address: false,
+  city: false,
+  district: false,
+  state: false,
+  micr: false,
+  contact: false,
+};
+
+const EMPTY_FORM = {
+  account_type: 'savings',
+  bank_name: '',
+  account_holder_name: '',
+  account_number: '',
+  confirm_account_number: '',
+  ifsc_code: '',
+  branch_name: '',
+  upi_id: '',
+  is_primary: false,
 };
 
 // ─── Badges ───────────────────────────────────────────────────────────────────
@@ -87,7 +110,7 @@ const PrimaryBadge = ({ compact = false }) => (
 
 // ─── Mobile Card ───────────────────────────────────────────────────────────────
 
-const MobileBankCard = ({ account, onView }) => (
+const MobileBankCard = ({ account, onView, onEdit, onDelete }) => (
   <motion.div
     initial={{ opacity: 0, y: 12 }}
     animate={{ opacity: 1, y: 0 }}
@@ -114,13 +137,24 @@ const MobileBankCard = ({ account, onView }) => (
           </p>
         </div>
       </div>
-      <button
-        onClick={(e) => { e.stopPropagation(); onView(account); }}
-        className="p-2 rounded-xl text-green-600 hover:text-green-700 hover:bg-green-50 transition-all shrink-0"
-        title="View Details"
-      >
-        <FaEye size={14} />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); onView(account); }}
+          className="p-2 rounded-xl text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-all shrink-0"
+          title="View Details"
+        >
+          <FaEye size={14} />
+        </button>
+        {onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(account); }}
+            className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-all shrink-0"
+            title="Delete Account"
+          >
+            <FaTrash size={13} />
+          </button>
+        )}
+      </div>
     </div>
 
     <div className="mt-4 flex flex-wrap gap-1.5">
@@ -129,7 +163,7 @@ const MobileBankCard = ({ account, onView }) => (
       {account.is_primary && <PrimaryBadge compact />}
     </div>
 
-    <div className="mt-4 space-y-2">
+    <div className="mt-4 space-y-2 flex-1">
       {account.account_type === 'upi' && (
         <div className="flex items-center justify-between p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50">
           <span className="text-[10px] font-bold text-emerald-600 uppercase">UPI ID</span>
@@ -178,11 +212,11 @@ const BankAccountViewModal = ({ account, onClose }) => {
       }
       icon={
         account.account_type === 'cash' ? (
-          <FaMoneyBillWave size={20} />
+          <FaMoneyBillWave size={20} className="text-amber-500" />
         ) : account.account_type === 'upi' ? (
-          <FaQrcode size={20} />
+          <FaQrcode size={20} className="text-emerald-500" />
         ) : (
-          <FaUniversity size={20} />
+          <FaUniversity size={20} className="text-blue-500" />
         )
       }
       size="lg"
@@ -293,6 +327,21 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
   const [viewModal, setViewModal] = useState(null);
   const [viewMode, setViewMode] = useState('table');
 
+  // Add / Edit modal state
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [autoLockedFields, setAutoLockedFields] = useState(EMPTY_AUTO_LOCKED_FIELDS);
+  const [ifscLookupState, setIfscLookupState] = useState({ loading: false, error: '' });
+  const [saving, setSaving] = useState(false);
+
+  // Delete modal state
+  const [accountToDelete, setAccountToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const ifscLookupTimerRef = useRef(null);
+  const lastIfscLookupRef = useRef('');
+  const ifscLookupRequestRef = useRef(0);
+
   const { pagination, goToPage, changeLimit } = usePagination(1, ITEMS_PER_PAGE);
 
   useEffect(() => {
@@ -340,8 +389,7 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
       if (!isMountedRef.current) return;
       if (result.success) {
         setAccounts(result.data || []);
-        const total =
-          result.meta?.total ?? result.total ?? null;
+        const total = result.meta?.total ?? result.total ?? null;
         setTotalServerItems(total);
       } else {
         toast.error(result.message || 'Failed to fetch bank accounts');
@@ -378,7 +426,7 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
   // ── Client-side filtering (when server doesn't paginate) ──────────────────
 
   const filteredAccounts = useMemo(() => {
-    if (totalServerItems !== null) return accounts; // server-paginated
+    if (totalServerItems !== null) return accounts;
     const q = debouncedSearch.trim().toLowerCase();
     let list = [...accounts];
     if (q) {
@@ -453,33 +501,214 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
     [accounts]
   );
 
+  // ── IFSC Lookup ───────────────────────────────────────────────────────────
+
+  const resetIfscLookupState = () => {
+    ifscLookupRequestRef.current += 1;
+    if (ifscLookupTimerRef.current) {
+      clearTimeout(ifscLookupTimerRef.current);
+      ifscLookupTimerRef.current = null;
+    }
+    lastIfscLookupRef.current = '';
+    setIfscLookupState({ loading: false, error: '' });
+    setAutoLockedFields(EMPTY_AUTO_LOCKED_FIELDS);
+  };
+
+  const handleIfscChange = (value) => {
+    const nextIfsc = value.toUpperCase();
+    setFormData((prev) => {
+      const shouldClearFetchedFields =
+        !nextIfsc.trim() || nextIfsc.length < 11 || nextIfsc !== lastIfscLookupRef.current;
+      if (!shouldClearFetchedFields) return { ...prev, ifsc_code: nextIfsc };
+      return {
+        ...prev,
+        ifsc_code: nextIfsc,
+        bank_name: '',
+        branch_name: '',
+      };
+    });
+    resetIfscLookupState();
+  };
+
+  const applyIfscLookup = useCallback(async (ifscValue, { silent = false } = {}) => {
+    const ifsc = String(ifscValue || '').trim().toUpperCase();
+    if (ifsc.length !== 11) {
+      if (!silent) toast.error('Enter a valid 11-character IFSC code');
+      return false;
+    }
+
+    const requestId = ++ifscLookupRequestRef.current;
+    setIfscLookupState({ loading: true, error: '' });
+
+    try {
+      const details = await fetchIfscDetails(ifsc);
+      if (requestId !== ifscLookupRequestRef.current || !isMountedRef.current) return false;
+
+      lastIfscLookupRef.current = ifsc;
+      setAutoLockedFields({
+        bank_name: !!details.bank_name,
+        branch_name: !!details.branch_name,
+      });
+      setFormData((prev) => ({
+        ...prev,
+        ifsc_code: ifsc,
+        bank_name: details.bank_name || prev.bank_name,
+        branch_name: details.branch_name || prev.branch_name,
+      }));
+      return true;
+    } catch (error) {
+      if (requestId !== ifscLookupRequestRef.current || !isMountedRef.current) return false;
+      const message = error.message || 'Failed to fetch bank details';
+      setIfscLookupState({ loading: false, error: message });
+      if (!silent) toast.error(message);
+      return false;
+    } finally {
+      if (requestId === ifscLookupRequestRef.current && isMountedRef.current) {
+        setIfscLookupState((prev) => ({ ...prev, loading: false }));
+      }
+    }
+  }, []);
+
+  // Auto-lookup IFSC after debounce
+  useEffect(() => {
+    if (!showFormModal || !['savings', 'current'].includes(formData.account_type)) return undefined;
+
+    const ifsc = String(formData.ifsc_code || '').trim().toUpperCase();
+    if (ifsc.length !== 11 || ifsc === lastIfscLookupRef.current) return undefined;
+
+    if (ifscLookupTimerRef.current) clearTimeout(ifscLookupTimerRef.current);
+    ifscLookupTimerRef.current = setTimeout(() => {
+      void applyIfscLookup(ifsc, { silent: true });
+    }, 450);
+
+    return () => {
+      if (ifscLookupTimerRef.current) {
+        clearTimeout(ifscLookupTimerRef.current);
+        ifscLookupTimerRef.current = null;
+      }
+    };
+  }, [applyIfscLookup, formData.account_type, formData.ifsc_code, showFormModal]);
+
+  // ── Open / Close modal helpers ───────────────────────────────────────────
+
+  const openAddModal = () => {
+    setFormData({ ...EMPTY_FORM });
+    resetIfscLookupState();
+    setShowFormModal(true);
+  };
+
+  const handleSaveAccount = async (e) => {
+    e?.preventDefault();
+    if (!employeeId) {
+      toast.error('Employee ID is missing');
+      return;
+    }
+    if (!formData.account_holder_name.trim()) {
+      toast.error('Account holder name is required');
+      return;
+    }
+
+    const isBankType = ['savings', 'current'].includes(formData.account_type);
+    const isUpiType = formData.account_type === 'upi';
+
+    if (isBankType) {
+      if (!formData.bank_name.trim()) {
+        toast.error('Bank name is required');
+        return;
+      }
+      if (!formData.account_number.trim()) {
+        toast.error('Account number is required');
+        return;
+      }
+      if (!formData.ifsc_code.trim()) {
+        toast.error('IFSC code is required');
+        return;
+      }
+    }
+    if (isUpiType && !formData.upi_id.trim()) {
+      toast.error('UPI ID is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const companyId = getCompanyId();
+      const payload = isBankType
+        ? {
+            bank_owner_type: 'employee',
+            employee_id: Number(employeeId),
+            account_type: formData.account_type,
+            bank_name: formData.bank_name,
+            account_holder_name: formData.account_holder_name,
+            account_number: formData.account_number,
+            ifsc_code: formData.ifsc_code,
+            branch_name: formData.branch_name,
+            is_primary: formData.is_primary,
+          }
+        : {
+            bank_owner_type: 'employee',
+            employee_id: Number(employeeId),
+            account_type: formData.account_type === 'cash' ? 'cash' : 'upi',
+            account_holder_name: formData.account_holder_name,
+            upi_id: formData.upi_id,
+            is_primary: formData.is_primary,
+          };
+
+      const response = await apiCall('/bank-accounts/create', 'POST', payload, companyId);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) throw new Error(result.message || 'Operation failed');
+
+      toast.success(result.message || 'Account added successfully');
+      setShowFormModal(false);
+      await fetchData({ force: true });
+    } catch (error) {
+      toast.error(error.message || 'An error occurred. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!accountToDelete) return;
+    setDeleting(true);
+    try {
+      const companyId = getCompanyId();
+      const accountId = accountToDelete.bank_account_id || accountToDelete.id;
+      const response = await apiCall(
+        `/bank-accounts/delete`,
+        'DELETE',
+        { bank_account_id: accountId },
+        companyId
+      );
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Failed to delete account');
+
+      toast.success(result.message || 'Account deleted successfully');
+      setAccountToDelete(null);
+      await fetchData({ force: true });
+    } catch (error) {
+      toast.error(error.message || 'Failed to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // ── Table columns ─────────────────────────────────────────────────────────
 
   const columns = [
     {
       key: 'account',
       label: 'Account Details',
-      visible: true,
       render: (account) => (
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-            {account.account_type === 'upi' ? (
-              <FaQrcode size={14} />
-            ) : account.account_type === 'cash' ? (
-              <FaMoneyBillWave size={14} />
-            ) : (
-              <FaUniversity size={14} />
-            )}
+        <div className="min-w-0">
+          <div className="font-semibold text-slate-800 text-sm truncate">
+            {account.account_holder_name}
           </div>
-          <div className="min-w-0">
-            <div className="font-semibold text-slate-800 text-sm truncate">
-              {account.account_holder_name}
-            </div>
-            <div className="text-[10px] text-slate-400 font-mono italic truncate">
-              {account.account_type === 'upi'
-                ? account.upi_id || 'UPI ID'
-                : account.bank_name || 'Cash Account'}
-            </div>
+          <div className="text-[10px] text-slate-400 font-mono italic truncate">
+            {account.account_type === 'upi'
+              ? account.upi_id || 'UPI ID'
+              : account.bank_name || 'Cash Account'}
           </div>
         </div>
       ),
@@ -487,7 +716,6 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
     {
       key: 'type',
       label: 'Type',
-      visible: true,
       render: (account) => (
         <div className="flex flex-col gap-1 items-start">
           <AccountTypeBadge type={account.account_type} compact />
@@ -497,27 +725,22 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
     },
     {
       key: 'account_number',
-      label: 'Account / UPI',
-      visible: true,
+      label: 'Account No.',
       render: (account) => (
         <span className="font-mono text-sm text-slate-600">
           {account.account_type === 'upi'
-            ? account.upi_id || '—'
-            : account.account_number
-              ? maskAccount(account.account_number)
-              : '—'}
+            ? account.upi_id
+            : account.account_number_masked ||
+              (account.account_number ? maskAccount(account.account_number) : '—')}
         </span>
       ),
     },
     {
       key: 'ifsc',
       label: 'IFSC / Branch',
-      visible: true,
       render: (account) => (
         <div className="flex flex-col">
-          <span className="text-sm font-semibold text-slate-700">
-            {account.ifsc_code || '—'}
-          </span>
+          <span className="text-sm font-semibold text-slate-700">{account.ifsc_code || '—'}</span>
           <span className="text-[10px] text-slate-400">{account.branch_name || ''}</span>
         </div>
       ),
@@ -525,146 +748,111 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
     {
       key: 'status',
       label: 'Status',
-      visible: true,
       render: (account) => <StatusBadge status={account.status} compact />,
     },
   ];
 
-  // ─── Render ────────────────────────────────────────────────────────────────
-
-  if (loading && accounts.length === 0) {
-    return (
-      <div className="py-16 flex flex-col items-center gap-4">
-        <FaSpinner className="animate-spin text-blue-500 text-3xl" />
-        <p className="text-slate-400 font-medium animate-pulse text-sm">
-          Loading bank accounts…
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-5">
-      {/* Stats row */}
-      {accounts.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-        >
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all"
-            >
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  {stat.label}
-                </p>
-                <p className="text-2xl font-black text-slate-800 mt-0.5">{stat.value}</p>
-              </div>
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${stat.iconCls}`}
-              >
-                <stat.icon size={18} />
-              </div>
+    <div className="space-y-4">
+      {/* Top action / stats row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all"
+          >
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {stat.label}
+              </p>
+              <p className="text-xl font-black text-slate-800 mt-0.5">{stat.value}</p>
             </div>
-          ))}
-        </motion.div>
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.iconCls}`}
+            >
+              <stat.icon size={16} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter and View Bar */}
+      <div className="flex flex-col gap-3 bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
+            <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+            <input
+              type="text"
+              placeholder="Search by holder name, bank, account number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none text-sm font-medium"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-blue-200 hover:from-blue-700 hover:to-indigo-700 transition-all shrink-0"
+          >
+            <FaPlus size={11} /> Add Account
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-50">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-[125px]">
+              <SelectField
+                options={[
+                  { value: '', label: 'All Status' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ]}
+                value={filterStatus || { value: '', label: 'All Status' }}
+                onChange={(opt) => setFilterStatus(opt.value ? opt : null)}
+              />
+            </div>
+            <div className="w-[135px]">
+              <SelectField
+                options={[
+                  { value: '', label: 'All Types' },
+                  { value: 'savings', label: 'Savings' },
+                  { value: 'current', label: 'Current' },
+                  { value: 'upi', label: 'UPI' },
+                  { value: 'cash', label: 'Cash' },
+                ]}
+                value={filterAccountType || { value: '', label: 'All Types' }}
+                onChange={(opt) => setFilterAccountType(opt.value ? opt : null)}
+              />
+            </div>
+          </div>
+
+          <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="blue" />
+        </div>
+      </div>
+
+      {/* Loading state */}
+      {loading && accounts.length === 0 && (
+        <div className="flex flex-col items-center py-12 gap-2 text-slate-400">
+          <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
+          <span className="text-xs font-medium">Loading bank accounts…</span>
+        </div>
       )}
-
-      {/* Filters + view switcher */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="flex flex-col lg:flex-row lg:justify-between gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
-      >
-        {/* Search */}
-        <div className="relative lg:w-2/5">
-          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by holder name, bank, account number, IFSC…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none shadow-sm transition-all text-sm font-medium"
-          />
-        </div>
-
-        {/* Filter row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-center">
-          <div className="w-full">
-            <SelectField 
-              options={[
-                { value: '', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' },
-              ]}
-              value={filterStatus || { value: '', label: 'All Status' }}
-              onChange={(opt) => {
-                setFilterStatus(opt.value ? opt : null);
-                goToPage(1);
-              }}
-            />
-          </div>
-
-          <div className="w-full">
-            <SelectField
-              options={[
-                { value: '', label: 'All Types' },
-                { value: 'savings', label: 'Savings' },
-                { value: 'current', label: 'Current' },
-                { value: 'upi', label: 'UPI' },
-              ]}
-              value={filterAccountType || { value: '', label: 'All Types' }}
-              onChange={(opt) => {
-                setFilterAccountType(opt.value ? opt : null);
-                goToPage(1);
-              }}
-            />
-          </div>
-
-          <div className="w-full">
-            <SelectField
-              options={[
-                { value: '', label: 'All Primary' },
-                { value: '1', label: 'Primary Only' },
-                { value: '0', label: 'Non-Primary' },
-              ]}
-              value={filterIsPrimary || { value: '', label: 'All Primary' }}
-              onChange={(opt) => {
-                setFilterIsPrimary(opt.value ? opt : null);
-                goToPage(1);
-              }}
-            />
-          </div>
-
-          <div className="flex justify-start lg:justify-end">
-            <ManagementViewSwitcher
-              viewMode={viewMode}
-              onChange={setViewMode}
-              accent="blue"
-            />
-          </div>
-        </div>
-      </motion.div>
 
       {/* Empty state */}
       {totalItems === 0 && !loading && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-100"
+          className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-slate-100"
         >
-          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-            <FaUniversity size={24} />
+          <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
+            <FaUniversity size={22} />
           </div>
-          <p className="text-slate-500 font-bold">No bank accounts found</p>
-          <p className="text-slate-400 text-sm mt-1 mx-auto max-w-xs">
+          <p className="text-slate-700 font-bold text-sm">No bank accounts found</p>
+          <p className="text-slate-400 text-xs mt-1 mx-auto max-w-xs">
             {searchTerm
               ? `No results matching "${searchTerm}"`
-              : 'This employee has not added any bank accounts yet.'}
+              : 'This employee does not have any bank accounts added yet.'}
           </p>
         </motion.div>
       )}
@@ -674,14 +862,14 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
         <ManagementTable
           rows={paginatedData}
           columns={columns}
-          rowKey={(row) => row.bank_id ?? row.id}
+          rowKey={(row) => row.bank_account_id ?? row.id}
           onRowClick={(row) => setViewModal(row)}
           getActions={(row) => [
             {
               label: 'View Details',
               icon: <FaEye size={13} />,
               onClick: () => setViewModal(row),
-              className: 'text-green-600 hover:text-green-700 hover:bg-green-50',
+              className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50',
             },
           ]}
           accent="blue"
@@ -693,7 +881,7 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
         <ManagementGrid viewMode={viewMode}>
           {paginatedData.map((account) => (
             <MobileBankCard
-              key={account.bank_id ?? account.id}
+              key={account.bank_account_id ?? account.id}
               account={account}
               onView={(r) => setViewModal(r)}
             />
@@ -718,6 +906,7 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
         account={viewModal}
         onClose={() => setViewModal(null)}
       />
+
     </div>
   );
 };

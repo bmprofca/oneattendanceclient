@@ -13,7 +13,8 @@ import {
   FaComment, FaCog, FaMapPin, FaServer, FaInfoCircle,
   FaSpinner, FaSignInAlt, FaSignOutAlt, FaHourglassHalf,
   FaChevronLeft, FaFilePdf, FaPlus, FaSave,
-  FaDownload, FaEdit, FaTrash, FaUniversity
+  FaDownload, FaEdit, FaTrash, FaUniversity,
+  FaCoffee, FaCoins
 } from "react-icons/fa";
 import apiCall from "../utils/api";
 import { toast } from "react-toastify";
@@ -33,8 +34,12 @@ import TimePickerField from "../components/TimePicker";
 import { ManageAttendanceModal } from "./UnmarkedAttendance";
 import CompanyLedger from "./CompanyLedger";
 import SkeletonComponent from "../components/SkeletonComponent";
-import { EditSalaryModal, ReviseSalaryModal, DeleteConfirmModal } from "../pages/SalaryManagement";
+import { AssignSalaryModal, EditSalaryModal, ReviseSalaryModal, DeleteConfirmModal } from "../pages/SalaryManagement";
 import EmployeeBankAccountsTab from "../components/EmployeeBankAccountsTab";
+import EmployeeBreaksTab from "../components/profile/EmployeeBreaksTab";
+import EmployeePayrollAdjustmentsTab from "../components/profile/EmployeePayrollAdjustmentsTab";
+import EmployeeLeaveBalancesTab from "../components/profile/EmployeeLeaveBalancesTab";
+import EmployeeLeaveRequestsTab from "../components/profile/EmployeeLeaveRequestsTab";
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
@@ -516,7 +521,25 @@ const CalendarEmployeeInfo = ({ employee, shift, statistics }) => {
 
 // ─── CALENDAR DAY DETAILS MODAL ───────────────────────────────────────────────
 
-const CalendarDayDetailsModal = ({ cell, onClose, shift, onManage }) => {
+const CalendarDayDetailsModal = ({ cell, employeeId, onClose, shift, onManage }) => {
+  const [fetchedBreaks, setFetchedBreaks] = useState([]);
+  const [loadingBreaks, setLoadingBreaks] = useState(false);
+
+  useEffect(() => {
+    if (!cell?.date || !employeeId) return;
+    const dateStr = formatCalendarDate(cell.date);
+    const companyStr = localStorage.getItem("company");
+    const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
+    setLoadingBreaks(true);
+    apiCall(`/attendance/list?employee_id=${employeeId}&type=break&from_date=${dateStr}&to_date=${dateStr}`, "GET", null, companyId)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) setFetchedBreaks(json.data || []);
+      })
+      .catch((err) => console.error("Failed to fetch break details", err))
+      .finally(() => setLoadingBreaks(false));
+  }, [cell, employeeId]);
+
   if (!cell) return null;
   const { date, data } = cell;
   const status = getDayStatus(data);
@@ -654,29 +677,41 @@ const CalendarDayDetailsModal = ({ cell, onClose, shift, onManage }) => {
             </div>
           )}
 
-          {breakPairs.length > 0 && (
+          {(breakPairs.length > 0 || fetchedBreaks.length > 0) && (
             <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                Breaks ({breakPairs.length})
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                <span>Breaks ({fetchedBreaks.length || breakPairs.length})</span>
+                {loadingBreaks && <FaSpinner className="animate-spin text-amber-500" size={10} />}
               </p>
               <div className="space-y-1.5">
-                {breakPairs.map((bp, i) => {
-                  const sTime = bp.start?.time ? parseTime(bp.start.time) : null;
-                  const eTime = bp.end?.time ? parseTime(bp.end.time) : null;
-                  let dur = null;
-                  if (sTime != null && eTime != null) {
-                    dur = eTime - sTime;
-                    if (dur < 0) dur += 24 * 60;
-                  }
-                  return (
-                    <div key={i} className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-100 text-[11px]">
-                      <span className="font-bold text-amber-700">
-                        {bp.start?.time || "—"} → {bp.end?.time || (bp.end === null ? "Active" : "—")}
+                {fetchedBreaks.length > 0 ? (
+                  fetchedBreaks.map((b, i) => (
+                    <div key={i} className="flex items-center justify-between p-2.5 bg-amber-50 rounded-lg border border-amber-100 text-xs">
+                      <span className="font-bold text-amber-800">
+                        {b.start_time || b.break_start || "—"} → {b.end_time || b.break_end || "—"}
                       </span>
-                      {dur != null && dur > 0 && <span className="font-black text-amber-600">{dur}m</span>}
+                      {b.remark && <span className="text-[10px] text-amber-600 italic">{b.remark}</span>}
                     </div>
-                  );
-                })}
+                  ))
+                ) : (
+                  breakPairs.map((bp, i) => {
+                    const sTime = bp.start?.time ? parseTime(bp.start.time) : null;
+                    const eTime = bp.end?.time ? parseTime(bp.end.time) : null;
+                    let dur = null;
+                    if (sTime != null && eTime != null) {
+                      dur = eTime - sTime;
+                      if (dur < 0) dur += 24 * 60;
+                    }
+                    return (
+                      <div key={i} className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-100 text-[11px]">
+                        <span className="font-bold text-amber-700">
+                          {bp.start?.time || "—"} → {bp.end?.time || (bp.end === null ? "Active" : "—")}
+                        </span>
+                        {dur != null && dur > 0 && <span className="font-black text-amber-600">{dur}m</span>}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -1199,6 +1234,7 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
         {selectedCell && (
           <CalendarDayDetailsModal
             cell={selectedCell}
+            employeeId={employeeId}
             onClose={() => setSelectedCell(null)}
             shift={shift}
             onManage={(cell) => { setSelectedCell(null); setManageCell(cell); }}
@@ -2827,6 +2863,161 @@ function CreateSalaryModal({ isOpen, onClose, employeeId, onSuccess }) {
   );
 }
 
+// ─── TRANSFER PERMISSION PACKAGE MODAL ──────────────────────────────────────
+
+function TransferPackageModal({ isOpen, onClose, employeeId, employeeName, onSuccess }) {
+  const [packages, setPackages] = useState([]);
+  const [loadingPackages, setLoadingPackages] = useState(false);
+  const [selectedPackageId, setSelectedPackageId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setLoadingPackages(true);
+    const companyStr = localStorage.getItem("company");
+    const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
+    apiCall("/permissions/permission-packages", "GET", null, companyId)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) setPackages(json.data || []);
+      })
+      .catch((err) => console.error("Failed to load packages", err))
+      .finally(() => setLoadingPackages(false));
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedPackageId) {
+      toast.warning("Please select a permission package");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const companyStr = localStorage.getItem("company");
+      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
+      const response = await apiCall("/permissions/transfer-packages", "PUT", {
+        assignments: [{ employee_id: Number(employeeId), package_id: Number(selectedPackageId) }]
+      }, companyId);
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || "Failed to assign package");
+      toast.success(result.message || "Permission package assigned successfully");
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      toast.error(err.message || "Failed to assign package");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Transfer / Assign Permission Package"
+      subtitle={`Assign permission package for ${employeeName || "Employee"}`}
+      icon={<FaShieldAlt className="text-indigo-600" />}
+      size="md"
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={submitting} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={handleSubmit} disabled={submitting || !selectedPackageId} className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-indigo-700 hover:to-purple-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-50">
+            {submitting ? <FaSpinner className="animate-spin" size={12} /> : <FaSave size={12} />}
+            {submitting ? "Assigning..." : "Assign Package"}
+          </button>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Permission Package</label>
+          <SelectField
+            value={packages.map(p => ({ value: p.id, label: `${p.package_name || p.name} (${p.group_code || 'Code'})` })).find(opt => String(opt.value) === String(selectedPackageId)) || null}
+            onChange={(opt) => setSelectedPackageId(opt?.value || "")}
+            options={packages.map(p => ({ value: p.id, label: `${p.package_name || p.name} (${p.group_code || 'Code'})` }))}
+            isLoading={loadingPackages}
+            placeholder={loadingPackages ? "Loading packages..." : "Select permission package"}
+            menuPortalTarget={document.body}
+          />
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── SHARE SHIFT SCHEDULE MODAL ─────────────────────────────────────────────
+
+function ShareShiftModal({ isOpen, onClose, employeeId, employeeEmail, month, year, onSuccess }) {
+  const [targetEmail, setTargetEmail] = useState(employeeEmail || "");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (employeeEmail) setTargetEmail(employeeEmail);
+  }, [employeeEmail]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const companyStr = localStorage.getItem("company");
+      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
+      const response = await apiCall("/shifts/send-email", "POST", {
+        employee_id: employeeId,
+        month,
+        year,
+        email: targetEmail.trim()
+      }, companyId);
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || "Failed to send shift email");
+      toast.success(result.message || "Shift schedule emailed successfully");
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      toast.error(err.message || "Failed to send shift email");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Share Shift Schedule"
+      subtitle="Send monthly shift schedule via email"
+      icon={<FaEnvelope className="text-indigo-600" />}
+      size="md"
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={submitting} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={handleSubmit} disabled={submitting} className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50">
+            {submitting ? <FaSpinner className="animate-spin" size={12} /> : <FaEnvelope size={12} />}
+            {submitting ? "Sending..." : "Send Email"}
+          </button>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Recipient Email</label>
+          <input
+            type="email"
+            value={targetEmail}
+            onChange={(e) => setTargetEmail(e.target.value)}
+            placeholder="Enter email address"
+            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 outline-none text-sm font-semibold text-slate-800"
+            required
+          />
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ─── GENERIC TAB CONTENT ──────────────────────────────────────────────────────
 
 function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
@@ -2843,6 +3034,8 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const [showCreateSalaryModal, setShowCreateSalaryModal] = useState(false);
   const [showCreatePayrollModal, setShowCreatePayrollModal] = useState(false);
   const [showCreateLeaveModal, setShowCreateLeaveModal] = useState(false);
+  const [showTransferPackageModal, setShowTransferPackageModal] = useState(false);
+  const [showShareShiftModal, setShowShareShiftModal] = useState(false);
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
   const [leaveTypeLoading, setLeaveTypeLoading] = useState(false);
   const [creatingLeave, setCreatingLeave] = useState(false);
@@ -3352,16 +3545,34 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
             {tabIcon}{tabLabel}
           </p>
           <div className="flex items-center gap-2 flex-row justify-end">
-            {normalizedTabKey === "shifts" && (
+            {normalizedTabKey === "permissions" && (
               <button
                 type="button"
-                onClick={handleDownloadShiftPdf}
-                disabled={downloadingShiftPdf}
-                className="inline-flex whitespace-nowrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => setShowTransferPackageModal(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-100"
               >
-                {downloadingShiftPdf ? <FaSpinner className="animate-spin" size={10} /> : <FaFilePdf size={10} />}
-                {downloadingShiftPdf ? "Preparing PDF…" : "Download This Month PDF"}
+                <FaExchangeAlt size={10} /> Transfer Package
               </button>
+            )}
+            {normalizedTabKey === "shifts" && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleDownloadShiftPdf}
+                  disabled={downloadingShiftPdf}
+                  className="inline-flex whitespace-nowrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {downloadingShiftPdf ? <FaSpinner className="animate-spin" size={10} /> : <FaFilePdf size={10} />}
+                  {downloadingShiftPdf ? "Preparing PDF…" : "Download PDF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowShareShiftModal(true)}
+                  className="inline-flex whitespace-nowrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-100"
+                >
+                  <FaEnvelope size={10} /> Share Shift
+                </button>
+              </>
             )}
             {normalizedTabKey === "leaves" && (
               <button type="button" onClick={handleCreateLeaveClick} className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 shadow-sm transition-all hover:bg-amber-100">
@@ -3369,14 +3580,9 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
               </button>
             )}
             {normalizedTabKey === "salary" && (
-              <>
-                <button type="button" onClick={() => setShowCreateSalaryModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 shadow-sm transition-all hover:bg-green-100">
-                  <FaPlus size={10} /> Create
-                </button>
-                <button onClick={() => navigate(`/employee-salary-history/${employeeId}`)} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-all shadow-sm">
-                  <FaHistory size={10} /> History
-                </button>
-              </>
+              <button type="button" onClick={() => setShowCreateSalaryModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 shadow-sm transition-all hover:bg-green-100">
+                <FaPlus size={10} /> Create
+              </button>
             )}
             {normalizedTabKey === "payroll" && (
               <button type="button" onClick={handleCreatePayrollClick} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100">
@@ -3714,6 +3920,31 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
       </AnimatePresence>
 
       <AnimatePresence>
+        {showTransferPackageModal && (
+          <TransferPackageModal
+            isOpen={showTransferPackageModal}
+            onClose={() => setShowTransferPackageModal(false)}
+            employeeId={employeeId}
+            employeeName={rows[0]?.name || "Employee"}
+            onSuccess={() => fetchData(pagination.page, pagination.limit)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showShareShiftModal && (
+          <ShareShiftModal
+            isOpen={showShareShiftModal}
+            onClose={() => setShowShareShiftModal(false)}
+            employeeId={employeeId}
+            employeeEmail={rows[0]?.email || ""}
+            month={new Date().getMonth() + 1}
+            year={new Date().getFullYear()}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {selectedItem && (
           <DetailModal
             isOpen={!!selectedItem}
@@ -3738,6 +3969,21 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
         onSubmit={submitProfileLeaveAction}
         submitting={profileLeaveSubmitting}
       />
+
+      <AnimatePresence>
+        {showCreateSalaryModal && normalizedTabKey === "salary" && (
+          <AssignSalaryModal
+            isOpen={showCreateSalaryModal}
+            onClose={() => setShowCreateSalaryModal(false)}
+            onSuccess={() => {
+              setShowCreateSalaryModal(false);
+              fetchData(pagination.page, pagination.limit);
+            }}
+            initialEmployeeId={employeeId}
+            companyCurrency="INR"
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showEditSalaryModal && salaryToEdit && normalizedTabKey === "salary" && (
@@ -3774,6 +4020,138 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── ATTENDANCE SUB-TAB DISPATCHER ──────────────────────────────────────────
+function AttendanceSection({ employee, fallbackId, refreshKey }) {
+  const [subTab, setSubTab] = useState("calendar"); // "calendar" | "breaks"
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setSubTab("calendar")}
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+            subTab === "calendar"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-gray-600 hover:text-blue-700 hover:bg-blue-50"
+          }`}
+        >
+          <FaCalendarAlt size={12} />
+          <span>Calendar & Logs</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("breaks")}
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+            subTab === "breaks"
+              ? "bg-amber-500 text-white shadow-sm"
+              : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
+          }`}
+        >
+          <FaCoffee size={12} />
+          <span>Break Management</span>
+        </button>
+      </div>
+
+      {subTab === "calendar" ? (
+        <EmployeeAttendanceCalendar employee={employee} fallbackId={fallbackId} refreshKey={refreshKey} />
+      ) : (
+        <EmployeeBreaksTab employeeId={employee?.id || fallbackId} employeeName={employee?.name} />
+      )}
+    </div>
+  );
+}
+
+// ─── PAYROLL SUB-TAB DISPATCHER ─────────────────────────────────────────────
+function PayrollSection({ employee, employeeId, refreshKey }) {
+  const [subTab, setSubTab] = useState("records"); // "records" | "adjustments"
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setSubTab("records")}
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+            subTab === "records"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
+          }`}
+        >
+          <FaCalendarAlt size={12} />
+          <span>Payroll Records</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("adjustments")}
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+            subTab === "adjustments"
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "text-gray-600 hover:text-indigo-700 hover:bg-indigo-50"
+          }`}
+        >
+          <FaCoins size={12} />
+          <span>Adjustments (Bonus / Fine)</span>
+        </button>
+      </div>
+
+      {subTab === "records" ? (
+        <TabContent
+          tabKey="payroll"
+          tabLabel="Payroll"
+          tabIcon={<FaCalendarAlt size={12} />}
+          employeeId={employeeId}
+          refreshKey={refreshKey}
+        />
+      ) : (
+        <EmployeePayrollAdjustmentsTab employeeId={employeeId} employeeName={employee?.name} />
+      )}
+    </div>
+  );
+}
+
+// ─── LEAVES SUB-TAB DISPATCHER ──────────────────────────────────────────────
+function LeavesSection({ employee, employeeId, refreshKey }) {
+  const [subTab, setSubTab] = useState("requests"); // "requests" | "balances"
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setSubTab("requests")}
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+            subTab === "requests"
+              ? "bg-amber-500 text-white shadow-sm"
+              : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
+          }`}
+        >
+          <FaUmbrellaBeach size={12} />
+          <span>Leave Requests</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("balances")}
+          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+            subTab === "balances"
+              ? "bg-violet-600 text-white shadow-sm"
+              : "text-gray-600 hover:text-violet-700 hover:bg-violet-50"
+          }`}
+        >
+          <FaCalendarPlus size={12} />
+          <span>Leave Balances & Quotas</span>
+        </button>
+      </div>
+
+      {subTab === "requests" ? (
+        <EmployeeLeaveRequestsTab employeeId={employeeId} employeeName={employee?.name} />
+      ) : (
+        <EmployeeLeaveBalancesTab employeeId={employeeId} employeeName={employee?.name} />
+      )}
     </div>
   );
 }
@@ -3886,7 +4264,11 @@ export default function EmployeeProfilePage() {
               >
                 <div className="space-y-4">
                   {activeTab === "attendance" ? (
-                    <EmployeeAttendanceCalendar employee={profile.employee} fallbackId={employeeId} refreshKey={refreshKey} />
+                    <AttendanceSection employee={profile.employee} fallbackId={employeeId} refreshKey={refreshKey} />
+                  ) : activeTab === "payroll" ? (
+                    <PayrollSection employee={profile.employee} employeeId={profile.employee?.id ?? employeeId} refreshKey={refreshKey} />
+                  ) : activeTab === "leaves" ? (
+                    <LeavesSection employee={profile.employee} employeeId={profile.employee?.id ?? employeeId} refreshKey={refreshKey} />
                   ) : activeTab === "ledger" ? (
                     <CompanyLedger employeeId={profile.employee?.id ?? employeeId} />
                   ) : activeTab === "accounts" ? (

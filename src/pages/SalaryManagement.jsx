@@ -962,41 +962,43 @@ const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitT
 
     return (
         <AnimatePresence>
-            <motion.div variants={backdropVariants} initial="hidden" animate="visible" exit="exit" className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex justify-center items-start overflow-y-auto p-4 sm:p-6 pt-8 sm:pt-16 !mt-0" onClick={onClose}>
+            <motion.div variants={backdropVariants} initial="hidden" animate="visible" exit="exit" className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
                 <ModalScrollLock />
-                <motion.div variants={modalVariants} initial="hidden" animate="visible" exit="exit" className="bg-white w-full max-w-4xl max-h-[80vh] rounded-xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden m-auto" onClick={e => e.stopPropagation()}>
-                    {/* Header */}
-                    <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-5">
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-200">
-                                <FaPlus className="h-6 w-6 text-white" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-slate-900">Assign Salary</h2>
-                                <p className="text-sm text-slate-500">Configure salary profile for employee</p>
-                            </div>
+                <motion.div variants={modalVariants} initial="hidden" animate="visible" exit="exit" className="bg-white relative w-full max-w-4xl max-h-[90vh] rounded-xl shadow-2xl border border-gray-100 m-auto flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-gray-100 bg-white z-10 flex-shrink-0">
+                        <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                            <FaMoneyBillWave className="w-5 h-5 text-green-600" />
                         </div>
-                        <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-all hover:bg-slate-100">
-                            <FaTimes className="h-4 w-4" />
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900">Assign Salary</h2>
+                            <p className="text-xs text-gray-400 mt-0.5">Define employee compensation structure and base earnings.</p>
+                        </div>
+                        <button onClick={onClose} className="ml-auto w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors text-gray-400 hover:text-gray-600" aria-label="Close">
+                            <FaTimes className="w-4 h-4" />
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                        <div className="p-6 space-y-5">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Select Employee *</label>
-                                <EmployeeSelect value={selectedEmployee?.id || ''} onChange={(id, emp) => setSelectedEmployee(emp)} placeholder="Search and select an employee..." initialEmployee={selectedEmployee} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
+                    <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-6 space-y-6">
+                        <div className="space-y-4">
+                            {!initialEmployeeId && (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Select Employee *</label>
+                                    <EmployeeSelect
+                                        value={selectedEmployee?.id || ''}
+                                        onChange={(id, emp) => setSelectedEmployee(emp || (id ? { id } : null))}
+                                        placeholder="Select an employee..."
+                                        initialEmployee={initialEmployee}
+                                    />
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Effective From *</label>
                                     <AdvancedDateFilter
-                                        tabOptions={["month"]}
+                                        tabOptions={['month']}
                                         value={formData.effective_from ? { month: parseInt(formData.effective_from.split('-')[1]), year: parseInt(formData.effective_from.split('-')[0]) } : null}
-                                        onChange={(val) => {
-                                            if (val && val.month && val.year) { setFormData({ ...formData, effective_from: `${val.year}-${String(val.month).padStart(2, '0')}-01` }); }
-                                            else { setFormData({ ...formData, effective_from: '' }); }
-                                        }}
+                                        onChange={(val) => setFormData({ ...formData, effective_from: val && val.month && val.year ? `${val.year}-${String(val.month).padStart(2, '0')}-01` : '' })}
                                         placeholder="Select month"
                                         buttonClassName="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none text-left text-sm"
                                     />
@@ -1004,12 +1006,9 @@ const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitT
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Effective To</label>
                                     <AdvancedDateFilter
-                                        tabOptions={["month"]}
+                                        tabOptions={['month']}
                                         value={formData.effective_to ? { month: parseInt(formData.effective_to.split('-')[1]), year: parseInt(formData.effective_to.split('-')[0]) } : null}
-                                        onChange={(val) => {
-                                            if (val && val.month && val.year) { setFormData({ ...formData, effective_to: `${val.year}-${String(val.month).padStart(2, '0')}-01` }); }
-                                            else { setFormData({ ...formData, effective_to: '' }); }
-                                        }}
+                                        onChange={(val) => setFormData({ ...formData, effective_to: val && val.month && val.year ? `${val.year}-${String(val.month).padStart(2, '0')}-01` : '' })}
                                         placeholder="Optional"
                                         buttonClassName="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none text-left text-sm"
                                     />
@@ -1025,19 +1024,19 @@ const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitT
                                         options={packages.map(pkg => ({ value: pkg.id, label: `${pkg.name} (${pkg.code})` }))}
                                         isLoading={loadingPackages}
                                         isClearable
-                                        placeholder={loadingPackages ? 'Loading packages...' : 'Custom / Manual'}
-                                        noOptionsMessage={() => 'No packages found'}
+                                        placeholder={loadingPackages ? "Loading packages..." : "Custom / Manual"}
                                         menuPortalTarget={document.body}
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Base Amount *</label>
                                     <input
-                                        type="text" inputMode="decimal" placeholder="Enter amount" value={formData.base_amount}
+                                        type="text" inputMode="decimal" value={formData.base_amount}
                                         onChange={e => {
                                             const val = e.target.value.replace(/[^0-9.]/g, '');
                                             if (val === '' || /^\d*\.?\d*$/.test(val)) setFormData({ ...formData, base_amount: val });
                                         }}
+                                        placeholder="Enter amount"
                                         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all text-sm font-semibold"
                                     />
                                 </div>
@@ -1046,7 +1045,7 @@ const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitT
                             <div className="border-t border-slate-100 pt-5">
                                 <div className="flex items-center justify-between mb-3">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                        <FaCalculator className="text-indigo-500" /> Salary Components
+                                        <FaCalculator className="text-green-500" /> Salary Components
                                     </label>
                                     <button type="button" onClick={() => setShowOverrideForm(true)} className="text-[10px] px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-all font-bold border border-indigo-200 shadow-sm flex items-center gap-1.5 uppercase tracking-wider">
                                         <FaPlus size={8} /> Add Component
@@ -1658,5 +1657,5 @@ const SalaryManagement = () => {
         </ManagementHub>
     );
 };
-export { EditSalaryModal, ReviseSalaryModal, DeleteConfirmModal, SalaryDetailModal };
+export { AssignSalaryModal, EditSalaryModal, ReviseSalaryModal, DeleteConfirmModal, SalaryDetailModal };
 export default SalaryManagement;
