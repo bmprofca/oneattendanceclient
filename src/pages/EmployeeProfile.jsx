@@ -13,7 +13,7 @@ import {
   FaComment, FaCog, FaMapPin, FaServer, FaInfoCircle,
   FaSpinner, FaSignInAlt, FaSignOutAlt, FaHourglassHalf,
   FaChevronLeft, FaFilePdf, FaPlus, FaSave,
-  FaDownload, FaEdit, FaTrash, FaUniversity,FaCircle ,
+  FaDownload, FaEdit, FaTrash, FaUniversity, FaCircle,
   FaCoffee, FaCoins
 } from "react-icons/fa";
 import apiCall from "../utils/api";
@@ -1283,8 +1283,8 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
               type="button"
               onClick={() => setActiveTab("attendance")}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === "attendance"
-                  ? "bg-white text-blue-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
                 }`}
             >
               <FaCalendarCheck size={12} />
@@ -1294,8 +1294,8 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
               type="button"
               onClick={() => setActiveTab("break")}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === "break"
-                  ? "bg-white text-amber-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
+                ? "bg-white text-amber-700 shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
                 }`}
             >
               <FaCoffee size={12} />
@@ -1318,8 +1318,8 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
                     type="button"
                     onClick={() => setStatus(opt.value)}
                     className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold uppercase transition ${status === opt.value
-                        ? `${opt.color} ring-2 ring-blue-100 shadow-sm`
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      ? `${opt.color} ring-2 ring-blue-100 shadow-sm`
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                       }`}
                   >
                     {opt.label}
@@ -1359,8 +1359,8 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
                         type="button"
                         onClick={() => setHalfDaySession(s.value)}
                         className={`p-2.5 rounded-xl border text-xs font-bold uppercase transition ${halfDaySession === s.value
-                            ? "border-blue-500 bg-blue-50 text-blue-700"
-                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                           }`}
                       >
                         {s.label}
@@ -1417,8 +1417,8 @@ function EmployeeAttendanceCalendar({ employee, fallbackId, refreshKey = 0 }) {
                       type="button"
                       onClick={() => setBreakType(b.value)}
                       className={`p-2.5 rounded-xl border text-xs font-bold uppercase transition ${breakType === b.value
-                          ? "border-amber-500 bg-amber-50 text-amber-700 shadow-sm ring-2 ring-amber-100"
-                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        ? "border-amber-500 bg-amber-50 text-amber-700 shadow-sm ring-2 ring-amber-100"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                         }`}
                     >
                       {b.label}
@@ -3428,6 +3428,7 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const [payrollEmailOverride, setPayrollEmailOverride] = useState("");
   const [downloadingPayrollPdf, setDownloadingPayrollPdf] = useState(false);
   const [emailingPayrollPdf, setEmailingPayrollPdf] = useState(false);
+  const [permissionPackage, setPermissionPackage] = useState(null);
 
   const [showEditSalaryModal, setShowEditSalaryModal] = useState(false);
   const [showReviseSalaryModal, setShowReviseSalaryModal] = useState(false);
@@ -3465,10 +3466,16 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
         async () => {
           const companyStr = localStorage.getItem("company");
           const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-          const response = await apiCall(
-            `/employees/${employeeId}?include=${normalizedTabKey}${isAttendance ? `&sub-tab=${subType}` : ""}&page=${page}&limit=${limit}`,
-            "GET", null, companyId
-          );
+          let response;
+          if (normalizedTabKey === "permissions") {
+            // New dedicated endpoint for permissions (returns package + permissions)
+            response = await apiCall(`/permissions/employee-package/${employeeId}`, "GET", null, companyId);
+          } else {
+            response = await apiCall(
+              `/employees/${employeeId}?include=${normalizedTabKey}${isAttendance ? `&sub-tab=${subType}` : ""}&page=${page}&limit=${limit}`,
+              "GET", null, companyId
+            );
+          }
           const data = await response.json();
           return { res: response, json: data };
         }
@@ -4423,8 +4430,8 @@ function PayrollSection({ employee, employeeId, refreshKey }) {
           type="button"
           onClick={() => setSubTab("records")}
           className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "records"
-              ? "bg-emerald-600 text-white shadow-sm"
-              : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
+            ? "bg-emerald-600 text-white shadow-sm"
+            : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
             }`}
         >
           <FaCalendarAlt size={12} />
@@ -4434,8 +4441,8 @@ function PayrollSection({ employee, employeeId, refreshKey }) {
           type="button"
           onClick={() => setSubTab("adjustments")}
           className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "adjustments"
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "text-gray-600 hover:text-indigo-700 hover:bg-indigo-50"
+            ? "bg-indigo-600 text-white shadow-sm"
+            : "text-gray-600 hover:text-indigo-700 hover:bg-indigo-50"
             }`}
         >
           <FaCoins size={12} />
@@ -4469,8 +4476,8 @@ function LeavesSection({ employee, employeeId, refreshKey }) {
           type="button"
           onClick={() => setSubTab("requests")}
           className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "requests"
-              ? "bg-amber-500 text-white shadow-sm"
-              : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
+            ? "bg-amber-500 text-white shadow-sm"
+            : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
             }`}
         >
           <FaUmbrellaBeach size={12} />
@@ -4480,8 +4487,8 @@ function LeavesSection({ employee, employeeId, refreshKey }) {
           type="button"
           onClick={() => setSubTab("balances")}
           className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "balances"
-              ? "bg-violet-600 text-white shadow-sm"
-              : "text-gray-600 hover:text-violet-700 hover:bg-violet-50"
+            ? "bg-violet-600 text-white shadow-sm"
+            : "text-gray-600 hover:text-violet-700 hover:bg-violet-50"
             }`}
         >
           <FaCalendarPlus size={12} />
