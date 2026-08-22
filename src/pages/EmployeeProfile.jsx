@@ -40,6 +40,7 @@ import EmployeeBreaksTab from "../components/profile/EmployeeBreaksTab";
 import EmployeePayrollAdjustmentsTab from "../components/profile/EmployeePayrollAdjustmentsTab";
 import EmployeeLeaveBalancesTab from "../components/profile/EmployeeLeaveBalancesTab";
 import EmployeeLeaveRequestsTab from "../components/profile/EmployeeLeaveRequestsTab";
+import EmployeePermissionsPanel from "../components/common/EmployeePermissionsPanel";
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
@@ -3242,90 +3243,6 @@ function CreateSalaryModal({ isOpen, onClose, employeeId, onSuccess }) {
   );
 }
 
-// ─── TRANSFER PERMISSION PACKAGE MODAL ──────────────────────────────────────
-
-function TransferPackageModal({ isOpen, onClose, employeeId, employeeName, onSuccess }) {
-  const [packages, setPackages] = useState([]);
-  const [loadingPackages, setLoadingPackages] = useState(false);
-  const [selectedPackageId, setSelectedPackageId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setLoadingPackages(true);
-    const companyStr = localStorage.getItem("company");
-    const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-    apiCall("/permissions/permission-packages", "GET", null, companyId)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) setPackages(json.data || []);
-      })
-      .catch((err) => console.error("Failed to load packages", err))
-      .finally(() => setLoadingPackages(false));
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedPackageId) {
-      toast.warning("Please select a permission package");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const companyStr = localStorage.getItem("company");
-      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-      const response = await apiCall("/permissions/transfer-packages", "PUT", {
-        assignments: [{ employee_id: Number(employeeId), package_id: Number(selectedPackageId) }]
-      }, companyId);
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Failed to assign package");
-      toast.success(result.message || "Permission package assigned successfully");
-      onSuccess?.();
-      onClose();
-    } catch (err) {
-      toast.error(err.message || "Failed to assign package");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Transfer / Assign Permission Package"
-      subtitle={`Assign permission package for ${employeeName || "Employee"}`}
-      icon={<FaShieldAlt className="text-indigo-600" />}
-      size="md"
-      footer={
-        <>
-          <button type="button" onClick={onClose} disabled={submitting} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50">Cancel</button>
-          <button type="button" onClick={handleSubmit} disabled={submitting || !selectedPackageId} className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-indigo-700 hover:to-purple-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-50">
-            {submitting ? <FaSpinner className="animate-spin" size={12} /> : <FaSave size={12} />}
-            {submitting ? "Assigning..." : "Assign Package"}
-          </button>
-        </>
-      }
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Permission Package</label>
-          <SelectField
-            value={packages.map(p => ({ value: p.id, label: `${p.package_name || p.name} (${p.group_code || 'Code'})` })).find(opt => String(opt.value) === String(selectedPackageId)) || null}
-            onChange={(opt) => setSelectedPackageId(opt?.value || "")}
-            options={packages.map(p => ({ value: p.id, label: `${p.package_name || p.name} (${p.group_code || 'Code'})` }))}
-            isLoading={loadingPackages}
-            placeholder={loadingPackages ? "Loading packages..." : "Select permission package"}
-            menuPortalTarget={document.body}
-          />
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 // ─── SHARE SHIFT SCHEDULE MODAL ─────────────────────────────────────────────
 
 function ShareShiftModal({ isOpen, onClose, employeeId, employeeEmail, month, year, onSuccess }) {
@@ -3413,7 +3330,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const [showCreateSalaryModal, setShowCreateSalaryModal] = useState(false);
   const [showCreatePayrollModal, setShowCreatePayrollModal] = useState(false);
   const [showCreateLeaveModal, setShowCreateLeaveModal] = useState(false);
-  const [showTransferPackageModal, setShowTransferPackageModal] = useState(false);
   const [showShareShiftModal, setShowShareShiftModal] = useState(false);
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
   const [leaveTypeLoading, setLeaveTypeLoading] = useState(false);
@@ -3466,16 +3382,10 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
         async () => {
           const companyStr = localStorage.getItem("company");
           const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-          let response;
-          if (normalizedTabKey === "permissions") {
-            // New dedicated endpoint for permissions (returns package + permissions)
-            response = await apiCall(`/permissions/employee-package/${employeeId}`, "GET", null, companyId);
-          } else {
-            response = await apiCall(
-              `/employees/${employeeId}?include=${normalizedTabKey}${isAttendance ? `&sub-tab=${subType}` : ""}&page=${page}&limit=${limit}`,
-              "GET", null, companyId
-            );
-          }
+          const response = await apiCall(
+            `/employees/${employeeId}?include=${normalizedTabKey}${isAttendance ? `&sub-tab=${subType}` : ""}&page=${page}&limit=${limit}`,
+            "GET", null, companyId
+          );
           const data = await response.json();
           return { res: response, json: data };
         }
@@ -3931,15 +3841,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
             {tabIcon}{tabLabel}
           </p>
           <div className="flex items-center gap-2 flex-row justify-end">
-            {normalizedTabKey === "permissions" && (
-              <button
-                type="button"
-                onClick={() => setShowTransferPackageModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-100"
-              >
-                <FaExchangeAlt size={10} /> Transfer Package
-              </button>
-            )}
             {normalizedTabKey === "shifts" && (
               <>
                 <button
@@ -4306,18 +4207,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showTransferPackageModal && (
-          <TransferPackageModal
-            isOpen={showTransferPackageModal}
-            onClose={() => setShowTransferPackageModal(false)}
-            employeeId={employeeId}
-            employeeName={rows[0]?.name || "Employee"}
-            onSuccess={() => fetchData(pagination.page, pagination.limit)}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {showShareShiftModal && (
           <ShareShiftModal
             isOpen={showShareShiftModal}
@@ -4651,6 +4540,8 @@ export default function EmployeeProfilePage() {
                     <CompanyLedger employeeId={profile.employee?.id ?? employeeId} />
                   ) : activeTab === "accounts" ? (
                     <EmployeeBankAccountsTab employeeId={profile.employee?.id ?? employeeId} />
+                  ) : activeTab === "permissions" ? (
+                    <EmployeePermissionsPanel employeeId={profile.employee?.id ?? employeeId} />
                   ) : (
                     <TabContent
                       tabKey={activeTab}
