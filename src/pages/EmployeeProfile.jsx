@@ -40,7 +40,7 @@ import EmployeeBreaksTab from "../components/profile/EmployeeBreaksTab";
 import EmployeePayrollAdjustmentsTab from "../components/profile/EmployeePayrollAdjustmentsTab";
 import EmployeeLeaveBalancesTab from "../components/profile/EmployeeLeaveBalancesTab";
 import EmployeeLeaveRequestsTab from "../components/profile/EmployeeLeaveRequestsTab";
-import EmployeePermissionsPanel from "../components/common/EmployeePermissionsPanel";
+import EmployeePermissionsPanel from "../components/profile/EmployeePermissionsPanel";
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
