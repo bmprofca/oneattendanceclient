@@ -34,13 +34,13 @@ import TimePickerField from "../components/TimePicker";
 import { ManageAttendanceModal } from "./UnmarkedAttendance";
 import CompanyLedger from "./CompanyLedger";
 import SkeletonComponent from "../components/SkeletonComponent";
-import { AssignSalaryModal, EditSalaryModal, ReviseSalaryModal, DeleteConfirmModal } from "../pages/SalaryManagement";
 import EmployeeBankAccountsTab from "../components/EmployeeBankAccountsTab";
 import EmployeeBreaksTab from "../components/profile/EmployeeBreaksTab";
 import EmployeePayrollAdjustmentsTab from "../components/profile/EmployeePayrollAdjustmentsTab";
 import EmployeeLeaveBalancesTab from "../components/profile/EmployeeLeaveBalancesTab";
 import EmployeeLeaveRequestsTab from "../components/profile/EmployeeLeaveRequestsTab";
 import EmployeePermissionsPanel from "../components/profile/EmployeePermissionsPanel";
+import EmployeeSalaryTab from "../components/profile/EmployeeSalaryTab";
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
@@ -2522,152 +2522,6 @@ function useAttendanceConfig(onView, onViewLogs, width, subType = "attendance") 
   return { columns, cardRenderer, rowKey: "id" };
 }
 
-// ─── SALARY CONFIG (updated for new API structure) ────────────────────────────
-
-function useSalaryConfig(onView, onEdit, onRevise, onDelete, width) {
-  const columns = [
-    {
-      key: "salary_id",
-      label: "Salary ID",
-      render: (s) => (
-        <span className="inline-flex whitespace-nowrap rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700 font-mono">
-          #{s.salary_id || s.id || "—"}
-        </span>
-      ),
-    },
-    {
-      key: "base_amount",
-      label: "Base / Net",
-      render: (s) => (
-        <div className="flex flex-col">
-          <span className="font-semibold text-gray-800 text-sm">
-            ₹{Number(s.base_amount || 0).toLocaleString()}
-          </span>
-          {s.net_salary != null && (
-            <span className="text-[10px] text-emerald-600 font-bold">
-              Net ₹{Number(s.net_salary).toLocaleString()}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    width > 580 && {
-      key: "ctc",
-      label: "CTC",
-      render: (s) => (
-        <span className="text-sm font-semibold text-indigo-600">
-          {s.ctc != null ? `₹${Number(s.ctc).toLocaleString()}` : "—"}
-        </span>
-      ),
-    },
-    width > 700 && {
-      key: "effective_from",
-      label: "Effective From",
-      render: (s) => <span className="text-sm text-gray-600">{fmtDate(s.effective_from)}</span>,
-    },
-    width > 950 && {
-      key: "effective_to",
-      label: "Effective To",
-      render: (s) => (
-        <span className="text-sm text-gray-600">
-          {s.effective_to ? fmtDate(s.effective_to) : <span className="italic text-gray-400 text-xs">Ongoing</span>}
-        </span>
-      ),
-    },
-    width > 800 && {
-      key: "status",
-      label: "Status",
-      render: (s) => {
-        const active = !s.effective_to || new Date(s.effective_to) > new Date();
-        return active
-          ? <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><FaCheckCircle size={10} />Active</span>
-          : <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"><FaTimesCircle size={10} />Expired</span>;
-      },
-    },
-  ].filter(Boolean);
-
-  const cardRenderer = (s, index, activeId, onToggle) => {
-    const active = !s.effective_to || new Date(s.effective_to) > new Date();
-    const sid = s.salary_id || s.id;
-    const earnings = (s.components || []).filter((c) => c.type === "earning");
-    const deductions = (s.components || []).filter((c) => c.type === "deduction");
-
-    const actions = [
-      { label: "View Details", icon: <FaEye size={12} />, onClick: () => onView(s), className: "text-blue-600 hover:bg-blue-50" },
-      s.payroll_used
-        ? { label: "Revise Salary", icon: <FaExchangeAlt size={12} />, onClick: () => onRevise(s), className: "text-purple-600 hover:bg-purple-50" }
-        : { label: "Edit Salary", icon: <FaEdit size={12} />, onClick: () => onEdit(s), className: "text-indigo-600 hover:bg-indigo-50" },
-      { label: "Delete", icon: <FaTrash size={12} />, onClick: () => onDelete(s), className: "text-red-600 hover:bg-red-50" },
-    ];
-
-    return (
-      <ManagementCard
-        key={sid || index}
-        accent="green"
-        delay={index * 0.04}
-        onClick={() => onView(s)}
-        activeId={activeId}
-        onToggle={onToggle}
-        menuId={`sal-${sid || index}`}
-        actions={actions}
-        hoverable
-        title={`Salary #${sid || ""}`}
-        subtitle={`${fmtDate(s.effective_from)} → ${s.effective_to ? fmtDate(s.effective_to) : "Ongoing"}`}
-        eyebrow="Salary Record"
-        badge={
-          active
-            ? <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><FaCheckCircle size={10} />Active</span>
-            : <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"><FaTimesCircle size={10} />Expired</span>
-        }
-        footer={
-          <div className="flex w-full items-center justify-between text-xs text-gray-400">
-            <span>CTC: {s.ctc != null ? `₹${Number(s.ctc).toLocaleString()}` : "—"}</span>
-            <span>Net: {s.net_salary != null ? `₹${Number(s.net_salary).toLocaleString()}` : "—"}</span>
-          </div>
-        }
-      >
-        {/* Base + financial row */}
-        <div className="grid grid-cols-3 gap-2 mb-2">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-2 text-center">
-            <p className="text-[9px] font-bold text-blue-500 uppercase mb-0.5">Base</p>
-            <p className="text-xs font-black text-blue-700">₹{Number(s.base_amount || 0).toLocaleString()}</p>
-          </div>
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-2 text-center">
-            <p className="text-[9px] font-bold text-emerald-500 uppercase mb-0.5">Net</p>
-            <p className="text-xs font-black text-emerald-700">{s.net_salary != null ? `₹${Number(s.net_salary).toLocaleString()}` : "—"}</p>
-          </div>
-          <div className="rounded-lg border border-rose-100 bg-rose-50 p-2 text-center">
-            <p className="text-[9px] font-bold text-rose-500 uppercase mb-0.5">Deductions</p>
-            <p className="text-xs font-black text-rose-700">{s.total_deductions != null ? `₹${Number(s.total_deductions).toLocaleString()}` : "—"}</p>
-          </div>
-        </div>
-        {/* Components preview */}
-        {s.components && s.components.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {earnings.slice(0, 2).map((c) => (
-              <span key={c.id} className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-full font-bold">
-                {c.code} +₹{Number(c.amount || 0).toLocaleString()}
-              </span>
-            ))}
-            {deductions.slice(0, 2).map((c) => (
-              <span key={c.id} className="text-[9px] bg-rose-50 text-rose-700 border border-rose-100 px-1.5 py-0.5 rounded-full font-bold">
-                {c.code} -₹{Number(c.amount || 0).toLocaleString()}
-              </span>
-            ))}
-            {s.components.length > 4 && (
-              <span className="text-[9px] bg-gray-50 text-gray-500 border border-gray-100 px-1.5 py-0.5 rounded-full font-bold">
-                +{s.components.length - 4} more
-              </span>
-            )}
-          </div>
-        )}
-      </ManagementCard>
-    );
-  };
-
-  return { columns, cardRenderer, rowKey: (row, idx) => row.salary_id || row.id || `sal-${idx}` };
-}
-
 // ─── PAYROLL CONFIG (updated for new API structure) ───────────────────────────
 
 function usePayrollConfig(onView, onDownloadPdf, onSendEmail, width) {
@@ -2978,271 +2832,6 @@ function useLeaveConfig(onView, onApprove, onReject, width) {
   return { columns, cardRenderer, getActions, rowKey: "id" };
 }
 
-// ─── CREATE SALARY MODAL ─────────────────────────────────────────────────────
-
-function CreateSalaryModal({ isOpen, onClose, employeeId, onSuccess }) {
-  const [packages, setPackages] = useState([]);
-  const [availableComponents, setAvailableComponents] = useState([]);
-  const [loadingPackages, setLoadingPackages] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [showOverrideForm, setShowOverrideForm] = useState(false);
-  const [formData, setFormData] = useState({
-    component_package_id: '',
-    base_amount: '',
-    effective_from: getCurrentMonthDate(),
-    effective_to: '',
-    components: [],
-  });
-
-  const existingComponentIds = useMemo(() => formData.components.map((c) => c.component_id), [formData.components]);
-  const filteredAvailableComponents = useMemo(() => availableComponents.filter((c) => !existingComponentIds.includes(c.id)), [availableComponents, existingComponentIds]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    loadSalaryPackages();
-    loadSalaryComponents();
-  }, [isOpen]);
-
-  const loadSalaryPackages = async () => {
-    setLoadingPackages(true);
-    try {
-      const company = JSON.parse(localStorage.getItem('company') || '{}');
-      const response = await apiCall('/salary/components/packages', 'GET', null, company?.id);
-      const result = await response.json();
-      if (result.success) setPackages(result.data || []);
-    } catch (error) {
-      console.error('Failed to load salary packages:', error);
-    } finally {
-      setLoadingPackages(false);
-    }
-  };
-
-  const loadSalaryComponents = async () => {
-    try {
-      const company = JSON.parse(localStorage.getItem('company') || '{}');
-      const response = await apiCall('/salary/components/list', 'GET', null, company?.id);
-      const result = await response.json();
-      if (result.success) setAvailableComponents(result.data || []);
-    } catch (error) {
-      console.error('Failed to load salary components:', error);
-    }
-  };
-
-  const handlePackageChange = (packageId) => {
-    const pkg = packages.find((item) => String(item.id) === String(packageId));
-    if (!pkg) return;
-    const packageComponents = (pkg.items || []).map((item) => ({
-      component_id: item.component_id,
-      calc_type: item.calc_type || 'percentage',
-      calc_value: item.calc_value ?? '',
-      reason: item.reason || '',
-    }));
-    setFormData((prev) => ({ ...prev, component_package_id: packageId, components: packageComponents }));
-  };
-
-  const resetForm = () => {
-    setFormData({ component_package_id: '', base_amount: '', effective_from: getCurrentMonthDate(), effective_to: '', components: [] });
-    setShowOverrideForm(false);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!employeeId) { toast.warning('Employee details are not available.'); return; }
-    if (!formData.base_amount || !formData.effective_from) { toast.warning('Base amount and effective from are required.'); return; }
-
-    setSubmitting(true);
-    try {
-      const company = JSON.parse(localStorage.getItem('company') || '{}');
-      const payload = {
-        employee_id: Number(employeeId),
-        base_amount: Number(formData.base_amount),
-        effective_from: formData.effective_from,
-        effective_to: formData.effective_to || null,
-        components: formData.components.map((item) => ({
-          component_id: Number(item.component_id),
-          calc_type: item.calc_type || 'percentage',
-          calc_value: Number(item.calc_value || 0),
-          reason: item.reason || '',
-        })),
-      };
-
-      const response = await apiCall('/salary/assign-salary', 'POST', payload, company?.id);
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || 'Failed to create salary');
-
-      toast.success('Salary created successfully');
-      onSuccess?.();
-      onClose();
-      resetForm();
-    } catch (error) {
-      toast.error(error.message || 'Failed to create salary');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => { resetForm(); onClose(); }}
-      title="Create Salary"
-      subtitle="Assign a new salary profile to this employee"
-      icon={<FaMoneyBillWave className="text-green-600" />}
-      size="4xl"
-      footer={
-        <>
-          <button type="button" onClick={() => { resetForm(); onClose(); }} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">Cancel</button>
-          <button type="button" onClick={handleSubmit} disabled={submitting} className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-green-200">
-            {submitting ? <FaSpinner className="animate-spin" /> : <FaSave />}
-            {submitting ? 'Creating…' : 'Create Salary'}
-          </button>
-        </>
-      }
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Effective From *</label>
-            <AdvancedDateFilter
-              tabOptions={['month']}
-              value={formData.effective_from ? { month: Number(formData.effective_from.split('-')[1]), year: Number(formData.effective_from.split('-')[0]) } : null}
-              onChange={(val) => setFormData((prev) => ({ ...prev, effective_from: val && val.month && val.year ? `${val.year}-${String(val.month).padStart(2, '0')}-01` : '' }))}
-              placeholder="Select month"
-              buttonClassName="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none text-left text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Effective To</label>
-            <AdvancedDateFilter
-              tabOptions={['month']}
-              value={formData.effective_to ? { month: Number(formData.effective_to.split('-')[1]), year: Number(formData.effective_to.split('-')[0]) } : null}
-              onChange={(val) => setFormData((prev) => ({ ...prev, effective_to: val && val.month && val.year ? `${val.year}-${String(val.month).padStart(2, '0')}-01` : '' }))}
-              placeholder="Optional"
-              buttonClassName="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none text-left text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Salary Package (Quick Fill)</label>
-            <SelectField
-              value={formData.component_package_id ? { value: formData.component_package_id, label: packages.find((p) => String(p.id) === String(formData.component_package_id))?.name || 'Custom / Manual' } : null}
-              onChange={(opt) => handlePackageChange(opt?.value || '')}
-              options={packages.map((pkg) => ({ value: pkg.id, label: `${pkg.name} (${pkg.code})` }))}
-              isLoading={loadingPackages}
-              isClearable
-              placeholder={loadingPackages ? 'Loading packages...' : 'Custom / Manual'}
-              menuPortalTarget={document.body}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Base Amount *</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={formData.base_amount}
-              onChange={(e) => {
-                const value = e.target.value.replace(/[^0-9.]/g, '');
-                if (value === '' || /^\d*\.?\d*$/.test(value)) setFormData((prev) => ({ ...prev, base_amount: value }));
-              }}
-              placeholder="Enter amount"
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all text-sm font-semibold"
-            />
-          </div>
-        </div>
-
-        <div className="border-t border-slate-100 pt-5">
-          <div className="flex items-center justify-between mb-3">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <FaCalculator className="text-green-500" /> Salary Components
-            </label>
-            <button type="button" onClick={() => setShowOverrideForm(true)} className="text-[10px] px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-all font-bold border border-green-200 shadow-sm flex items-center gap-1.5 uppercase tracking-wider">
-              <FaPlus size={8} /> Add Component
-            </button>
-          </div>
-
-          {formData.components.length > 0 && (
-            <div className="space-y-3 mb-3">
-              {formData.components.map((comp, idx) => {
-                const componentData = availableComponents.find((item) => String(item.id) === String(comp.component_id));
-                return (
-                  <div key={`${comp.component_id}-${idx}`} className="p-4 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                      <div className="md:col-span-4">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Component</label>
-                        <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 truncate">{componentData?.name || `Component ${comp.component_id}`} <span className="text-[10px] text-slate-400 font-mono">({componentData?.code})</span></div>
-                      </div>
-                      <div className="md:col-span-3">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Type</label>
-                        <SelectField
-                          value={comp.calc_type ? { value: comp.calc_type, label: comp.calc_type === 'percentage' ? 'Percentage (%)' : 'Fixed Amount' } : null}
-                          onChange={(opt) => {
-                            const updated = [...formData.components];
-                            updated[idx].calc_type = opt?.value || 'percentage';
-                            setFormData((prev) => ({ ...prev, components: updated, component_package_id: '' }));
-                          }}
-                          options={[{ value: 'percentage', label: 'Percentage (%)' }, { value: 'fixed', label: 'Fixed Amount' }]}
-                          placeholder="Select type"
-                          menuPortalTarget={document.body}
-                        />
-                      </div>
-                      <div className="md:col-span-3">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Value</label>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={comp.calc_value ?? ''}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/[^0-9.]/g, '');
-                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                              const updated = [...formData.components];
-                              updated[idx].calc_value = value;
-                              setFormData((prev) => ({ ...prev, components: updated, component_package_id: '' }));
-                            }
-                          }}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none text-sm font-bold focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all"
-                        />
-                      </div>
-                      <div className="md:col-span-2 flex justify-end pb-0.5">
-                        <button type="button" onClick={() => { const updated = formData.components.filter((_, index) => index !== idx); setFormData((prev) => ({ ...prev, components: updated, component_package_id: '' })); }} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><FaTimes size={14} /></button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {showOverrideForm && (
-            <div className="mt-4 p-4 bg-green-50/50 rounded-xl border-2 border-dashed border-green-200">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] font-bold text-green-900 uppercase tracking-widest">Select Component to Add</p>
-                <button type="button" onClick={() => setShowOverrideForm(false)} className="text-slate-400 hover:text-slate-600"><FaTimes size={12} /></button>
-              </div>
-              <SelectField
-                value={null}
-                onChange={(opt) => {
-                  if (!opt) return;
-                  const comp = filteredAvailableComponents.find((item) => String(item.id) === String(opt.value));
-                  if (!comp) return;
-                  setFormData((prev) => ({ ...prev, components: [...prev.components, { component_id: comp.id, calc_type: comp.calc_type || 'percentage', calc_value: comp.calc_value || '', reason: '' }], component_package_id: '' }));
-                  setShowOverrideForm(false);
-                }}
-                options={filteredAvailableComponents.map((comp) => ({ value: comp.id, label: `${comp.name} (${comp.code})` }))}
-                placeholder="Choose a component..."
-                menuPortalTarget={document.body}
-              />
-            </div>
-          )}
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 // ─── SHARE SHIFT SCHEDULE MODAL ─────────────────────────────────────────────
 
 function ShareShiftModal({ isOpen, onClose, employeeId, employeeEmail, month, year, onSuccess }) {
@@ -3327,7 +2916,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const [selectedLogItem, setSelectedLogItem] = useState(null);
   const [profileLeaveAction, setProfileLeaveAction] = useState(null);
   const [profileLeaveSubmitting, setProfileLeaveSubmitting] = useState(false);
-  const [showCreateSalaryModal, setShowCreateSalaryModal] = useState(false);
   const [showCreatePayrollModal, setShowCreatePayrollModal] = useState(false);
   const [showCreateLeaveModal, setShowCreateLeaveModal] = useState(false);
   const [showShareShiftModal, setShowShareShiftModal] = useState(false);
@@ -3346,13 +2934,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const [emailingPayrollPdf, setEmailingPayrollPdf] = useState(false);
   const [permissionPackage, setPermissionPackage] = useState(null);
 
-  const [showEditSalaryModal, setShowEditSalaryModal] = useState(false);
-  const [showReviseSalaryModal, setShowReviseSalaryModal] = useState(false);
-  const [showDeleteSalaryModal, setShowDeleteSalaryModal] = useState(false);
-  const [salaryToEdit, setSalaryToEdit] = useState(null);
-  const [salaryToRevise, setSalaryToRevise] = useState(null);
-  const [salaryToDelete, setSalaryToDelete] = useState(null);
-  const [deletingSalary, setDeletingSalary] = useState(false);
 
   const [subType, setSubType] = useState("attendance");
   const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(2026, i, 1).toLocaleString('en-US', { month: 'long' }) })), []);
@@ -3398,10 +2979,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
         rawData = rawData.map((item) => item?.payroll ?? item).filter(Boolean);
       }
 
-      if (normalizedTabKey === "salary" && rawData && !Array.isArray(rawData) && Array.isArray(rawData.salary)) {
-        rawData = rawData.salary;
-      }
-
       const dataArr = Array.isArray(rawData) ? rawData : rawData && typeof rawData === "object" ? [rawData] : [];
       const normalizedRows = normalizedTabKey === "attendance"
         ? dataArr.map(normalizeAttendanceRecord)
@@ -3429,27 +3006,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
       fetchRef.current = false;
     }
   }, [employeeId, isAttendance, subType, normalizedTabKey, tabKey, updatePagination]);
-
-  // ── handleDeleteSalary AFTER (fetchData now exists) ──────────────────────────
-  const handleDeleteSalary = useCallback(async () => {
-    if (!salaryToDelete) return;
-    setDeletingSalary(true);
-    try {
-      const companyStr = localStorage.getItem("company");
-      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-      const response = await apiCall("/salary/delete-salary", "DELETE", { salary_id: salaryToDelete.salary_id }, companyId);
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Failed to delete salary");
-      toast.success("Salary deleted successfully");
-      setShowDeleteSalaryModal(false);
-      setSalaryToDelete(null);
-      fetchData(pagination.page, pagination.limit);
-    } catch (error) {
-      toast.error(error.message || "Failed to delete salary");
-    } finally {
-      setDeletingSalary(false);
-    }
-  }, [salaryToDelete, fetchData, pagination.page, pagination.limit]);
 
   useEffect(() => {
     const page = normalizedTabKey === "permissions" ? 1 : pagination.page;
@@ -3739,22 +3295,8 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
     }
   }, [employeeId, fetchData, pagination.limit, pagination.page, payrollMonth, payrollYear, sendPayrollPdf]);
 
-  const handleCreateSalarySuccess = useCallback(() => {
-    setShowCreateSalaryModal(false);
-    fetchData(pagination.page, pagination.limit);
-  }, [fetchData, pagination.limit, pagination.page]);
-
   const permConfig = usePermissionsConfig(onView, effectiveWidth);
   const attConfig = useAttendanceConfig(onView, onViewLogs, effectiveWidth, subType);
-  // Replace the existing salConfig line:
-  const salConfig = useSalaryConfig(
-    onView,
-    (s) => { setSalaryToEdit(s); setShowEditSalaryModal(true); },
-    (s) => { setSalaryToRevise(s); setShowReviseSalaryModal(true); },
-    (s) => { setSalaryToDelete(s); setShowDeleteSalaryModal(true); },
-    effectiveWidth
-  );
-
 
   const payConfig = usePayrollConfig(onView, openPayrollDownloadModal, openPayrollEmailModal, effectiveWidth);
   const leaveConfig = useLeaveConfig(
@@ -3765,10 +3307,10 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   );
   const shiftConfig = useShiftConfig(onView, effectiveWidth);
 
-  const CONFIG_MAP = { permissions: permConfig, attendance: attConfig, salary: salConfig, payroll: payConfig, leaves: leaveConfig, shifts: shiftConfig };
+  const CONFIG_MAP = { permissions: permConfig, attendance: attConfig, payroll: payConfig, leaves: leaveConfig, shifts: shiftConfig };
   const activeConfig = CONFIG_MAP[normalizedTabKey] || permConfig;
   const { columns, cardRenderer, rowKey } = activeConfig;
-  const hasToolbarActions = normalizedTabKey === "shifts" || normalizedTabKey === "leaves" || normalizedTabKey === "salary" || normalizedTabKey === "payroll";
+  const hasToolbarActions = normalizedTabKey === "shifts" || normalizedTabKey === "leaves" || normalizedTabKey === "payroll";
 
   // Update getActions to include salary actions:
   const getActions = (row) => {
@@ -3781,14 +3323,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
         { label: "Approve / Edit", icon: <FaCheckCircle size={13} />, onClick: () => setProfileLeaveAction({ leave: row, action: "approve" }), className: "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" },
         { label: "Reject", icon: <FaTimesCircle size={13} />, onClick: () => setProfileLeaveAction({ leave: row, action: "reject" }), className: "text-rose-600 hover:text-rose-700 hover:bg-rose-50" }
       );
-    }
-    if (normalizedTabKey === "salary") {
-      if (row.payroll_used) {
-        base.push({ label: "Revise Salary", icon: <FaExchangeAlt size={13} />, onClick: () => { setSalaryToRevise(row); setShowReviseSalaryModal(true); }, className: "text-purple-600 hover:text-purple-700 hover:bg-purple-50" });
-      } else {
-        base.push({ label: "Edit Salary", icon: <FaEdit size={13} />, onClick: () => { setSalaryToEdit(row); setShowEditSalaryModal(true); }, className: "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50" });
-      }
-      base.push({ label: "Delete", icon: <FaTrash size={13} />, onClick: () => { setSalaryToDelete(row); setShowDeleteSalaryModal(true); }, className: "text-red-600 hover:text-red-700 hover:bg-red-50" });
     }
     if (normalizedTabKey === "payroll") {
       base.push(
@@ -3863,11 +3397,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
             )}
             {normalizedTabKey === "leaves" && (
               <button type="button" onClick={handleCreateLeaveClick} className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 shadow-sm transition-all hover:bg-amber-100">
-                <FaPlus size={10} /> Create
-              </button>
-            )}
-            {normalizedTabKey === "salary" && (
-              <button type="button" onClick={() => setShowCreateSalaryModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 shadow-sm transition-all hover:bg-green-100">
                 <FaPlus size={10} /> Create
               </button>
             )}
@@ -4028,17 +3557,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
               </div>
             </form>
           </Modal>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showCreateSalaryModal && normalizedTabKey === "salary" && (
-          <CreateSalaryModal
-            isOpen={showCreateSalaryModal}
-            onClose={() => setShowCreateSalaryModal(false)}
-            employeeId={employeeId}
-            onSuccess={handleCreateSalarySuccess}
-          />
         )}
       </AnimatePresence>
 
@@ -4245,56 +3763,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
         submitting={profileLeaveSubmitting}
       />
 
-      <AnimatePresence>
-        {showCreateSalaryModal && normalizedTabKey === "salary" && (
-          <AssignSalaryModal
-            isOpen={showCreateSalaryModal}
-            onClose={() => setShowCreateSalaryModal(false)}
-            onSuccess={() => {
-              setShowCreateSalaryModal(false);
-              fetchData(pagination.page, pagination.limit);
-            }}
-            initialEmployeeId={employeeId}
-            companyCurrency="INR"
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showEditSalaryModal && salaryToEdit && normalizedTabKey === "salary" && (
-          <EditSalaryModal
-            isOpen={showEditSalaryModal}
-            onClose={() => { setShowEditSalaryModal(false); setSalaryToEdit(null); }}
-            onSuccess={() => { setShowEditSalaryModal(false); setSalaryToEdit(null); fetchData(pagination.page, pagination.limit); }}
-            salary={salaryToEdit}
-            companyCurrency="INR"
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showReviseSalaryModal && salaryToRevise && normalizedTabKey === "salary" && (
-          <ReviseSalaryModal
-            isOpen={showReviseSalaryModal}
-            onClose={() => { setShowReviseSalaryModal(false); setSalaryToRevise(null); }}
-            onSuccess={() => { setShowReviseSalaryModal(false); setSalaryToRevise(null); fetchData(1, pagination.limit); }}
-            salary={salaryToRevise}
-            companyCurrency="INR"
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showDeleteSalaryModal && salaryToDelete && normalizedTabKey === "salary" && (
-          <DeleteConfirmModal
-            isOpen={showDeleteSalaryModal}
-            onClose={() => { setShowDeleteSalaryModal(false); setSalaryToDelete(null); }}
-            onConfirm={handleDeleteSalary}
-            salary={salaryToDelete}
-            processingId={deletingSalary ? salaryToDelete?.salary_id : null}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -4542,6 +4010,8 @@ export default function EmployeeProfilePage() {
                     <EmployeeBankAccountsTab employeeId={profile.employee?.id ?? employeeId} />
                   ) : activeTab === "permissions" ? (
                     <EmployeePermissionsPanel employeeId={profile.employee?.id ?? employeeId} />
+                  ) : activeTab === "salary" ? (
+                    <EmployeeSalaryTab employeeId={profile.employee?.id ?? employeeId} refreshKey={refreshKey} />
                   ) : (
                     <TabContent
                       tabKey={activeTab}
