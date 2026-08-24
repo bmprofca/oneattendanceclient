@@ -28,7 +28,7 @@ const isAddition = (type) => ['bonus', 'reimbursement', 'other_addition'].includ
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-export default function EmployeePayrollAdjustmentsTab({ employeeId, employeeName }) {
+export default function EmployeePayrollAdjustmentsTab({ employeeId, employeeName, refreshKey = 0 }) {
   const currentDate = new Date();
   const [adjustments, setAdjustments] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -106,7 +106,7 @@ export default function EmployeePayrollAdjustmentsTab({ employeeId, employeeName
 
   useEffect(() => {
     fetchAdjustments(pagination.page);
-  }, [employeeId, pagination.page, pagination.limit, selectedMonth, selectedYear, adjustmentType, fetchAdjustments]);
+  }, [employeeId, pagination.page, pagination.limit, selectedMonth, selectedYear, adjustmentType, fetchAdjustments, refreshKey]);
 
   const openCreateModal = () => {
     setEditingAdjustment(null);

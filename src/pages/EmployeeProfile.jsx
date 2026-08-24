@@ -5,16 +5,12 @@ import {
   FaChevronDown, FaHistory, FaEye, FaShieldAlt,
   FaClock, FaMoneyBillWave, FaCalendarAlt, FaExchangeAlt,
   FaEnvelope, FaIdCard, FaCheckCircle, FaTimesCircle,
-  FaTimes, FaCalculator, FaPhone,
-  FaChartBar, FaHandPaper, FaCalendarPlus, FaCalendarCheck,
-  FaTag, FaBriefcase, FaMapMarkerAlt, FaNetworkWired,
-  FaArrowDown, FaArrowUp, FaUmbrellaBeach, FaChevronRight,
+  FaTimes, FaPhone, FaChartBar, FaCalendarPlus, FaCalendarCheck,
+  FaTag, FaBriefcase, FaMapMarkerAlt, FaUmbrellaBeach, FaChevronRight,
   FaUser, FaUserCheck, FaHourglassEnd, FaExclamationCircle,
-  FaComment, FaCog, FaMapPin, FaServer, FaInfoCircle,
-  FaSpinner, FaSignInAlt, FaSignOutAlt, FaHourglassHalf,
-  FaChevronLeft, FaFilePdf, FaPlus, FaSave,
-  FaDownload, FaEdit, FaTrash, FaUniversity, FaCircle,
-  FaCoffee, FaCoins
+  FaComment, FaCog, FaInfoCircle, FaSpinner, FaSignInAlt,
+  FaSignOutAlt, FaHourglassHalf, FaChevronLeft, FaFilePdf,
+  FaPlus, FaSave, FaTrash, FaUniversity, FaCircle, FaCoffee
 } from "react-icons/fa";
 import apiCall from "../utils/api";
 import { toast } from "react-toastify";
@@ -31,17 +27,15 @@ import AdvancedDateFilter from "../components/AdvancedDateFilter";
 import CategoryPermissionSelector from "../components/common/CategoryPermissionSelector";
 import SelectField from "../components/SelectField";
 import TimePickerField from "../components/TimePicker";
-import { ManageAttendanceModal } from "./UnmarkedAttendance";
 import CompanyLedger from "./CompanyLedger";
 import SkeletonComponent from "../components/SkeletonComponent";
 import EmployeeBankAccountsTab from "../components/EmployeeBankAccountsTab";
-import EmployeeBreaksTab from "../components/profile/EmployeeBreaksTab";
-import EmployeePayrollAdjustmentsTab from "../components/profile/EmployeePayrollAdjustmentsTab";
 import EmployeeLeaveBalancesTab from "../components/profile/EmployeeLeaveBalancesTab";
 import EmployeeLeaveRequestsTab from "../components/profile/EmployeeLeaveRequestsTab";
 import EmployeePermissionsPanel from "../components/profile/EmployeePermissionsPanel";
 import EmployeeSalaryTab from "../components/profile/EmployeeSalaryTab";
 import EmployeePayrollTab from "../components/profile/EmployeePayrollTab";
+import EmployeePayrollAdjustmentsTab from "../components/profile/EmployeePayrollAdjustmentsTab";
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
@@ -71,9 +65,6 @@ const fmt = (value) => {
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-const fmtMonthYear = (d) =>
-  d ? new Date(d).toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : "—";
-
 const fmtDateTime = (d) => {
   if (!d) return "—";
   return new Date(d).toLocaleString("en-IN", {
@@ -86,11 +77,6 @@ const formatDays = (value) => {
   const number = Number(value);
   if (!Number.isFinite(number)) return '0';
   return Number.isInteger(number) ? String(number) : number.toFixed(1);
-};
-
-const getCurrentMonthDate = () => {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
 };
 
 const getInitials = (name) => {
@@ -117,22 +103,6 @@ async function runDedupedRequest(key, requestFn) {
   inFlightRequests.set(key, promise);
   return promise;
 }
-
-const triggerFileDownload = (url, filename) => {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener noreferrer";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
-const downloadBlob = (blob, filename) => {
-  const downloadUrl = URL.createObjectURL(blob);
-  triggerFileDownload(downloadUrl, filename);
-  setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-};
 
 // ─── CALENDAR HELPERS (new API structure) ─────────────────────────────────────
 
@@ -268,10 +238,6 @@ function computeWorkStats(dayData) {
     hasOpenSession: punches.some((p) => p.out === null),
     sessions: punches,
   };
-}
-
-function formatDay(day) {
-  return parseFloat(day).toString();
 }
 
 function getDayStatus(dayData) {
@@ -1970,156 +1936,6 @@ function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "atten
       );
     }
 
-    // ── PAYROLL DETAIL ────────────────────────────────────────────────────────
-    if (tabKey === "payroll") {
-      const att = item.attendance || {};
-      const work = item.work || {};
-      const snapshot = item.snapshot || {};
-      const earnings = item.components_breakdown?.earnings || [];
-      const deductions = item.components_breakdown?.deductions || [];
-      const adjustments = item.adjustments || [];
-
-      return (
-        <div className="space-y-5">
-          {/* Period */}
-          <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-            <FaCalendarAlt className="text-indigo-500" size={16} />
-            <div>
-              <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Payroll Period</p>
-              <p className="text-base font-black text-indigo-800">
-                {item.month && item.year
-                  ? new Date(item.year, item.month - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
-                  : fmtMonthYear(item.payroll_period || item.period || item.month)}
-              </p>
-            </div>
-          </div>
-
-          {/* Financial summary */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-center">
-              <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Total Earnings</p>
-              <p className="text-base font-black text-emerald-700">₹{Number(item.total_earnings || 0).toLocaleString()}</p>
-            </div>
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-100 text-center">
-              <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mb-1">Total Deductions</p>
-              <p className="text-base font-black text-rose-700">₹{Number(item.total_deductions || 0).toLocaleString()}</p>
-            </div>
-            <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-center">
-              <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Net Salary</p>
-              <p className="text-base font-black text-indigo-700">₹{Number(item.net_salary || 0).toLocaleString()}</p>
-            </div>
-          </div>
-
-          {/* Attendance summary */}
-          {Object.keys(att).length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <FaCalendarAlt className="text-blue-400" /> Attendance
-              </p>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                {[
-                  { label: "Working Days", value: att.working_days ?? "—", color: "slate" },
-                  { label: "Present", value: att.present_days ?? "—", color: "emerald" },
-                  { label: "Absent", value: att.absent_days ?? "—", color: "rose" },
-                  { label: "Paid Leave", value: att.paid_leave_days ?? "—", color: "violet" },
-                  { label: "Unpaid Leave", value: att.unpaid_leave_days ?? "—", color: "orange" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className={`p-2.5 rounded-xl bg-${color}-50 border border-${color}-100 text-center`}>
-                    <p className={`text-[9px] font-bold text-${color}-500 uppercase tracking-widest mb-0.5`}>{label}</p>
-                    <p className={`text-sm font-black text-${color}-700`}>{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Work stats */}
-          {Object.keys(work).length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <FaClock className="text-blue-400" /> Work Stats
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-100 text-center">
-                  <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mb-0.5">Worked</p>
-                  <p className="text-sm font-black text-blue-700">{formatMinutes(work.worked_minutes)}</p>
-                </div>
-                <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-100 text-center">
-                  <p className="text-[9px] font-bold text-purple-500 uppercase tracking-widest mb-0.5">Overtime</p>
-                  <p className="text-sm font-black text-purple-700">{formatMinutes(work.overtime_minutes)}</p>
-                </div>
-                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-100 text-center">
-                  <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mb-0.5">Deduction</p>
-                  <p className="text-sm font-black text-rose-700">{formatMinutes(work.deduction_minutes)}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Earnings breakdown */}
-          {earnings.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <FaArrowUp className="text-emerald-500" /> Earnings Breakdown
-              </p>
-              <div className="space-y-1.5">
-                {earnings.map((e, i) => (
-                  <div key={i} className="flex items-center justify-between p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
-                    <span className="text-sm font-semibold text-gray-700">{e.name}</span>
-                    <span className="text-sm font-black text-emerald-700">₹{Number(e.amount || 0).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Deductions breakdown */}
-          {deductions.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <FaArrowDown className="text-rose-500" /> Deductions Breakdown
-              </p>
-              <div className="space-y-1.5">
-                {deductions.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between p-2.5 bg-rose-50 rounded-lg border border-rose-100">
-                    <span className="text-sm font-semibold text-gray-700">{d.name}</span>
-                    <span className="text-sm font-black text-rose-700">₹{Number(d.amount || 0).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Snapshot */}
-          {Object.keys(snapshot).length > 0 && (
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Employee Snapshot</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Designation" value={fmt(snapshot.designation)} />
-                <Field label="Employment Type" value={<Pill value={snapshot.employment_type} />} />
-                <Field label="Salary Type" value={<Pill value={snapshot.salary_type} />} />
-                <Field label="Base Amount" value={`₹${Number(snapshot.base_amount || 0).toLocaleString()}`} highlight />
-              </div>
-            </div>
-          )}
-
-          {/* Adjustments */}
-          {adjustments.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Adjustments</p>
-              <div className="space-y-1.5">
-                {adjustments.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between p-2.5 bg-amber-50 rounded-lg border border-amber-100">
-                    <span className="text-sm font-semibold text-gray-700">{a.name || a.label || "Adjustment"}</span>
-                    <span className="text-sm font-black text-amber-700">₹{Number(a.amount || 0).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
 
     // ── SHIFTS DETAIL ─────────────────────────────────────────────────────────
     if (tabKey === "shifts") {
@@ -2451,159 +2267,6 @@ function useAttendanceConfig(onView, onViewLogs, width, subType = "attendance") 
   return { columns, cardRenderer, rowKey: "id" };
 }
 
-// ─── PAYROLL CONFIG (updated for new API structure) ───────────────────────────
-
-function usePayrollConfig(onView, onDownloadPdf, onSendEmail, width) {
-  const columns = [
-    {
-      key: "payroll_period",
-      label: "Period",
-      render: (p) => (
-        <span className="font-semibold text-gray-800 text-sm">
-          {p.month && p.year
-            ? new Date(p.year, p.month - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" })
-            : fmtMonthYear(p.payroll_period || p.period || p.month)}
-        </span>
-      ),
-    },
-    {
-      key: "total_earnings",
-      label: "Earnings",
-      render: (p) => (
-        <span className="text-sm font-semibold text-emerald-700">
-          {p.total_earnings != null ? `₹${Number(p.total_earnings).toLocaleString()}` : "—"}
-        </span>
-      ),
-    },
-    width > 600 && {
-      key: "total_deductions",
-      label: "Deductions",
-      render: (p) => (
-        <span className="text-sm font-semibold text-rose-600">
-          {p.total_deductions != null ? `₹${Number(p.total_deductions).toLocaleString()}` : "—"}
-        </span>
-      ),
-    },
-    {
-      key: "net_salary",
-      label: "Net Salary",
-      render: (p) => (
-        <span className="inline-flex whitespace-nowrap rounded-lg bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
-          {p.net_salary != null ? `₹${Number(p.net_salary).toLocaleString()}` : "—"}
-        </span>
-      ),
-    },
-    width > 800 && {
-      key: "attendance",
-      label: "Present / Working",
-      render: (p) => {
-        const att = p.attendance || {};
-        return att.present_days != null ? (
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-gray-700">{formatDay(att.present_days)} / {formatDay(att.working_days)} days</span>
-            {Number(att.absent_days) > 0 && (
-              <span className="text-[10px] text-rose-500 font-bold">{formatDay(att.absent_days)} absent</span>
-            )}
-          </div>
-        ) : "—";
-      },
-    },
-    width > 1000 && {
-      key: "work",
-      label: "Worked",
-      render: (p) => {
-        const work = p.work || {};
-        return work.worked_minutes != null
-          ? <span className="text-xs text-blue-600 font-semibold">{formatMinutes(work.worked_minutes)}</span>
-          : "—";
-      },
-    },
-  ].filter(Boolean);
-
-  const cardRenderer = (p, index, activeId, onToggle) => {
-    const att = p.attendance || {};
-    const work = p.work || {};
-    const earnings = p.components_breakdown?.earnings || [];
-    const deductions = p.components_breakdown?.deductions || [];
-    const periodLabel = p.month && p.year
-      ? new Date(p.year, p.month - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
-      : fmtMonthYear(p.payroll_period || p.period || p.month);
-
-    const actions = [
-      { label: "View Details", icon: <FaEye size={12} />, onClick: () => onView(p), className: "text-blue-600 hover:bg-blue-50" },
-      { label: "Download PDF", icon: <FaDownload size={12} />, onClick: () => onDownloadPdf(p), className: "text-blue-600 hover:bg-blue-50" },
-      { label: "Send Email", icon: <FaEnvelope size={12} />, onClick: () => onSendEmail(p), className: "text-purple-600 hover:bg-purple-50" },
-    ];
-
-    return (
-      <ManagementCard
-        key={p.id || index}
-        accent="emerald"
-        delay={index * 0.04}
-        onClick={() => onView(p)}
-        activeId={activeId}
-        onToggle={onToggle}
-        menuId={`pay-${p.id || index}`}
-        actions={actions}
-        hoverable
-        title={periodLabel || "Payroll"}
-        subtitle={`${att.present_days ?? "—"} present of ${att.working_days ?? "—"} working days`}
-        eyebrow="Payroll Record"
-        badge={
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-            <FaCheckCircle size={9} /> ID #{p.id}
-          </span>
-        }
-        footer={
-          <div className="flex w-full items-center justify-between text-xs text-gray-400">
-            <span>Worked: {work.worked_minutes != null ? formatMinutes(work.worked_minutes) : "—"}</span>
-            {Number(work.overtime_minutes) > 0 && <span className="text-purple-500 font-bold">OT: {formatMinutes(work.overtime_minutes)}</span>}
-          </div>
-        }
-      >
-        {/* Financial summary */}
-        <div className="grid grid-cols-3 gap-2 mb-2">
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-2 text-center">
-            <p className="text-[9px] font-bold text-emerald-500 uppercase mb-0.5">Earnings</p>
-            <p className="text-xs font-black text-emerald-700">
-              {p.total_earnings != null ? `₹${Number(p.total_earnings).toLocaleString()}` : "—"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-rose-100 bg-rose-50 p-2 text-center">
-            <p className="text-[9px] font-bold text-rose-500 uppercase mb-0.5">Deductions</p>
-            <p className="text-xs font-black text-rose-700">
-              {p.total_deductions != null ? `₹${Number(p.total_deductions).toLocaleString()}` : "—"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-2 text-center">
-            <p className="text-[9px] font-bold text-indigo-500 uppercase mb-0.5">Net</p>
-            <p className="text-xs font-black text-indigo-700">
-              {p.net_salary != null ? `₹${Number(p.net_salary).toLocaleString()}` : "—"}
-            </p>
-          </div>
-        </div>
-
-        {/* Earnings component preview */}
-        {earnings.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {earnings.slice(0, 3).map((e, i) => (
-              <span key={i} className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-full font-bold">
-                {e.name}: ₹{Number(e.amount || 0).toLocaleString()}
-              </span>
-            ))}
-            {earnings.length > 3 && (
-              <span className="text-[9px] bg-gray-50 text-gray-500 border border-gray-100 px-1.5 py-0.5 rounded-full font-bold">
-                +{earnings.length - 3} more
-              </span>
-            )}
-          </div>
-        )}
-      </ManagementCard>
-    );
-  };
-  return { columns, cardRenderer, rowKey: "id" };
-}
-
 // ─── SHIFTS CONFIG (updated for new API structure) ────────────────────────────
 
 function useShiftConfig(onView, width) {
@@ -2845,28 +2508,15 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const [selectedLogItem, setSelectedLogItem] = useState(null);
   const [profileLeaveAction, setProfileLeaveAction] = useState(null);
   const [profileLeaveSubmitting, setProfileLeaveSubmitting] = useState(false);
-  const [showCreatePayrollModal, setShowCreatePayrollModal] = useState(false);
   const [showCreateLeaveModal, setShowCreateLeaveModal] = useState(false);
   const [showShareShiftModal, setShowShareShiftModal] = useState(false);
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
   const [leaveTypeLoading, setLeaveTypeLoading] = useState(false);
   const [creatingLeave, setCreatingLeave] = useState(false);
   const [leaveCreateForm, setLeaveCreateForm] = useState({ employee_id: employeeId || "", leave_config_id: "", start_date: "", end_date: "", remarks: "" });
-  const [payrollMonth, setPayrollMonth] = useState(new Date().getMonth() + 1);
-  const [payrollYear, setPayrollYear] = useState(new Date().getFullYear());
-  const [sendPayrollPdf, setSendPayrollPdf] = useState(true);
-  const [payrollDownloadItem, setPayrollDownloadItem] = useState(null);
-  const [payrollEmailItem, setPayrollEmailItem] = useState(null);
-  const [payrollPdfIsSummary, setPayrollPdfIsSummary] = useState(true);
-  const [payrollEmailOverride, setPayrollEmailOverride] = useState("");
-  const [downloadingPayrollPdf, setDownloadingPayrollPdf] = useState(false);
-  const [emailingPayrollPdf, setEmailingPayrollPdf] = useState(false);
-  const [permissionPackage, setPermissionPackage] = useState(null);
 
 
   const [subType, setSubType] = useState("attendance");
-  const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(2026, i, 1).toLocaleString('en-US', { month: 'long' }) })), []);
-  const yearOptions = useMemo(() => Array.from({ length: 6 }, (_, i) => ({ value: new Date().getFullYear() - 2 + i, label: String(new Date().getFullYear() - 2 + i) })), []);
   const [downloadingShiftPdf, setDownloadingShiftPdf] = useState(false);
   const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
   const fetchRef = useRef(false);
@@ -2876,7 +2526,7 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
 
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-  const ACCENT_MAP = { basic: "slate", permissions: "indigo", attendance: "blue", salary: "green", payroll: "emerald", leaves: "amber", shifts: "violet" };
+  const ACCENT_MAP = { basic: "slate", permissions: "indigo", attendance: "blue", salary: "green", leaves: "amber", shifts: "violet" };
   const accent = ACCENT_MAP[normalizedTabKey] || "indigo";
 
 
@@ -2982,128 +2632,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
     }
   }, [fetchData, pagination.limit, pagination.page, profileLeaveAction]);
 
-  const getPayrollPeriodLabel = useCallback((payroll) => {
-    if (payroll?.month && payroll?.year) {
-      return new Date(payroll.year, payroll.month - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
-    }
-    return fmtMonthYear(payroll?.payroll_period || payroll?.period || payroll?.month);
-  }, []);
-
-  const getPayrollPdfFilename = useCallback((payroll) => {
-    const month = Number(payroll?.month);
-    const year = Number(payroll?.year);
-    const normalizedMonth = Number.isFinite(month) ? String(month).padStart(2, "0") : "month";
-    const normalizedYear = Number.isFinite(year) ? String(year) : "year";
-    return `${normalizedMonth}_${normalizedYear}_payroll.pdf`;
-  }, []);
-
-  const openPayrollDownloadModal = useCallback((payroll) => {
-    if (!payroll?.id) {
-      toast.error("Payroll entry ID not found");
-      return;
-    }
-    setPayrollDownloadItem(payroll);
-    setPayrollPdfIsSummary(true);
-    setActiveMenu(null);
-  }, []);
-
-  const openPayrollEmailModal = useCallback((payroll) => {
-    if (!payroll?.id) {
-      toast.error("Payroll entry ID not found");
-      return;
-    }
-    setPayrollEmailItem(payroll);
-    setPayrollPdfIsSummary(true);
-    setPayrollEmailOverride("");
-    setActiveMenu(null);
-  }, []);
-
-  const closePayrollDownloadModal = useCallback(() => {
-    if (!downloadingPayrollPdf) setPayrollDownloadItem(null);
-  }, [downloadingPayrollPdf]);
-
-  const closePayrollEmailModal = useCallback(() => {
-    if (!emailingPayrollPdf) setPayrollEmailItem(null);
-  }, [emailingPayrollPdf]);
-
-  const handleConfirmPayrollDownload = useCallback(async () => {
-    if (!payrollDownloadItem?.id) return;
-    const currentPayroll = payrollDownloadItem;
-    setPayrollDownloadItem(null);
-    setDownloadingPayrollPdf(true);
-    try {
-      const companyStr = localStorage.getItem("company");
-      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-      const response = await apiCall(
-        "/payroll/download",
-        "POST",
-        { payroll_entry_id: currentPayroll.id, type: payrollPdfIsSummary ? "summary" : "detailed" },
-        companyId
-      );
-
-      if (!response.ok) {
-        let errorMessage = "Failed to download payslip";
-        try {
-          const errorResult = await response.json();
-          errorMessage = errorResult?.message || errorMessage;
-        } catch {
-          // Keep fallback when the server does not return JSON.
-        }
-        throw new Error(errorMessage);
-      }
-
-      const filename = getPayrollPdfFilename(currentPayroll);
-      const contentType = response.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        const result = await response.json();
-        const fileUrl = result.url || result.file_url || result.data?.url || result.data?.file_url;
-        if (!result.success || !fileUrl) throw new Error(result.message || "Failed to download payslip");
-        try {
-          const fileResponse = await fetch(fileUrl);
-          if (!fileResponse.ok) throw new Error("Unable to fetch PDF file");
-          const fileBlob = await fileResponse.blob();
-          downloadBlob(fileBlob, filename);
-        } catch {
-          triggerFileDownload(fileUrl, filename);
-        }
-        toast.success(result.message || "Payslip downloaded successfully");
-      } else {
-        const blob = await response.blob();
-        downloadBlob(blob, filename);
-        toast.success("Payslip downloaded successfully");
-      }
-    } catch (error) {
-      toast.error(error.message || "Failed to download payslip");
-    } finally {
-      setDownloadingPayrollPdf(false);
-    }
-  }, [getPayrollPdfFilename, payrollDownloadItem, payrollPdfIsSummary]);
-
-  const handleConfirmPayrollEmail = useCallback(async (e) => {
-    if (e) e.preventDefault();
-    if (!payrollEmailItem?.id) return;
-    const currentPayroll = payrollEmailItem;
-    setPayrollEmailItem(null);
-    setEmailingPayrollPdf(true);
-    try {
-      const companyStr = localStorage.getItem("company");
-      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-      const payload = { payroll_entry_id: [currentPayroll.id], type: payrollPdfIsSummary ? "summary" : "details" };
-      if (payrollEmailOverride.trim()) {
-        payload.email = payrollEmailOverride.trim();
-      }
-      const response = await apiCall("/payroll/send-email", "POST", payload, companyId);
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Failed to send email");
-      toast.success(result.message || "Payslip email sent successfully");
-      setPayrollEmailOverride("");
-    } catch (error) {
-      toast.error(error.message || "Failed to send email");
-    } finally {
-      setEmailingPayrollPdf(false);
-    }
-  }, [payrollEmailItem, payrollEmailOverride, payrollPdfIsSummary]);
-
   const handleDownloadShiftPdf = useCallback(async () => {
     if (!employeeId) return;
     setDownloadingShiftPdf(true);
@@ -3193,41 +2721,9 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
     }
   }, [fetchData, leaveCreateForm, pagination.limit, pagination.page]);
 
-  const handleCreatePayrollClick = useCallback(() => {
-    if (!employeeId) { toast.warning("Employee details are not available."); return; }
-    setPayrollMonth(new Date().getMonth() + 1);
-    setPayrollYear(new Date().getFullYear());
-    setSendPayrollPdf(true);
-    setShowCreatePayrollModal(true);
-  }, [employeeId]);
-
-  const handleCreatePayrollSubmit = useCallback(async (e) => {
-    e.preventDefault();
-    if (!employeeId) { toast.warning("Employee details are not available."); return; }
-    try {
-      const companyStr = localStorage.getItem("company");
-      const companyId = companyStr ? JSON.parse(companyStr)?.id : null;
-      const payload = {
-        month: Number(payrollMonth),
-        year: Number(payrollYear),
-        employee_id: [Number(employeeId)],
-        send_pdf: Boolean(sendPayrollPdf),
-      };
-      const response = await apiCall("/payroll/generate-payroll", "POST", payload, companyId);
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Failed to generate payroll");
-      toast.success("Payroll generated successfully");
-      setShowCreatePayrollModal(false);
-      fetchData(pagination.page, pagination.limit);
-    } catch (error) {
-      toast.error(error.message || "Failed to generate payroll");
-    }
-  }, [employeeId, fetchData, pagination.limit, pagination.page, payrollMonth, payrollYear, sendPayrollPdf]);
-
   const permConfig = usePermissionsConfig(onView, effectiveWidth);
   const attConfig = useAttendanceConfig(onView, onViewLogs, effectiveWidth, subType);
 
-  const payConfig = usePayrollConfig(onView, openPayrollDownloadModal, openPayrollEmailModal, effectiveWidth);
   const leaveConfig = useLeaveConfig(
     onView,
     (leave) => setProfileLeaveAction({ leave, action: "approve" }),
@@ -3236,40 +2732,14 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   );
   const shiftConfig = useShiftConfig(onView, effectiveWidth);
 
-  const CONFIG_MAP = { permissions: permConfig, attendance: attConfig, payroll: payConfig, leaves: leaveConfig, shifts: shiftConfig };
+  const CONFIG_MAP = { permissions: permConfig, attendance: attConfig, leaves: leaveConfig, shifts: shiftConfig };
   const activeConfig = CONFIG_MAP[normalizedTabKey] || permConfig;
-  const { columns, cardRenderer, rowKey } = activeConfig;
-  const hasToolbarActions = normalizedTabKey === "shifts" || normalizedTabKey === "leaves" || normalizedTabKey === "payroll";
+  const { columns, cardRenderer, rowKey, getActions: configActions } = activeConfig;
+  const hasToolbarActions = normalizedTabKey === "shifts" || normalizedTabKey === "leaves";
 
 
   return (
     <div className="space-y-4">
-      <AnimatePresence>
-        {(downloadingPayrollPdf || emailingPayrollPdf) && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center"
-          >
-            <FaSpinner className={`animate-spin text-5xl mb-4 ${downloadingPayrollPdf ? "text-emerald-600" : "text-purple-600"}`} />
-            <p className="text-gray-800 font-semibold shadow-sm px-5 py-2.5 bg-white rounded-xl border border-gray-100 flex items-center gap-2">
-              {downloadingPayrollPdf ? (
-                <>
-                  <FaFilePdf className="text-emerald-500" />
-                  Preparing PDF Payslip...
-                </>
-              ) : (
-                <>
-                  <FaEnvelope className="text-purple-500" />
-                  Sending Email...
-                </>
-              )}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {warn && <p className="text-xs text-amber-500">⚠ Could not load data from API — list may be empty.</p>}
 
       {normalizedTabKey === "attendance" && (
@@ -3309,11 +2779,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
                 <FaPlus size={10} /> Create
               </button>
             )}
-            {normalizedTabKey === "payroll" && (
-              <button type="button" onClick={handleCreatePayrollClick} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100">
-                <FaPlus size={10} /> Create
-              </button>
-            )}
             {rows.length > 0 && normalizedTabKey !== "permissions" && (
               <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent={accent} />
             )}
@@ -3348,7 +2813,7 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
       )}
 
       {!loading && rows.length > 0 && normalizedTabKey !== "permissions" && viewMode === "table" && (
-        <ManagementTable rows={rows} columns={columns} rowKey={rowKey} onRowClick={onView} activeId={activeMenu} onToggleAction={(e, id) => setActiveMenu((c) => (c === id ? null : id))} getActions={getActions} accent={accent} headerClassName="xsm:hidden" />
+        <ManagementTable rows={rows} columns={columns} rowKey={rowKey} onRowClick={onView} activeId={activeMenu} onToggleAction={(e, id) => setActiveMenu((c) => (c === id ? null : id))} getActions={configActions} accent={accent} headerClassName="xsm:hidden" />
       )}
 
       {!loading && rows.length > 0 && normalizedTabKey !== "permissions" && viewMode === "card" && (
@@ -3423,217 +2888,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showCreatePayrollModal && normalizedTabKey === "payroll" && (
-          <Modal
-            isOpen={showCreatePayrollModal}
-            onClose={() => setShowCreatePayrollModal(false)}
-            title="Generate Payroll"
-            subtitle="Create payroll for this employee"
-            icon={<FaMoneyBillWave className="text-emerald-600" />}
-            size="md"
-            footer={
-              <>
-                <button type="button" onClick={() => setShowCreatePayrollModal(false)} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">Cancel</button>
-                <button type="button" onClick={handleCreatePayrollSubmit} className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-emerald-700 hover:to-green-700 transition-all shadow-lg shadow-emerald-200">Generate Payroll</button>
-              </>
-            }
-          >
-            <form onSubmit={handleCreatePayrollSubmit} className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Month</label>
-                  <SelectField value={monthOptions.find((option) => option.value === payrollMonth) || null} onChange={(option) => setPayrollMonth(Number(option?.value || 1))} options={monthOptions} placeholder="Select month" menuPortalTarget={document.body} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Year</label>
-                  <SelectField value={yearOptions.find((option) => option.value === payrollYear) || null} onChange={(option) => setPayrollYear(Number(option?.value || new Date().getFullYear()))} options={yearOptions} placeholder="Select year" menuPortalTarget={document.body} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-                <div>
-                  <p className="text-sm font-semibold text-emerald-800">Send payslip PDF</p>
-                  <p className="text-xs text-emerald-700/80">Email the generated payslip after payroll creation.</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={sendPayrollPdf}
-                  onClick={() => setSendPayrollPdf((prev) => !prev)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sendPayrollPdf ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${sendPayrollPdf ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-            </form>
-          </Modal>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {payrollDownloadItem && normalizedTabKey === "payroll" && (
-          <Modal
-            isOpen={!!payrollDownloadItem}
-            onClose={closePayrollDownloadModal}
-            title="Download Payslip"
-            subtitle="Choose format before downloading."
-            icon={<FaDownload className="text-blue-600" />}
-            size="sm"
-            footer={
-              <>
-                <button
-                  type="button"
-                  onClick={closePayrollDownloadModal}
-                  disabled={downloadingPayrollPdf}
-                  className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmPayrollDownload}
-                  disabled={downloadingPayrollPdf}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {downloadingPayrollPdf ? <FaSpinner className="animate-spin" size={12} /> : <FaDownload size={12} />}
-                  {downloadingPayrollPdf ? "Downloading..." : "Download PDF"}
-                </button>
-              </>
-            }
-          >
-            <div className="space-y-4 pb-2">
-              <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-4">
-                <div className="bg-white p-3 rounded-xl shadow-sm text-blue-500 mt-0.5">
-                  <FaFilePdf size={22} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-gray-800 text-base truncate">{getPayrollPeriodLabel(payrollDownloadItem)}</h4>
-                  <p className="text-sm text-gray-600 mb-1">Payroll record #{payrollDownloadItem.id}</p>
-                  <p className="text-xs text-gray-500 font-mono">
-                    Net: <span className="text-gray-700 font-medium">{payrollDownloadItem.net_salary != null ? `Rs ${Number(payrollDownloadItem.net_salary).toLocaleString()}` : "N/A"}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 rounded-xl border border-blue-100 bg-blue-50">
-                <div>
-                  <div className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                    <FaFilePdf className="text-blue-500" size={13} />
-                    Payslip Format
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {payrollPdfIsSummary ? "Summary - key totals only." : "Details - full breakdown with all components."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-semibold select-none cursor-pointer transition-colors ${!payrollPdfIsSummary ? "text-gray-800" : "text-gray-400"}`} onClick={() => setPayrollPdfIsSummary(false)}>Details</span>
-                  <button
-                    type="button"
-                    onClick={() => setPayrollPdfIsSummary((value) => !value)}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payrollPdfIsSummary ? "bg-blue-500" : "bg-gray-300"}`}
-                  >
-                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payrollPdfIsSummary ? "translate-x-5" : "translate-x-0"}`} />
-                  </button>
-                  <span className={`text-xs font-semibold select-none cursor-pointer transition-colors ${payrollPdfIsSummary ? "text-blue-700" : "text-gray-400"}`} onClick={() => setPayrollPdfIsSummary(true)}>Summary</span>
-                </div>
-              </div>
-            </div>
-          </Modal>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {payrollEmailItem && normalizedTabKey === "payroll" && (
-          <Modal
-            isOpen={!!payrollEmailItem}
-            onClose={closePayrollEmailModal}
-            title="Send Payslip Email"
-            subtitle="Confirm and optionally provide an alternate email address."
-            icon={<FaEnvelope className="text-purple-600" />}
-            size="md"
-            footer={
-              <>
-                <button
-                  type="button"
-                  onClick={closePayrollEmailModal}
-                  disabled={emailingPayrollPdf}
-                  className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmPayrollEmail}
-                  disabled={emailingPayrollPdf}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {emailingPayrollPdf ? <FaSpinner className="animate-spin" size={12} /> : <FaEnvelope size={12} />}
-                  {emailingPayrollPdf ? "Sending..." : "Confirm & Send"}
-                </button>
-              </>
-            }
-          >
-            <form onSubmit={handleConfirmPayrollEmail} className="space-y-5 pb-2">
-              <div className="p-4 bg-purple-50 border border-purple-100 rounded-xl flex items-start gap-4">
-                <div className="bg-white p-3 rounded-xl shadow-sm text-purple-500 mt-0.5">
-                  <FaFilePdf size={22} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-gray-800 text-base truncate">{getPayrollPeriodLabel(payrollEmailItem)}</h4>
-                  <p className="text-sm text-gray-600 mb-1">Payroll record #{payrollEmailItem.id}</p>
-                  <p className="text-xs text-gray-500 font-mono">
-                    Default Email: <span className="text-gray-700 font-medium">{payrollEmailItem.employee?.email || payrollEmailItem.email || "N/A"}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Alternate Email Address (Optional)
-                </label>
-                <div className="relative">
-                  <FaEnvelope className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="email"
-                    value={payrollEmailOverride}
-                    onChange={(event) => setPayrollEmailOverride(event.target.value)}
-                    placeholder="Leave blank to use default email"
-                    disabled={emailingPayrollPdf}
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 outline-none transition-all text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-2 ml-1">
-                  If provided, the payslip will be sent to this email instead of the employee's registered email.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between p-4 rounded-xl border border-purple-100 bg-purple-50">
-                <div>
-                  <div className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                    <FaFilePdf className="text-purple-500" size={13} />
-                    Payslip Type
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {payrollPdfIsSummary ? "Summary - key totals only." : "Details - full breakdown with all components."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-semibold select-none cursor-pointer transition-colors ${!payrollPdfIsSummary ? "text-gray-800" : "text-gray-400"}`} onClick={() => setPayrollPdfIsSummary(false)}>Details</span>
-                  <button
-                    type="button"
-                    onClick={() => setPayrollPdfIsSummary((value) => !value)}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payrollPdfIsSummary ? "bg-purple-500" : "bg-gray-300"}`}
-                  >
-                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payrollPdfIsSummary ? "translate-x-5" : "translate-x-0"}`} />
-                  </button>
-                  <span className={`text-xs font-semibold select-none cursor-pointer transition-colors ${payrollPdfIsSummary ? "text-purple-700" : "text-gray-400"}`} onClick={() => setPayrollPdfIsSummary(true)}>Summary</span>
-                </div>
-              </div>
-            </form>
-          </Modal>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {showShareShiftModal && (
           <ShareShiftModal
             isOpen={showShareShiftModal}
@@ -3685,45 +2939,6 @@ function AttendanceSection({ employee, fallbackId, refreshKey }) {
   );
 }
 
-// ─── PAYROLL SUB-TAB DISPATCHER ─────────────────────────────────────────────
-function PayrollSection({ employee, employeeId, refreshKey }) {
-  const [subTab, setSubTab] = useState("records"); // "records" | "adjustments"
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setSubTab("records")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "records"
-            ? "bg-emerald-600 text-white shadow-sm"
-            : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
-            }`}
-        >
-          <FaCalendarAlt size={12} />
-          <span>Payroll Records</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab("adjustments")}
-          className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${subTab === "adjustments"
-            ? "bg-indigo-600 text-white shadow-sm"
-            : "text-gray-600 hover:text-indigo-700 hover:bg-indigo-50"
-            }`}
-        >
-          <FaCoins size={12} />
-          <span>Adjustments (Bonus / Fine)</span>
-        </button>
-      </div>
-
-      {subTab === "records" ? (
-        <EmployeePayrollTab employeeId={employeeId} refreshKey={refreshKey} />
-      ) : (
-        <EmployeePayrollAdjustmentsTab employeeId={employeeId} employeeName={employee?.name} />
-      )}
-    </div>
-  );
-}
 
 // ─── LEAVES SUB-TAB DISPATCHER ──────────────────────────────────────────────
 function LeavesSection({ employee, employeeId, refreshKey }) {
@@ -3904,7 +3119,14 @@ export default function EmployeeProfilePage() {
                   {activeTab === "attendance" ? (
                     <AttendanceSection employee={profile.employee} fallbackId={employeeId} refreshKey={refreshKey} />
                   ) : activeTab === "payroll" ? (
-                    <PayrollSection employee={profile.employee} employeeId={profile.employee?.id ?? employeeId} refreshKey={refreshKey} />
+                    <div className="space-y-6">
+                      <EmployeePayrollTab employeeId={profile.employee?.id ?? employeeId} refreshKey={refreshKey} />
+                      <EmployeePayrollAdjustmentsTab
+                        employeeId={profile.employee?.id ?? employeeId}
+                        employeeName={profile.employee?.name}
+                        refreshKey={refreshKey}
+                      />
+                    </div>
                   ) : activeTab === "leaves" ? (
                     <LeavesSection employee={profile.employee} employeeId={profile.employee?.id ?? employeeId} refreshKey={refreshKey} />
                   ) : activeTab === "ledger" ? (
