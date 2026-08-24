@@ -41,6 +41,7 @@ import EmployeeLeaveBalancesTab from "../components/profile/EmployeeLeaveBalance
 import EmployeeLeaveRequestsTab from "../components/profile/EmployeeLeaveRequestsTab";
 import EmployeePermissionsPanel from "../components/profile/EmployeePermissionsPanel";
 import EmployeeSalaryTab from "../components/profile/EmployeeSalaryTab";
+import EmployeePayrollTab from "../components/profile/EmployeePayrollTab";
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
@@ -3716,13 +3717,7 @@ function PayrollSection({ employee, employeeId, refreshKey }) {
       </div>
 
       {subTab === "records" ? (
-        <TabContent
-          tabKey="payroll"
-          tabLabel="Payroll"
-          tabIcon={<FaCalendarAlt size={12} />}
-          employeeId={employeeId}
-          refreshKey={refreshKey}
-        />
+        <EmployeePayrollTab employeeId={employeeId} refreshKey={refreshKey} />
       ) : (
         <EmployeePayrollAdjustmentsTab employeeId={employeeId} employeeName={employee?.name} />
       )}
