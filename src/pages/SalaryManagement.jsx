@@ -873,7 +873,7 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
 
 // ─── Assign Salary Modal ──────────────────────────────────────────────────────
 
-const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitTitle, companyCurrency }) => {
+const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitTitle, companyCurrency, initialEmployeeId = null, initialEmployee = null }) => {
     const [packages, setPackages] = useState([]);
     const [availableComponents, setAvailableComponents] = useState([]);
     const [loadingPackages, setLoadingPackages] = useState(false);
@@ -892,8 +892,12 @@ const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitT
     const filteredAvailableComponents = useMemo(() => availableComponents.filter(c => !existingComponentIds.includes(c.id)), [availableComponents, existingComponentIds]);
 
     useEffect(() => {
-        if (isOpen) { loadSalaryPackages(); loadSalaryComponents(); }
-    }, [isOpen]);
+        if (isOpen) {
+            setSelectedEmployee(initialEmployee || (initialEmployeeId ? { id: initialEmployeeId } : null));
+            loadSalaryPackages();
+            loadSalaryComponents();
+        }
+    }, [isOpen, initialEmployeeId, initialEmployee]);
 
     const handlePackageChange = (packageId) => {
         const pkg = packages.find(p => String(p.id) === String(packageId));

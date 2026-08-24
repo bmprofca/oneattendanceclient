@@ -1969,78 +1969,6 @@ function DetailModal({ isOpen, onClose, item, tabKey, tabLabel, subType = "atten
       );
     }
 
-    // ── SALARY DETAIL ─────────────────────────────────────────────────────────
-    if (tabKey === "salary") {
-      const earnings = (item.components || []).filter((c) => c.type === "earning");
-      const deductions = (item.components || []).filter((c) => c.type === "deduction");
-      return (
-        <div className="space-y-5">
-          {/* Header snapshot */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Base Amount", value: `₹${Number(item.base_amount || 0).toLocaleString()}`, color: "blue" },
-              { label: "CTC", value: item.ctc != null ? `₹${Number(item.ctc).toLocaleString()}` : "—", color: "indigo" },
-              { label: "Net Salary", value: item.net_salary != null ? `₹${Number(item.net_salary).toLocaleString()}` : "—", color: "emerald" },
-              { label: "Total Deductions", value: item.total_deductions != null ? `₹${Number(item.total_deductions).toLocaleString()}` : "—", color: "rose" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className={`p-3 rounded-xl bg-${color}-50 border border-${color}-100 text-center`}>
-                <p className={`text-[10px] font-bold text-${color}-500 uppercase tracking-widest mb-1`}>{label}</p>
-                <p className={`text-base font-black text-${color}-700`}>{value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Effective From" value={fmtDate(item.effective_from)} />
-            <Field label="Effective To" value={item.effective_to ? fmtDate(item.effective_to) : "Ongoing"} />
-          </div>
-
-          {/* Earnings */}
-          {earnings.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <FaArrowUp className="text-emerald-500" /> Earnings ({earnings.length})
-              </p>
-              <div className="space-y-2">
-                {earnings.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">{c.code}</span>
-                      <span className="text-sm font-semibold text-gray-800">{c.name}</span>
-                      <span className="text-[10px] text-gray-400">{c.calc_type === "percentage" ? `${Number(c.calc_value)}%` : "Fixed"}</span>
-                    </div>
-                    <span className="text-sm font-black text-emerald-700">₹{Number(c.amount || 0).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Deductions */}
-          {deductions.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <FaArrowDown className="text-rose-500" /> Deductions ({deductions.length})
-              </p>
-              <div className="space-y-2">
-                {deductions.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between p-3 bg-rose-50 rounded-xl border border-rose-100">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">{c.code}</span>
-                      <span className="text-sm font-semibold text-gray-800">{c.name}</span>
-                      <span className="text-[10px] text-gray-400">{c.calc_type === "percentage" ? `${Number(c.calc_value)}%` : "Fixed"}</span>
-                    </div>
-                    <span className="text-sm font-black text-rose-700">₹{Number(c.amount || 0).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
     // ── PAYROLL DETAIL ────────────────────────────────────────────────────────
     if (tabKey === "payroll") {
       const att = item.attendance || {};
@@ -3312,26 +3240,6 @@ function TabContent({ tabKey, tabLabel, tabIcon, employeeId, refreshKey = 0 }) {
   const { columns, cardRenderer, rowKey } = activeConfig;
   const hasToolbarActions = normalizedTabKey === "shifts" || normalizedTabKey === "leaves" || normalizedTabKey === "payroll";
 
-  // Update getActions to include salary actions:
-  const getActions = (row) => {
-    const base = [{ label: "View Details", icon: <FaEye size={13} />, onClick: () => setSelectedItem(row), className: "text-blue-600 hover:text-blue-700 hover:bg-blue-50" }];
-    if (normalizedTabKey === "attendance") {
-      base.push({ label: "View History", icon: <FaHistory size={13} />, onClick: () => setSelectedLogItem(row), className: "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" });
-    }
-    if (normalizedTabKey === "leaves" && row.status === "pending") {
-      base.push(
-        { label: "Approve / Edit", icon: <FaCheckCircle size={13} />, onClick: () => setProfileLeaveAction({ leave: row, action: "approve" }), className: "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" },
-        { label: "Reject", icon: <FaTimesCircle size={13} />, onClick: () => setProfileLeaveAction({ leave: row, action: "reject" }), className: "text-rose-600 hover:text-rose-700 hover:bg-rose-50" }
-      );
-    }
-    if (normalizedTabKey === "payroll") {
-      base.push(
-        { label: "Download PDF", icon: <FaDownload size={13} />, onClick: () => openPayrollDownloadModal(row), className: "text-blue-600 hover:text-blue-700 hover:bg-blue-50" },
-        { label: "Send Email", icon: <FaEnvelope size={13} />, onClick: () => openPayrollEmailModal(row), className: "text-purple-600 hover:text-purple-700 hover:bg-purple-50" }
-      );
-    }
-    return base;
-  };
 
   return (
     <div className="space-y-4">
