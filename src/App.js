@@ -46,7 +46,6 @@ import GlobalSkeleton from "./components/GlobalSkeletonComponent";
 import ScrollToTop from "./components/ScrollToTop";
 import ProfilePage from "./pages/Profile";
 import EmployeeProfile from "./pages/EmployeeProfile";
-import EmployeeSalaryHistory from "./pages/EmployeeSalaryHistory";
 import UnmarkedAttendance from "./pages/UnmarkedAttendance";
 import BreakManagement from "./pages/BreakManagement";
 import ServerUnavailable from "./pages/ServerUnavailable";
@@ -468,7 +467,6 @@ function AppContent() {
         />
         </MainLayout></ProtectedRoute>} />
         <Route path="/employee-profile/:employeeId/:tabKey?" element={<ProtectedRoute pageKey="employeeProfile"><MainLayout><EmployeeProfile /></MainLayout></ProtectedRoute>} />
-        <Route path="/employee-salary-history/:employeeId" element={<ProtectedRoute pageKey="salaryManagement"><MainLayout><EmployeeSalaryHistory /></MainLayout></ProtectedRoute>} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>
