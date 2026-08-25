@@ -307,23 +307,31 @@ const BreakDetailModal = ({ record, onClose, onEdit }) => {
 
 // ─── Create / Edit Break Modal ─────────────────────────────────────────────────
 
-const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false }) => {
+export const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false, initialEmployeeData = null, initialDate = '' }) => {
     const [breakStart, setBreakStart] = useState(isEdit ? getTimeStr(record?.break_start) : '');
     const [breakEnd, setBreakEnd] = useState(isEdit ? getTimeStr(record?.break_end) : '');
     const [notes, setNotes] = useState(record?.remark || '');
-    const [employeeId, setEmployeeId] = useState(isEdit ? (record?.employee_id || '') : '');
-    const [date, setDate] = useState(isEdit ? (record?.attendance_date || '') : new Date().toISOString().slice(0, 10));
+    const [employeeId, setEmployeeId] = useState(record?.employee_id || initialEmployeeData?.id || '');
+    const [date, setDate] = useState(record?.attendance_date || initialDate || new Date().toISOString().slice(0, 10));
+
+    useEffect(() => {
+        setBreakStart(isEdit ? getTimeStr(record?.break_start) : '');
+        setBreakEnd(isEdit ? getTimeStr(record?.break_end) : '');
+        setNotes(record?.remark || '');
+        setEmployeeId(record?.employee_id || initialEmployeeData?.id || '');
+        setDate(record?.attendance_date || initialDate || new Date().toISOString().slice(0, 10));
+    }, [record, isEdit, initialEmployeeData, initialDate]);
     
     const initialEmployee = useMemo(() => {
-        if (!record?.employee_id) return null;
+        if (!record?.employee_id && !initialEmployeeData) return null;
         return {
-            id: record.employee_id,
-            name: record.name,
-            employee_code: record.employee_code,
-            designation: record.designation,
-            profile_picture: record.profile_picture,
+            id: record?.employee_id || initialEmployeeData.id,
+            name: record?.name || initialEmployeeData.name,
+            employee_code: record?.employee_code || initialEmployeeData.employee_code,
+            designation: record?.designation || initialEmployeeData.designation,
+            profile_picture: record?.profile_picture || initialEmployeeData.profile_picture,
         };
-    }, [record]);
+    }, [record, initialEmployeeData]);
 
     const isSaveDisabled = saving || !breakStart || !employeeId || !date;
 

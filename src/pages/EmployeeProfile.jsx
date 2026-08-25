@@ -208,8 +208,8 @@ function ProfileHeaderSummary({ data }) {
       <div className="text-right hidden sm:block">
         <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
           <Pill value={e.status} />
-          <Pill value={e.employment_type} />
-          <Pill value={e.salary_type} />
+          <Pill value={e.employment_type.label} />
+          <Pill value={e.salary_type.label} />
         </div>
         <p className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 mb-1">
           <FaIdCard size={10} className="shrink-0" />
@@ -217,7 +217,7 @@ function ProfileHeaderSummary({ data }) {
         </p>
         <p className="flex items-center gap-1.5 text-xs text-slate-600 mb-0.5">
           <FaBriefcase size={10} className="shrink-0 text-emerald-500" />
-          {fmt(e.designation)}
+          {fmt(e.designation.label)}
         </p>
         <p className="flex items-center gap-1.5 text-xs text-slate-400">
           <FaEnvelope size={10} className="shrink-0 text-blue-400" />
