@@ -187,6 +187,7 @@ const LeaveManagement = () => {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
+    const [dateFilter, setDateFilter] = useState(null);
     const [viewMode, setViewMode] = useState('table');
     const [isInitialLoad, setIsInitialLoad] = useState(true);
 
@@ -249,6 +250,20 @@ const LeaveManagement = () => {
             });
             if (searchVal) params.append('search', searchVal);
             if (typeVal) params.append('leave_type', typeVal);
+            if (dateFilter?.date) {
+                params.append('start_date', dateFilter.date);
+                params.append('end_date', dateFilter.date);
+            } else if (dateFilter?.month && dateFilter?.year) {
+                const month = Number(dateFilter.month);
+                const year = Number(dateFilter.year);
+                const monthValue = String(month).padStart(2, '0');
+                const lastDay = new Date(year, month, 0).getDate();
+                params.append('start_date', `${year}-${monthValue}-01`);
+                params.append('end_date', `${year}-${monthValue}-${String(lastDay).padStart(2, '0')}`);
+            } else if (dateFilter?.from_date && dateFilter?.to_date) {
+                params.append('start_date', dateFilter.from_date);
+                params.append('end_date', dateFilter.to_date);
+            }
 
             const response = await apiCall(`/leave/emp-leaves?${params}`, 'GET', null, companyId);
             const result = await response.json();
@@ -270,11 +285,11 @@ const LeaveManagement = () => {
             fetchInProgress.current = false;
             setIsInitialLoad(false);
         }
-    }, [pagination.limit, updatePagination, debouncedSearch, typeFilter]);
+    }, [pagination.limit, updatePagination, debouncedSearch, typeFilter, dateFilter]);
 
     useEffect(() => {
         if (!isInitialLoad) fetchLeaves(pagination.page, debouncedSearch, typeFilter, true);
-    }, [pagination.page, pagination.limit, debouncedSearch, typeFilter]);
+    }, [pagination.page, pagination.limit, debouncedSearch, typeFilter, dateFilter]);
 
     useEffect(() => {
         fetchLeaves(1, '', '', true);
@@ -284,7 +299,7 @@ const LeaveManagement = () => {
         setLeaveConfigsLoading(true);
         try {
             const companyId = JSON.parse(localStorage.getItem('company'))?.id;
-            const response = await apiCall('/leave/company', 'GET', null, companyId);
+            const response = await apiCall('/leave/company?page=1&limit=100', 'GET', null, companyId);
             const result = await response.json();
 
             if (!response.ok || !result.success) throw new Error(result.message || 'Failed to load leave types');
@@ -298,8 +313,8 @@ const LeaveManagement = () => {
     }, []);
 
     useEffect(() => {
-        if (showCreateModal || approveLeave) fetchLeaveConfigs();
-    }, [showCreateModal, approveLeave, fetchLeaveConfigs]);
+        fetchLeaveConfigs();
+    }, [fetchLeaveConfigs]);
 
     const closeCreateModal = () => {
         setShowCreateModal(false);
@@ -612,24 +627,16 @@ const LeaveManagement = () => {
         { label: 'Pending', val: leaves.filter(l => l.status === 'pending').length, icon: FaClock, color: 'yellow' },
     ];
 
-    const leaveTypeOptions = useMemo(() => {
-        const seen = new Map();
-
-        leaves.forEach((leave) => {
-            const rawValue = String(leave.leave_code || leave.leave_name || leave.leave_type || '').trim();
-            if (!rawValue) return;
-
-            const normalized = rawValue.toLowerCase();
-            if (!seen.has(normalized)) {
-                seen.set(normalized, {
-                    value: normalized,
-                    label: leave.leave_name || leave.leave_code || rawValue,
-                });
-            }
-        });
-
-        return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label));
-    }, [leaves]);
+    const leaveTypeOptions = useMemo(
+        () => leaveConfigs
+            .filter((config) => config.is_active !== false)
+            .map((config) => ({
+                value: String(config.id),
+                label: `${config.name}${config.code ? ` (${config.code})` : ''}`,
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label)),
+        [leaveConfigs]
+    );
 
     const leaveTypeFilterOptions = useMemo(
         () => [
@@ -644,18 +651,7 @@ const LeaveManagement = () => {
         [leaveTypeFilterOptions, typeFilter]
     );
 
-    const visibleLeaves = useMemo(() => {
-        if (!typeFilter) return leaves;
-
-        const normalized = typeFilter.toLowerCase();
-        return leaves.filter((leave) => {
-            const candidates = [leave.leave_name, leave.leave_code, leave.leave_type]
-                .filter(Boolean)
-                .map((value) => String(value).toLowerCase());
-
-            return candidates.some((value) => value === normalized || value.includes(normalized));
-        });
-    }, [leaves, typeFilter]);
+    const visibleLeaves = leaves;
 
     const visiblePendingLeaves = useMemo(
         () => visibleLeaves.filter((leave) => leave.status === 'pending'),
@@ -916,11 +912,9 @@ const LeaveManagement = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="flex flex-col gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-6 md:flex-row md:items-center md:justify-between"
+                    className="grid grid-cols-1 gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-6 lg:grid-cols-[minmax(0,1fr)_220px_260px_auto] lg:items-center"
                 >
-                    {/* Left Section: Search & Type Filter */}
-                    <div className="flex flex-col gap-4 flex-1 sm:flex-row sm:items-center md:flex-row md:items-center">
-                        <div className="relative flex-1 w-full">
+                    <div className="relative w-full">
                             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
                             <input
                                 type="text"
@@ -937,23 +931,29 @@ const LeaveManagement = () => {
                                     <FaTimes size={14} />
                                 </button>
                             )}
-                        </div>
                     </div>
 
-                    {/* Right Section: View Mode */}
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-[170px] flex-col sm:w-56">
-                            <SelectField
-                                options={leaveTypeFilterOptions}
-                                value={selectedLeaveTypeFilter}
-                                onChange={(option) => setTypeFilter(option?.value || '')}
-                                isClearable={false}
-                                placeholder="All Leave Types"
-                            />
-                        </div>
-                        {/* Vertical Separator */}
-                        <div className="h-8 w-px bg-gray-200 hidden lg:block mx-1"></div>
-
+                    <SelectField
+                        options={leaveTypeFilterOptions}
+                        value={selectedLeaveTypeFilter}
+                        onChange={(option) => setTypeFilter(option?.value || '')}
+                        isClearable={false}
+                        placeholder="All Leave Types"
+                    />
+                    <AdvancedDateFilter
+                        value={dateFilter}
+                        onChange={(value) => {
+                            if (!value || (!value.date && !(value.month && value.year) && !(value.from_date && value.to_date))) {
+                                setDateFilter(null);
+                                return;
+                            }
+                            setDateFilter(value);
+                        }}
+                        placeholder="Filter by date"
+                        tabOptions={["date", "month", "range"]}
+                        buttonClassName="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm shadow-sm transition hover:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 font-medium"
+                    />
+                    <div className="flex justify-start lg:justify-end">
                         <ManagementViewSwitcher
                             viewMode={viewMode}
                             onChange={setViewMode}

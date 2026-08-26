@@ -42,6 +42,17 @@ const STATUS = {
   cancelled: { label: 'Cancelled', bg: 'bg-slate-50', text: 'text-slate-600', dot: 'bg-slate-400', border: 'border-slate-200' },
 };
 
+const getAttachmentUrl = (attachment) => {
+  if (typeof attachment === 'string') return attachment;
+  return attachment?.file_url || attachment?.url || '';
+};
+
+const getAttachmentName = (attachment, index) => {
+  const url = getAttachmentUrl(attachment);
+  const name = typeof attachment === 'object' ? attachment?.name : '';
+  return name || decodeURIComponent(url.substring(url.lastIndexOf('/') + 1) || `Attachment ${index + 1}`);
+};
+
 function StatusBadge({ status }) {
   const s = STATUS[status] || STATUS.pending;
   return (
@@ -57,6 +68,8 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('table');
   const [statusFilter, setStatusFilter] = useState('');
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState(null);
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -76,7 +89,7 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
     end_date: '',
     is_half_day: false,
     half_day_type: 'first_half',
-    remarks: '',
+    reason: '',
     attachments: [],
   });
 
@@ -98,13 +111,27 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
     try {
       const company = JSON.parse(localStorage.getItem('company') || '{}');
       const params = new URLSearchParams({
-        employee_id: String(employeeId),
         page: String(page),
         limit: String(pagination.limit),
       });
       if (statusFilter) params.append('status', statusFilter);
+      if (leaveTypeFilter) params.append('leave_type', leaveTypeFilter);
 
-      const response = await apiCall(`/leave/management?${params.toString()}`, 'GET', null, company?.id);
+      if (dateFilter?.date) {
+        params.append('start_date', dateFilter.date);
+        params.append('end_date', dateFilter.date);
+      } else if (dateFilter?.month && dateFilter?.year) {
+        const month = String(dateFilter.month).padStart(2, '0');
+        const year = Number(dateFilter.year);
+        const lastDay = new Date(year, Number(dateFilter.month), 0).getDate();
+        params.append('start_date', `${year}-${month}-01`);
+        params.append('end_date', `${year}-${month}-${String(lastDay).padStart(2, '0')}`);
+      } else if (dateFilter?.from_date && dateFilter?.to_date) {
+        params.append('start_date', dateFilter.from_date);
+        params.append('end_date', dateFilter.to_date);
+      }
+
+      const response = await apiCall(`/leave/emp-leaves/${employeeId}?${params.toString()}`, 'GET', null, company?.id);
       const result = await response.json();
 
       if (result.success) {
@@ -124,7 +151,7 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
     } finally {
       setLoading(false);
     }
-  }, [employeeId, pagination.limit, pagination.page, statusFilter, updatePagination]);
+  }, [dateFilter, employeeId, leaveTypeFilter, pagination.limit, pagination.page, statusFilter, updatePagination]);
 
   useEffect(() => {
     fetchLeaves(pagination.page);
@@ -160,6 +187,10 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
     }
   }, [employeeId]);
 
+  useEffect(() => {
+    loadLeaveConfigs();
+  }, [loadLeaveConfigs]);
+
   const openCreateModal = () => {
     setCreateForm({
       leave_config_id: '',
@@ -167,7 +198,7 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
       end_date: '',
       is_half_day: false,
       half_day_type: 'first_half',
-      remarks: '',
+      reason: '',
       attachments: [],
     });
     loadLeaveConfigs();
@@ -214,7 +245,7 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
         end_date: createForm.end_date,
         is_half_day: createForm.is_half_day ? 1 : 0,
         half_day_type: createForm.is_half_day ? createForm.half_day_type : null,
-        remarks: createForm.remarks || '',
+        reason: createForm.reason || '',
         attachments: createForm.attachments.map((a) => a.url),
       };
 
@@ -301,6 +332,42 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
     [leaveConfigs, createForm.leave_config_id]
   );
 
+  const leaveTypeOptions = useMemo(() => {
+    const types = new Map();
+    leaveConfigs.forEach((config) => {
+      types.set(String(config.id), {
+        value: String(config.id),
+        label: `${config.name}${config.code ? ` (${config.code})` : ''}`,
+      });
+    });
+    leaves.forEach((leave) => {
+      if (!leave.leave_config_id || types.has(String(leave.leave_config_id))) return;
+      types.set(String(leave.leave_config_id), {
+        value: String(leave.leave_config_id),
+        label: leave.leave_name || leave.leave_code || 'Leave',
+      });
+    });
+    return Array.from(types.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [leaveConfigs, leaves]);
+
+  const selectedDateFilter = useMemo(() => {
+    if (!dateFilter) return null;
+    if (dateFilter.date) return { date: dateFilter.date };
+    if (dateFilter.month && dateFilter.year) return { month: dateFilter.month, year: dateFilter.year };
+    if (dateFilter.from_date && dateFilter.to_date) {
+      return { from_date: dateFilter.from_date, to_date: dateFilter.to_date };
+    }
+    return null;
+  }, [dateFilter]);
+
+  const handleDateFilterChange = (value) => {
+    if (!value || (!value.date && !(value.month && value.year) && !(value.from_date && value.to_date))) {
+      setDateFilter(null);
+      return;
+    }
+    setDateFilter(value);
+  };
+
   const columns = [
     {
       key: 'leave_type',
@@ -342,8 +409,8 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
   return (
     <div className="space-y-4">
       {/* Top action and filter bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div className="w-[140px]">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
           <SelectField
             options={[
               { value: '', label: 'All Status' },
@@ -358,15 +425,33 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
             }
             onChange={(opt) => setStatusFilter(opt?.value || '')}
           />
+          <div className="w-full sm:min-w-[190px] sm:max-w-[240px]">
+            <SelectField
+              options={leaveTypeOptions}
+              value={leaveTypeOptions.find((option) => option.value === String(leaveTypeFilter)) || null}
+              onChange={(option) => setLeaveTypeFilter(option?.value || '')}
+              placeholder="All Leave Types"
+              isClearable
+            />
+          </div>
+          <div className="w-full sm:min-w-[230px] sm:max-w-[280px]">
+            <AdvancedDateFilter
+              value={selectedDateFilter}
+              onChange={handleDateFilterChange}
+              placeholder="Filter by date"
+              tabOptions={['date', 'month', 'range']}
+              buttonClassName="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm shadow-sm transition hover:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 font-medium"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 justify-end w-full sm:w-auto">
+        <div className="flex w-full items-center justify-end gap-2 lg:w-auto">
           <button
             type="button"
             onClick={openCreateModal}
             className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-amber-200 hover:from-amber-600 hover:to-orange-600 transition-all"
           >
-            <FaPlus size={10} /> Request Leave
+            <FaPlus size={10} /> Create Leave
           </button>
           {leaves.length > 0 && (
             <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="amber" />
@@ -619,13 +704,13 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
 
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Remarks / Reason
+                Reason / Description
               </label>
               <textarea
                 rows={3}
                 placeholder="State the reason for leave..."
-                value={createForm.remarks}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, remarks: e.target.value }))}
+                value={createForm.reason}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, reason: e.target.value }))}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-amber-500/10 focus:border-amber-400 outline-none text-sm resize-none"
               />
             </div>
@@ -684,15 +769,15 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
           isOpen={!!detailLeave}
           onClose={() => setDetailLeave(null)}
           title="Leave Details"
-          subtitle={`${detailLeave.leave_name || detailLeave.leave_type || 'Leave'} · ${formatDays(detailLeave.total_days)} Days`}
-          icon={<FaEye className="text-amber-500" />}
-          size="lg"
+          subtitle={`${employeeName || detailLeave.employee_name || 'Employee'} · ${detailLeave.leave_name || detailLeave.leave_type || 'Leave'}`}
+          icon={<FaEye className="h-6 w-6" />}
+          size="3xl"
           footer={
             <div className="flex gap-2 justify-end w-full">
               <button
                 type="button"
                 onClick={() => setDetailLeave(null)}
-                className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
+                className="rounded-xl bg-gray-100 py-2.5 px-5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-200"
               >
                 Close
               </button>
@@ -701,16 +786,16 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
                   <button
                     type="button"
                     onClick={() => { setRejectLeave(detailLeave); setRejectRemarks(''); setDetailLeave(null); }}
-                    className="px-4 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-rose-700 hover:to-red-700 transition-all flex items-center gap-1.5 shadow-md shadow-rose-200"
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-rose-200 transition-all hover:from-rose-700 hover:to-red-700"
                   >
-                    <FaTimes size={12} /> Reject
+                    <FaTrash size={13} /> Reject
                   </button>
                   <button
                     type="button"
                     onClick={() => { openApproveModal(detailLeave); setDetailLeave(null); }}
-                    className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:from-emerald-700 hover:to-green-700 transition-all flex items-center gap-1.5 shadow-md shadow-emerald-200"
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-200 transition-all hover:from-emerald-700 hover:to-green-700"
                   >
-                    <FaCheck size={12} /> Approve / Edit
+                    <FaCheck size={13} /> Approve / Edit
                   </button>
                 </>
               )}
@@ -718,38 +803,75 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
           }
         >
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-amber-50/60 rounded-xl border border-amber-100">
-              <div>
-                <h4 className="font-black text-slate-800 text-base">{detailLeave.leave_name || detailLeave.leave_type}</h4>
-                <p className="text-xs text-amber-700 font-bold mt-0.5">
-                  {formatDays(detailLeave.total_days)} Day(s) {detailLeave.is_half_day ? `(Half Day - ${detailLeave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})` : ''}
-                </p>
+            <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-black tracking-tight text-slate-800">{employeeName || detailLeave.employee_name}</h3>
+                  <p className="mt-1 text-sm font-semibold text-blue-600">
+                    {detailLeave.leave_name || detailLeave.leave_type || 'Leave'} · {formatDays(detailLeave.total_days)} Days
+                    {detailLeave.is_half_day && (
+                      <span className="ml-1 text-xs font-bold text-indigo-500">
+                        (Half Day – {detailLeave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'})
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <StatusBadge status={detailLeave.status} />
               </div>
-              <StatusBadge status={detailLeave.status} />
+              <div className="mt-2 inline-flex items-center rounded-lg border border-slate-200/70 bg-white/70 px-2 py-1 text-[10px] font-bold text-slate-500">
+                {detailLeave.leave_code}
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Start Date</p>
-                <p className="text-sm font-semibold text-slate-800">{fmt(detailLeave.start_date)}</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-3">
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
+                <div className="text-sm font-medium text-gray-800">{fmt(detailLeave.start_date)}</div>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">End Date</p>
-                <p className="text-sm font-semibold text-slate-800">{fmt(detailLeave.end_date)}</p>
+              <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-3">
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">End Date</label>
+                <div className="text-sm font-medium text-gray-800">{fmt(detailLeave.end_date)}</div>
               </div>
+              <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-3">
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Applied On</label>
+                <div className="text-sm font-medium text-gray-800">{fmt(detailLeave.applied_at)}</div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-3">
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Payment Type</label>
+                <div className="text-sm font-medium text-gray-800">{detailLeave.is_paid ? 'Paid Leave' : 'Unpaid Leave'}</div>
+              </div>
+              {detailLeave.approved_at && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Approved On</label>
+                  <div className="text-sm font-medium text-emerald-800">{fmt(detailLeave.approved_at)}</div>
+                </div>
+              )}
+              {detailLeave.cancelled_at && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-rose-600">Cancelled On</label>
+                  <div className="text-sm font-medium text-rose-800">{fmt(detailLeave.cancelled_at)}</div>
+                </div>
+              )}
             </div>
 
-            {detailLeave.reason && (
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Reason</p>
-                <p className="text-xs text-slate-700 italic">"{detailLeave.reason}"</p>
+            {detailLeave.is_half_day && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-indigo-600">Half Day Session</label>
+                <div className="text-sm font-medium text-indigo-800">
+                  {detailLeave.half_day_type === 'first_half' ? 'First Half' : 'Second Half'}
+                </div>
               </div>
             )}
 
+            <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-3">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Reason / Description</label>
+              <div className="text-sm italic leading-relaxed text-gray-700">"{detailLeave.reason || 'No reason provided.'}"</div>
+            </div>
+
             {detailLeave.approval_remarks && (
-              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Approval Remarks</p>
-                <p className="text-xs text-emerald-800">{detailLeave.approval_remarks}</p>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Approval Remarks</label>
+                <div className="text-sm text-emerald-800">{detailLeave.approval_remarks}</div>
               </div>
             )}
 
@@ -758,19 +880,31 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Attachments ({detailLeave.attachments.length})
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {detailLeave.attachments.map((url, i) => (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {detailLeave.attachments.map((attachment, i) => {
+                    const url = getAttachmentUrl(attachment);
+                    const name = getAttachmentName(attachment, i);
+                    const isImage = /\.(jpg|jpeg|png|webp)(\?|$)/i.test(url) || String(attachment?.file_type || '').startsWith('image/');
+                    return (
                     <a
                       key={i}
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:border-amber-200 transition-all"
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow"
                     >
-                      <FaPaperclip size={10} className="text-amber-500" />
-                      Attachment #{i + 1}
+                      {isImage ? (
+                        <img src={url} alt={name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-orange-50 text-orange-500">
+                          <FaPaperclip />
+                          <span className="max-w-full truncate px-1 text-[9px] font-bold uppercase">{name.split('.').pop()}</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                     </a>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
