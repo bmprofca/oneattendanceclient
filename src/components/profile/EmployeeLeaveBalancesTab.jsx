@@ -287,8 +287,8 @@ export default function EmployeeLeaveBalancesTab({ employeeId, employeeName }) {
       </div>
 
       {/* Filter and Actions bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div className="w-[120px]">
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:gap-4">
+        <div className="w-full shrink-0 lg:w-[120px]">
           <SelectField
             options={yearOptions}
             value={yearOptions.find((y) => y.value === selectedYear) || yearOptions[2]}
@@ -296,11 +296,11 @@ export default function EmployeeLeaveBalancesTab({ employeeId, employeeName }) {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 justify-end w-full sm:w-auto">
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end">
           <button
             type="button"
             onClick={openAssignModal}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-violet-200 hover:from-violet-700 hover:to-indigo-700 transition-all"
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-violet-200 transition-all hover:from-violet-700 hover:to-indigo-700"
           >
             <FaPlus size={10} /> Assign Balance
           </button>
@@ -309,14 +309,14 @@ export default function EmployeeLeaveBalancesTab({ employeeId, employeeName }) {
               <button
                 type="button"
                 onClick={openEditModal}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50"
               >
                 <FaEdit size={11} /> Edit Quotas
               </button>
               <button
                 type="button"
                 onClick={openDeleteModal}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 transition-all"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 transition-all hover:bg-rose-100"
               >
                 <FaTrash size={10} /> Delete
               </button>
