@@ -14,8 +14,6 @@ import ManagementGrid from "../ManagementGrid";
 import ManagementViewSwitcher from "../ManagementViewSwitcher";
 import { ManagementCard, ManagementTable } from "../common";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const getCompanyId = () => {
   try {
     const company = localStorage.getItem("company");
@@ -43,7 +41,6 @@ const fmtDate = (dateStr) => {
   }
 };
 
-// Improved time formatter – handles "HH:MM:SS", "HH:MM", Date strings
 const formatTimeValue = (val) => {
   if (!val) return "—";
   if (typeof val === "string" && val.includes(":")) {
@@ -89,8 +86,6 @@ function ShiftStatusPill({ value }) {
   );
 }
 
-// ─── Shift Detail Modal ───────────────────────────────────────────────────────
-
 function ShiftDetailModal({ shift, onClose }) {
   if (!shift) return null;
 
@@ -118,7 +113,6 @@ function ShiftDetailModal({ shift, onClose }) {
       }
     >
       <div className="min-w-0 space-y-5 max-h-[80vh] overflow-y-auto pr-1">
-        {/* Date + Status header */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Shift Date</p>
@@ -137,7 +131,6 @@ function ShiftDetailModal({ shift, onClose }) {
           )}
         </div>
 
-        {/* Shift Timing */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
             <FaExchangeAlt className="text-violet-500" /> Shift Timing
@@ -162,7 +155,6 @@ function ShiftDetailModal({ shift, onClose }) {
           </div>
         </div>
 
-        {/* Break & Deductions */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
             <FaHourglassHalf className="text-amber-500" /> Breaks & Deductions
@@ -187,7 +179,6 @@ function ShiftDetailModal({ shift, onClose }) {
           </div>
         </div>
 
-        {/* Productivity Breakdown */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
             <FaUserCheck className="text-emerald-500" /> Productivity
@@ -208,7 +199,6 @@ function ShiftDetailModal({ shift, onClose }) {
           </div>
         </div>
 
-        {/* Flags */}
         <div>
           <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
             <FaBriefcase className="text-indigo-500" /> Status Flags
@@ -264,8 +254,6 @@ function ShiftDetailModal({ shift, onClose }) {
     </Modal>
   );
 }
-
-// ─── Share Shift Schedule Modal ───────────────────────────────────────────────
 
 function ShareShiftModal({ isOpen, onClose, employeeId, employeeEmail, month, year, onSuccess }) {
   const [targetEmail, setTargetEmail] = useState(employeeEmail || "");
@@ -357,8 +345,6 @@ function ShareShiftModal({ isOpen, onClose, employeeId, employeeEmail, month, ye
     </Modal>
   );
 }
-
-// ─── Main EmployeeShiftsTab Component ─────────────────────────────────────────
 
 export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0 }) {
   const targetEmployeeId = employee?.id || employeeId;
@@ -460,24 +446,45 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
       const response = await apiCall(
-        `/shifts/download?employee_id=${targetEmployeeId}&month=${month}&year=${year}`,
+        "/shifts/download",
         "POST",
-        null,
+        { employee_id: targetEmployeeId, month, year },
         companyId
       );
+
+      if (!response.ok) {
+        let errorMessage = "Failed to generate shift PDF";
+        try {
+          const errorResult = await response.json();
+          errorMessage = errorResult?.message || errorMessage;
+        } catch {
+          // Ignore JSON parse errors.
+        }
+        throw new Error(errorMessage);
+      }
+
       const contentType = response.headers.get("content-type") || "";
+      const result = contentType.includes("application/json") ? await response.json() : null;
+      const fileUrl = result?.url || result?.file_url || result?.data?.url || result?.data?.file_url;
+
+      if (result?.success && fileUrl) {
+        window.open(fileUrl, "_blank", "noopener,noreferrer");
+        toast.success(result.message || "Shift schedule downloaded successfully");
+        return;
+      }
+
       if (contentType.includes("application/pdf") || contentType.includes("application/octet-stream")) {
         const blob = await response.blob();
         const blobUrl = window.URL.createObjectURL(blob);
         window.open(blobUrl, "_blank", "noopener,noreferrer");
         return;
       }
-      const result = await response.json();
-      if (result?.success && result?.url) {
-        window.open(result.url, "_blank", "noopener,noreferrer");
-        return;
+
+      if (result) {
+        throw new Error(result?.message || "Failed to download shift PDF");
       }
-      throw new Error(result?.message || "Failed to download shift PDF");
+
+      throw new Error("Failed to download shift PDF");
     } catch (err) {
       toast.error(err?.message || "Failed to download shift PDF");
     } finally {
@@ -590,7 +597,6 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         </div>
       )}
 
-      {/* Toolbar */}
       <div className="flex flex-wrap p-2 sm:p-3 bg-white rounded-xl shadow-sm border border-gray-100 items-center justify-between gap-2 sm:gap-3">
         <p className="text-sm sm:text-base text-slate-800 px-2 sm:px-3 font-bold flex items-center gap-2">
           <FaClock className="text-violet-600" />
@@ -620,7 +626,6 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         </div>
       </div>
 
-      {/* Loading */}
       {loading && (
         <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
           <div className="w-7 h-7 border-2 border-slate-200 border-t-violet-500 rounded-full animate-spin" />
@@ -628,7 +633,6 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         </div>
       )}
 
-      {/* Empty State */}
       {!loading && rows.length === 0 && (
         <div className="text-center py-16 bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="w-12 h-12 rounded-full bg-violet-50 flex items-center justify-center mx-auto mb-3 text-violet-400">
@@ -639,7 +643,6 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         </div>
       )}
 
-      {/* Table View */}
       {!loading && rows.length > 0 && viewMode === "table" && (
         <div className="overflow-x-auto">
           <ManagementTable
@@ -657,7 +660,6 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         </div>
       )}
 
-      {/* Card Grid View */}
       {!loading && rows.length > 0 && viewMode === "card" && (
         <ManagementGrid viewMode={viewMode}>
           {rows.map((row, idx) =>
@@ -666,7 +668,6 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         </ManagementGrid>
       )}
 
-      {/* Pagination */}
       {!loading && rows.length > 0 && (
         <Pagination
           currentPage={pagination.page}
@@ -678,7 +679,6 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         />
       )}
 
-      {/* Modals */}
       <AnimatePresence>
         {selectedShift && (
           <ShiftDetailModal shift={selectedShift} onClose={() => setSelectedShift(null)} />
