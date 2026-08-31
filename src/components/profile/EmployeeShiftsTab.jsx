@@ -43,9 +43,19 @@ const fmtDate = (dateStr) => {
   }
 };
 
+// Improved time formatter – handles "HH:MM:SS", "HH:MM", Date strings
 const formatTimeValue = (val) => {
   if (!val) return "—";
-  if (typeof val === "string") return val.slice(0, 5);
+  if (typeof val === "string" && val.includes(":")) {
+    const parts = val.split(":");
+    if (parts.length >= 2) {
+      return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+    }
+  }
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
   return String(val);
 };
 
@@ -107,12 +117,17 @@ function ShiftDetailModal({ shift, onClose }) {
         </div>
       }
     >
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5 max-h-[80vh] overflow-y-auto pr-1">
         {/* Date + Status header */}
-        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="min-w-0">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Shift Date</p>
-            <p className="text-lg font-black text-slate-800">{fmtDate(shift.shift_date || shift.date)}</p>
+            <p className="break-words text-lg font-black text-slate-800">{fmtDate(shift.shift_date || shift.date)}</p>
+            {(shift.is_holiday?.name || shift.is_leave?.name) && (
+              <p className="mt-1 break-words text-xs font-semibold text-slate-500">
+                {shift.is_holiday?.name || shift.is_leave?.name}
+              </p>
+            )}
           </div>
           {dayStatus && (
             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border ${statusStyle.pill}`}>
@@ -324,7 +339,7 @@ function ShareShiftModal({ isOpen, onClose, employeeId, employeeEmail, month, ye
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto">
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
             Recipient Email
@@ -366,7 +381,7 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
     };
   }, []);
 
-  const fetchShifts = useCallback(async (page, limit) => {
+  const fetchShifts = useCallback(async () => {
     if (!targetEmployeeId) return;
     try {
       if (mountedRef.current) {
@@ -374,8 +389,11 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         setError(null);
       }
       const companyId = getCompanyId();
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
       const response = await apiCall(
-        `/employees/${targetEmployeeId}?include=shifts&page=${page}&limit=${limit}`,
+        `/shifts/employee-shifts/${targetEmployeeId}?month=${month}&year=${year}`,
         "GET",
         null,
         companyId
@@ -383,18 +401,40 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.message || "Failed to load shifts");
 
-      const rawShifts = data.data?.shifts ?? data.data ?? [];
-      const shiftList = Array.isArray(rawShifts) ? rawShifts : [];
-      const meta = data.meta?.shifts ?? data.meta ?? {};
+      const shiftSummary = data.data?.shift || {};
+      const days = data.data?.days || {};
+      const defaultExpectedMinutes =
+        shiftSummary.expected_work_minutes ??
+        data.data?.employee?.expected_work_minutes ??
+        0;
+
+      const shiftList = Object.entries(days).map(([shiftDate, day]) => ({
+        id: shiftDate,
+        shift_date: shiftDate,
+        day_status: day.day_status,
+        start_time: shiftSummary.shift_start_time || day.shift?.start_time || null,
+        end_time: shiftSummary.shift_end_time || day.shift?.end_time || null,
+        worked_minutes: Number(day.shift?.worked_minutes || 0),
+        overtime_minutes: Number(day.shift?.overtime_minutes || 0),
+        extra_break_minutes: Number(day.shift?.extra_break_minutes || 0),
+        early_leave_minutes: Number(day.shift?.early_leave_minutes || 0),
+        late_minutes: Number(day.shift?.late_minutes || 0),
+        deductible_minutes: Number(day.shift?.deductible_minutes || 0),
+        expected_work_minutes: defaultExpectedMinutes,
+        is_holiday: day.is_holiday,
+        is_leave: day.is_leave,
+        half_day_type: day.half_day_type,
+        leave_type: day.leave_type,
+      }));
 
       if (mountedRef.current) {
         setRows(shiftList);
         updatePagination({
-          page: Number(meta.page ?? page),
-          limit: Number(meta.limit ?? limit),
-          total: Number(meta.total ?? shiftList.length),
-          total_pages: Number(meta.total_pages ?? 1),
-          is_last_page: meta.is_last_page ?? true,
+          page: 1,
+          limit: shiftList.length || 1,
+          total: shiftList.length,
+          total_pages: 1,
+          is_last_page: true,
         });
       }
     } catch (err) {
@@ -408,8 +448,8 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
   }, [targetEmployeeId, updatePagination]);
 
   useEffect(() => {
-    fetchShifts(pagination.page, pagination.limit);
-  }, [fetchShifts, pagination.page, pagination.limit, refreshKey]);
+    fetchShifts();
+  }, [fetchShifts, refreshKey]);
 
   const handleDownloadPdf = useCallback(async () => {
     if (!targetEmployeeId) return;
@@ -421,7 +461,7 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       const year = now.getFullYear();
       const response = await apiCall(
         `/shifts/download?employee_id=${targetEmployeeId}&month=${month}&year=${year}`,
-        "GET",
+        "POST",
         null,
         companyId
       );
@@ -448,7 +488,7 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
   const columns = [
     {
       key: "shift_date",
-      label: "Shift Date",
+      label: "Date",
       render: (s) => (
         <span className="font-semibold text-slate-800 text-sm">
           {fmtDate(s.shift_date || s.date)}
@@ -456,25 +496,12 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       ),
     },
     {
-      key: "timing",
-      label: "Timing",
-      render: (s) => (
-        <span className="text-xs font-mono text-slate-600">
-          {formatTimeValue(s.start_time)} - {formatTimeValue(s.end_time)}
-        </span>
-      ),
+      key: "day_status",
+      label: "Status",
+      render: (s) => <ShiftStatusPill value={s.day_status || s.status} />,
     },
     {
-      key: "worked",
-      label: "Worked",
-      render: (s) => (
-        <span className="text-sm font-medium text-slate-700">
-          {formatMins(s.worked_minutes)}
-        </span>
-      ),
-    },
-    {
-      key: "expected",
+      key: "expected_work_minutes",
       label: "Expected",
       render: (s) => (
         <span className="text-xs font-medium text-slate-500">
@@ -483,9 +510,31 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       ),
     },
     {
-      key: "day_status",
-      label: "Status",
-      render: (s) => <ShiftStatusPill value={s.day_status || s.status} />,
+      key: "worked_minutes",
+      label: "Worked",
+      render: (s) => (
+        <span className="text-sm font-medium text-slate-700">
+          {formatMins(s.worked_minutes)}
+        </span>
+      ),
+    },
+    {
+      key: "overtime_minutes",
+      label: "Overtime",
+      render: (s) => (
+        <span className="text-sm font-medium text-violet-700">
+          {formatMins(s.overtime_minutes)}
+        </span>
+      ),
+    },
+    {
+      key: "deductible_minutes",
+      label: "Deductible",
+      render: (s) => (
+        <span className="text-sm font-medium text-rose-700">
+          {formatMins(s.deductible_minutes)}
+        </span>
+      ),
     },
   ];
 
@@ -510,11 +559,23 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       actions={getActions(s)}
       hoverable
       title={fmtDate(s.shift_date || s.date)}
-      subtitle={`${formatTimeValue(s.start_time)} - ${formatTimeValue(s.end_time)}`}
+      subtitle={
+        s.start_time || s.end_time
+          ? `${formatTimeValue(s.start_time)} - ${formatTimeValue(s.end_time)}`
+          : "Shift summary"
+      }
       eyebrow="Shift Record"
       badge={<ShiftStatusPill value={s.day_status || s.status} />}
     >
-      <div className="flex items-center justify-between text-xs text-gray-500 mt-2 pt-2 border-t border-slate-100">
+      {(s.is_holiday?.name || s.is_leave?.name) && (
+        <p
+          className="mt-2 truncate border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-500"
+          title={s.is_holiday?.name || s.is_leave?.name}
+        >
+          {s.is_holiday?.name || s.is_leave?.name}
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-xs text-gray-500">
         <span>Worked: {formatMins(s.worked_minutes)}</span>
         <span>Expected: {formatMins(s.expected_work_minutes)}</span>
       </div>
@@ -530,8 +591,8 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-wrap p-2 bg-white rounded-xl shadow-sm border border-gray-100 items-center justify-between gap-3">
-        <p className="text-sm text-slate-800 px-3 font-bold flex items-center gap-2">
+      <div className="flex flex-wrap p-2 sm:p-3 bg-white rounded-xl shadow-sm border border-gray-100 items-center justify-between gap-2 sm:gap-3">
+        <p className="text-sm sm:text-base text-slate-800 px-2 sm:px-3 font-bold flex items-center gap-2">
           <FaClock className="text-violet-600" />
           Shift Schedules & Records
         </p>
@@ -540,16 +601,16 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
             type="button"
             onClick={handleDownloadPdf}
             disabled={downloadingPdf || !targetEmployeeId}
-            className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 min-w-[120px] justify-center"
           >
             {downloadingPdf ? <FaSpinner className="animate-spin" size={11} /> : <FaFilePdf size={11} />}
-            {downloadingPdf ? "Preparing PDF…" : "Download PDF"}
+            {downloadingPdf ? "Preparing…" : "Download PDF"}
           </button>
           <button
             type="button"
             onClick={() => setShowShareShiftModal(true)}
             disabled={!targetEmployeeId}
-            className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-100"
+            className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 min-w-[120px] justify-center"
           >
             <FaEnvelope size={11} /> Share Shift
           </button>
@@ -580,16 +641,20 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
 
       {/* Table View */}
       {!loading && rows.length > 0 && viewMode === "table" && (
-        <ManagementTable
-          rows={rows}
-          columns={columns}
-          rowKey="id"
-          onRowClick={(shift) => setSelectedShift(shift)}
-          activeId={activeMenu}
-          onToggleAction={(e, id) => setActiveMenu((c) => (c === id ? null : id))}
-          getActions={getActions}
-          accent="violet"
-        />
+        <div className="overflow-x-auto">
+          <ManagementTable
+            rows={rows}
+            columns={columns}
+            rowKey="id"
+            onRowClick={(shift) => setSelectedShift(shift)}
+            activeId={activeMenu}
+            onToggleAction={(e, id) => setActiveMenu((c) => (c === id ? null : id))}
+            getActions={getActions}
+            accent="violet"
+            tableClassName="min-w-[640px] w-full"
+            cellClassName="whitespace-nowrap"
+          />
+        </div>
       )}
 
       {/* Card Grid View */}
