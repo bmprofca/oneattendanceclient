@@ -94,6 +94,23 @@ function ShiftDetailModal({ shift, onClose }) {
   const statusStyle = SHIFT_STATUS_STYLES[dayStatus] || SHIFT_STATUS_STYLES.upcoming;
   const allowedBreakMinutes = Number(shift.allowed_break_minutes ?? shift.break_minutes ?? 0);
   const graceMinutes = Number(shift.grace_minutes ?? 0);
+  const leaveMeta = shift.is_leave || {};
+  const holidayMeta = shift.is_holiday || {};
+  const leaveType = shift.leave_type || leaveMeta.type || null;
+  const leaveTypeValue = shift.leave_type_value || leaveMeta.name || null;
+  const leaveCode = shift.leave_code || leaveMeta.code || null;
+  const halfDayType = shift.half_day_type || leaveMeta.half_day_type || null;
+  const leaveIsPaid = typeof shift.leave_is_paid === "boolean" ? shift.leave_is_paid : leaveMeta.is_paid;
+  const holidayName = shift.holiday_name || holidayMeta.name || null;
+
+  const formatHalfDayLabel = (value) => {
+    if (!value) return "—";
+    return String(value)
+      .replace(/_/g, " ")
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
 
   return (
     <Modal
@@ -205,6 +222,52 @@ function ShiftDetailModal({ shift, onClose }) {
             </div>
           </div>
         </div>
+
+        {(dayStatus === "leave" || dayStatus === "half_day" || holidayName) && (
+          <div className="border-b border-gray-100 pb-4">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
+              <FaBriefcase className="text-indigo-500" /> Leave & Half-Day Details
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {leaveTypeValue && (
+                <div className="p-2.5 rounded-xl bg-violet-50 border border-violet-100 text-center">
+                  <p className="text-[9px] font-bold text-violet-500 uppercase tracking-widest mb-0.5">Leave Type</p>
+                  <p className="text-sm font-black text-violet-700">{leaveTypeValue}</p>
+                </div>
+              )}
+              {leaveCode && (
+                <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-100 text-center">
+                  <p className="text-[9px] font-bold text-sky-500 uppercase tracking-widest mb-0.5">Leave Code</p>
+                  <p className="text-sm font-black text-sky-700">{leaveCode}</p>
+                </div>
+              )}
+              {halfDayType && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-100 text-center">
+                  <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-0.5">Half Day</p>
+                  <p className="text-sm font-black text-amber-700">{formatHalfDayLabel(halfDayType)}</p>
+                </div>
+              )}
+              {typeof leaveIsPaid === "boolean" && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-center">
+                  <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest mb-0.5">Paid</p>
+                  <p className="text-sm font-black text-emerald-700">{leaveIsPaid ? "Yes" : "No"}</p>
+                </div>
+              )}
+              {holidayName && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-100 text-center sm:col-span-2">
+                  <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-0.5">Holiday</p>
+                  <p className="text-sm font-black text-amber-700">{holidayName}</p>
+                </div>
+              )}
+              {leaveType && !leaveTypeValue && (
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Type</p>
+                  <p className="text-sm font-black text-slate-700">{fmt(leaveType)}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div>
           <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -425,8 +488,12 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
         expected_work_minutes: defaultExpectedMinutes,
         is_holiday: day.is_holiday,
         is_leave: day.is_leave,
-        half_day_type: day.half_day_type,
-        leave_type: day.leave_type,
+        half_day_type: day.half_day_type || day.is_leave?.half_day_type || null,
+        leave_type: day.leave_type || day.is_leave?.type || null,
+        leave_type_value: day.leave_type_value || day.is_leave?.name || null,
+        leave_code: day.leave_code || day.is_leave?.code || null,
+        leave_is_paid: typeof day.is_leave?.is_paid === "boolean" ? day.is_leave.is_paid : null,
+        holiday_name: day.is_holiday?.name || null,
       }));
 
       if (mountedRef.current) {
