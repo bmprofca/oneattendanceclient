@@ -46,6 +46,7 @@ import GlobalSkeleton from "./components/GlobalSkeletonComponent";
 import ScrollToTop from "./components/ScrollToTop";
 import ProfilePage from "./pages/Profile";
 import EmployeeProfile from "./pages/EmployeeProfile";
+import CompanyLedger from "./pages/CompanyLedger";
 import UnmarkedAttendance from "./pages/UnmarkedAttendance";
 import BreakManagement from "./pages/BreakManagement";
 import ServerUnavailable from "./pages/ServerUnavailable";
@@ -453,6 +454,7 @@ function AppContent() {
           accessDeniedIcon={FaInfoCircle}
         /></MainLayout></ProtectedRoute>} />
         <Route path="/payroll-adjustments" element={<ProtectedRoute pageKey="payrollManagement"><Navigate to="/payroll-management?tab=adjustments" replace /></ProtectedRoute>} />
+        <Route path="/company-ledger" element={<ProtectedRoute pageKey="companyLedger"><MainLayout><CompanyLedger /></MainLayout></ProtectedRoute>} />
         <Route path="/bank-account-management" element={<ProtectedRoute pageKey="bankAccountManagement"><MainLayout><TabbedManagementHub
           routePath="/bank-account-management"
           defaultTab="company"

@@ -127,6 +127,12 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
           pageKey: 'payrollManagement'
         },
         {
+          icon: FaChartBar,
+          label: 'Company Ledger',
+          path: '/company-ledger',
+          pageKey: 'companyLedger'
+        },
+        {
           icon: FaUniversity,
           label: 'Bank Accounts',
           path: '/bank-account-management',
