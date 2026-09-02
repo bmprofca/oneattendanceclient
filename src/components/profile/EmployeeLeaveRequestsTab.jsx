@@ -7,6 +7,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import apiCall, { uploadFile } from '../../utils/api';
+import { runDedupedRequest } from '../../utils/requestDeduper';
 import Modal from '../Modal';
 import SelectField from '../SelectField';
 import AdvancedDateFilter from '../AdvancedDateFilter';
@@ -131,21 +132,26 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
         params.append('end_date', dateFilter.to_date);
       }
 
-      const response = await apiCall(`/leave/emp-leaves/${employeeId}?${params.toString()}`, 'GET', null, company?.id);
-      const result = await response.json();
+      const requestKey = `employee-leave-requests:${company?.id ?? 'none'}:${employeeId}:${page}:${pagination.limit}:${statusFilter || 'all'}:${leaveTypeFilter || 'all'}:${JSON.stringify(dateFilter ?? null)}`;
+      const { res, json } = await runDedupedRequest(requestKey, async () => {
+        const response = await apiCall(`/leave/emp-leaves/${employeeId}?${params.toString()}`, 'GET', null, company?.id);
+        const result = await response.json();
+        return { res: response, json: result };
+      });
 
-      if (result.success) {
-        setLeaves(result.data || []);
-        updatePagination({
-          page: result.meta?.page || page,
-          limit: result.meta?.limit || pagination.limit,
-          total: result.meta?.total || (result.data ? result.data.length : 0),
-          total_pages: result.meta?.total_pages || 1,
-          is_last_page: page >= (result.meta?.total_pages || 1),
-        });
-      } else {
+      if (!res.ok || !json.success) {
         setLeaves([]);
+        return;
       }
+
+      setLeaves(json.data || []);
+      updatePagination({
+        page: json.meta?.page || page,
+        limit: json.meta?.limit || pagination.limit,
+        total: json.meta?.total || (json.data ? json.data.length : 0),
+        total_pages: json.meta?.total_pages || 1,
+        is_last_page: page >= (json.meta?.total_pages || 1),
+      });
     } catch {
       setLeaves([]);
     } finally {
@@ -162,24 +168,32 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
     setLeaveConfigsLoading(true);
     try {
       const company = JSON.parse(localStorage.getItem('company') || '{}');
-      const response = await apiCall(`/leave/employee/${employeeId}`, 'GET', null, company?.id);
-      const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        setLeaveConfigs(
-          result.data.map((c) => ({
-            id: c.leave_config_id || c.id,
-            leave_config_id: c.leave_config_id || c.id,
-            code: c.code,
-            name: c.name,
-            is_paid: c.is_paid,
-            allow_half_day: c.allow_half_day,
-            allocated: Boolean(c.allocated),
-            used: c.balance ? Number(c.balance.used || 0) : 0,
-            remaining: c.balance ? Number(c.balance.remaining || 0) : 0,
-            total_allocated: c.balance ? Number(c.balance.total_allocated || 0) : 0,
-          }))
-        );
+      const requestKey = `employee-leave-configs:${company?.id ?? 'none'}:${employeeId}`;
+      const { res, json } = await runDedupedRequest(requestKey, async () => {
+        const response = await apiCall(`/leave/employee/${employeeId}`, 'GET', null, company?.id);
+        const result = await response.json();
+        return { res: response, json: result };
+      });
+
+      if (!res.ok || !json.success || !Array.isArray(json.data)) {
+        setLeaveConfigs([]);
+        return;
       }
+
+      setLeaveConfigs(
+        json.data.map((c) => ({
+          id: c.leave_config_id || c.id,
+          leave_config_id: c.leave_config_id || c.id,
+          code: c.code,
+          name: c.name,
+          is_paid: c.is_paid,
+          allow_half_day: c.allow_half_day,
+          allocated: Boolean(c.allocated),
+          used: c.balance ? Number(c.balance.used || 0) : 0,
+          remaining: c.balance ? Number(c.balance.remaining || 0) : 0,
+          total_allocated: c.balance ? Number(c.balance.total_allocated || 0) : 0,
+        }))
+      );
     } catch {
       setLeaveConfigs([]);
     } finally {

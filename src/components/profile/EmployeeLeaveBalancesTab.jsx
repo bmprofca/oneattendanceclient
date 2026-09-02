@@ -7,6 +7,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import apiCall from '../../utils/api';
+import { runDedupedRequest } from '../../utils/requestDeduper';
 import Modal from '../Modal';
 import ModalScrollLock from '../ModalScrollLock';
 import SelectField from '../SelectField';
@@ -73,27 +74,32 @@ export default function EmployeeLeaveBalancesTab({ employeeId, employeeName }) {
     setLoading(true);
     try {
       const company = JSON.parse(localStorage.getItem('company') || '{}');
-      const response = await apiCall(`/leave/employee/${employeeId}?year=${selectedYear}`, 'GET', null, company?.id);
-      const result = await response.json();
+      const requestKey = `employee-leave-balances:${company?.id ?? 'none'}:${employeeId}:${selectedYear}`;
+      const { res, json } = await runDedupedRequest(requestKey, async () => {
+        const response = await apiCall(`/leave/employee/${employeeId}?year=${selectedYear}`, 'GET', null, company?.id);
+        const result = await response.json();
+        return { res: response, json: result };
+      });
 
-      if (result.success && Array.isArray(result.data)) {
-        const mapped = result.data.map((c) => ({
-          id: c.leave_config_id || c.id,
-          leave_config_id: c.leave_config_id || c.id,
-          code: c.code,
-          name: c.name,
-          is_paid: c.is_paid,
-          allow_half_day: c.allow_half_day,
-          max_balance: Number(c.max_balance || 0),
-          allocated: Boolean(c.allocated),
-          used: c.balance ? Number(c.balance.used || 0) : 0,
-          total_allocated: c.balance ? Number(c.balance.total_allocated || 0) : 0,
-          remaining: c.balance ? Number(c.balance.remaining || 0) : 0,
-        }));
-        setLeaves(mapped);
-      } else {
+      if (!res.ok || !json.success || !Array.isArray(json.data)) {
         setLeaves([]);
+        return;
       }
+
+      const mapped = json.data.map((c) => ({
+        id: c.leave_config_id || c.id,
+        leave_config_id: c.leave_config_id || c.id,
+        code: c.code,
+        name: c.name,
+        is_paid: c.is_paid,
+        allow_half_day: c.allow_half_day,
+        max_balance: Number(c.max_balance || 0),
+        allocated: Boolean(c.allocated),
+        used: c.balance ? Number(c.balance.used || 0) : 0,
+        total_allocated: c.balance ? Number(c.balance.total_allocated || 0) : 0,
+        remaining: c.balance ? Number(c.balance.remaining || 0) : 0,
+      }));
+      setLeaves(mapped);
     } catch {
       setLeaves([]);
     } finally {
@@ -110,23 +116,31 @@ export default function EmployeeLeaveBalancesTab({ employeeId, employeeName }) {
     setConfigsLoading(true);
     try {
       const company = JSON.parse(localStorage.getItem('company') || '{}');
-      const response = await apiCall(`/leave/employee/${employeeId}?year=${selectedYear}`, 'GET', null, company?.id);
-      const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        setAvailableConfigs(
-          result.data.map((c) => ({
-            id: c.leave_config_id || c.id,
-            leave_config_id: c.leave_config_id || c.id,
-            code: c.code,
-            name: c.name,
-            is_paid: c.is_paid,
-            max_balance: Number(c.max_balance || 0),
-            allocated: Boolean(c.allocated),
-            used: c.balance ? Number(c.balance.used || 0) : 0,
-            total_allocated: c.balance ? Number(c.balance.total_allocated || 0) : 0,
-          }))
-        );
+      const requestKey = `employee-leave-configs:${company?.id ?? 'none'}:${employeeId}:${selectedYear}`;
+      const { res, json } = await runDedupedRequest(requestKey, async () => {
+        const response = await apiCall(`/leave/employee/${employeeId}?year=${selectedYear}`, 'GET', null, company?.id);
+        const result = await response.json();
+        return { res: response, json: result };
+      });
+
+      if (!res.ok || !json.success || !Array.isArray(json.data)) {
+        setAvailableConfigs([]);
+        return;
       }
+
+      setAvailableConfigs(
+        json.data.map((c) => ({
+          id: c.leave_config_id || c.id,
+          leave_config_id: c.leave_config_id || c.id,
+          code: c.code,
+          name: c.name,
+          is_paid: c.is_paid,
+          max_balance: Number(c.max_balance || 0),
+          allocated: Boolean(c.allocated),
+          used: c.balance ? Number(c.balance.used || 0) : 0,
+          total_allocated: c.balance ? Number(c.balance.total_allocated || 0) : 0,
+        }))
+      );
     } catch {
       setAvailableConfigs([]);
     } finally {

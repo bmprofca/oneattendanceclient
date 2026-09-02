@@ -7,6 +7,7 @@ import {
   FaIdCard, FaBriefcase, FaEnvelope, FaPhone
 } from "react-icons/fa";
 import apiCall from "../utils/api";
+import { runDedupedRequest } from "../utils/requestDeduper";
 import { RefreshButton } from "../components/common";
 import ProfileAvatar from "../components/common/ProfileAvatar";
 import SkeletonComponent from "../components/SkeletonComponent";
@@ -36,20 +37,6 @@ const TABS = [
 
 const DEFAULT_PROFILE_TAB = "attendance";
 const PROFILE_TAB_IDS = new Set(TABS.map((t) => t.key));
-
-// ─── Request Deduplication ────────────────────────────────────────────────────
-
-const inFlightRequests = new Map();
-function runDedupedRequest(key, requestFn) {
-  if (inFlightRequests.has(key)) {
-    return inFlightRequests.get(key);
-  }
-  const promise = requestFn().finally(() => {
-    inFlightRequests.delete(key);
-  });
-  inFlightRequests.set(key, promise);
-  return promise;
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

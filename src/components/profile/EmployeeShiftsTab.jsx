@@ -8,6 +8,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import apiCall from "../../utils/api";
+import { runDedupedRequest } from "../../utils/requestDeduper";
 import Modal from "../Modal";
 import Pagination, { usePagination } from "../PaginationComponent";
 import ManagementGrid from "../ManagementGrid";
@@ -453,22 +454,27 @@ export default function EmployeeShiftsTab({ employee, employeeId, refreshKey = 0
       const companyId = getCompanyId();
       const month = Number(selectedMonth) || 1;
       const year = Number(selectedYear) || new Date().getFullYear();
-      const response = await apiCall(
-        `/shifts/employee-shifts/${targetEmployeeId}?month=${month}&year=${year}`,
-        "GET",
-        null,
-        companyId
-      );
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.message || "Failed to load shifts");
+      const requestKey = `employee-shifts:${companyId ?? 'none'}:${targetEmployeeId}:${month}:${year}`;
+      const { res, json } = await runDedupedRequest(requestKey, async () => {
+        const response = await apiCall(
+          `/shifts/employee-shifts/${targetEmployeeId}?month=${month}&year=${year}`,
+          "GET",
+          null,
+          companyId
+        );
+        const data = await response.json();
+        return { res: response, json: data };
+      });
 
-      const shiftSummary = data.data?.shift || {};
-      const days = data.data?.days || {};
-      const stats = data.data?.statistics || {};
-      const counts = data.data?.counts || {};
+      if (!res.ok || !json.success) throw new Error(json.message || "Failed to load shifts");
+
+      const shiftSummary = json.data?.shift || {};
+      const days = json.data?.days || {};
+      const stats = json.data?.statistics || {};
+      const counts = json.data?.counts || {};
       const defaultExpectedMinutes =
         shiftSummary.expected_work_minutes ??
-        data.data?.employee?.expected_work_minutes ??
+        json.data?.employee?.expected_work_minutes ??
         0;
 
       const shiftList = Object.entries(days).map(([shiftDate, day]) => ({
