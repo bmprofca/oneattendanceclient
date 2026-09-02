@@ -14,6 +14,20 @@ import { ManagementTable } from '../common';
 import ManagementGrid from '../ManagementGrid';
 import ManagementViewSwitcher from '../ManagementViewSwitcher';
 
+const inFlightRequests = new Map();
+function runDedupedRequest(key, requestFn) {
+  if (inFlightRequests.has(key)) {
+    return inFlightRequests.get(key);
+  }
+
+  const promise = requestFn().finally(() => {
+    inFlightRequests.delete(key);
+  });
+
+  inFlightRequests.set(key, promise);
+  return promise;
+}
+
 const ADJUSTMENT_TYPES = [
   { value: 'bonus', label: 'Bonus' },
   { value: 'fine', label: 'Fine / Penalty' },
@@ -65,48 +79,55 @@ export default function EmployeePayrollAdjustmentsTab({ employeeId, employeeName
     []
   );
 
-  const fetchAdjustments = useCallback(async (page = pagination.page) => {
+  const fetchAdjustments = useCallback(async (page = 1) => {
     if (!employeeId) return;
     setLoading(true);
     try {
       const company = JSON.parse(localStorage.getItem('company') || '{}');
-      const params = new URLSearchParams({
-        employee_id: String(employeeId),
-        page: String(page),
-        limit: String(pagination.limit),
-        month: String(selectedMonth),
-        year: String(selectedYear),
-      });
-      if (adjustmentType) params.append('adjustment_type', adjustmentType);
+      const requestKey = `payroll-adjustments:${employeeId}:${selectedMonth}:${selectedYear}:${adjustmentType || 'all'}:${page}:${pagination.limit}`;
 
-      const response = await apiCall(`/payroll/adjustments/list?${params.toString()}`, 'GET', null, company?.id);
-      const result = await response.json();
-
-      if (result.success) {
-        setAdjustments(result.data || []);
-        setSummary(result.meta?.summary || null);
-        updatePagination({
-          page: result.meta?.page || page,
-          limit: result.meta?.limit || pagination.limit,
-          total: result.meta?.total || (result.data ? result.data.length : 0),
-          total_pages: result.meta?.total_pages || 1,
-          is_last_page: page >= (result.meta?.total_pages || 1),
+      const { res, json } = await runDedupedRequest(requestKey, async () => {
+        const params = new URLSearchParams({
+          employee_id: String(employeeId),
+          page: String(page),
+          limit: String(pagination.limit),
+          month: String(selectedMonth),
+          year: String(selectedYear),
         });
-      } else {
+        if (adjustmentType) params.append('adjustment_type', adjustmentType);
+
+        const response = await apiCall(`/payroll/adjustments/list?${params.toString()}`, 'GET', null, company?.id);
+        const data = await response.json();
+        return { res: response, json: data };
+      });
+
+      if (!res.ok || !json.success) {
         setAdjustments([]);
         setSummary(null);
+        return;
       }
+
+      setAdjustments(json.data || []);
+      setSummary(json.meta?.summary || null);
+      updatePagination({
+        page: json.meta?.page || page,
+        limit: json.meta?.limit || pagination.limit,
+        total: json.meta?.total || (json.data ? json.data.length : 0),
+        total_pages: json.meta?.total_pages || 1,
+        is_last_page: page >= (json.meta?.total_pages || 1),
+      });
     } catch {
       setAdjustments([]);
       setSummary(null);
     } finally {
       setLoading(false);
     }
-  }, [employeeId, pagination.limit, pagination.page, selectedMonth, selectedYear, adjustmentType, updatePagination]);
+  }, [employeeId, selectedMonth, selectedYear, adjustmentType, pagination.limit, updatePagination]);
 
   useEffect(() => {
-    fetchAdjustments(pagination.page);
-  }, [employeeId, pagination.page, pagination.limit, selectedMonth, selectedYear, adjustmentType, fetchAdjustments, refreshKey]);
+    if (!employeeId) return;
+    fetchAdjustments(1);
+  }, [employeeId, refreshKey, selectedMonth, selectedYear, adjustmentType, pagination.limit, fetchAdjustments]);
 
   const openCreateModal = () => {
     setEditingAdjustment(null);

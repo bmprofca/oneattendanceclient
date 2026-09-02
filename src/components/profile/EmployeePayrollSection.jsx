@@ -1,53 +1,64 @@
 import React, { useEffect, useState } from "react";
-import { FaCoins, FaMoneyBillWave } from "react-icons/fa";
+import { FaCoins, FaMoneyBillWave, FaHistory } from "react-icons/fa";
 import EmployeePayrollTab from "./EmployeePayrollTab";
 import EmployeePayrollAdjustmentsTab from "./EmployeePayrollAdjustmentsTab";
 
-const PAYROLL_SUB_TABS = [
-  { key: "payroll", label: "Payroll", icon: FaMoneyBillWave },
+const PAYROLL_TABS = [
+  { key: "generated", label: "Generated Payrolls", icon: FaMoneyBillWave },
+  { key: "preview", label: "Preview Payrolls", icon: FaHistory },
   { key: "adjustments", label: "Adjustments", icon: FaCoins },
 ];
 
 export default function EmployeePayrollSection({ employee, employeeId, refreshKey = 0 }) {
   const targetEmployeeId = employee?.id || employeeId;
   const employeeName = employee?.name;
-  const [activeSubTab, setActiveSubTab] = useState("payroll");
+  const [activeTab, setActiveTab] = useState("generated");
 
   useEffect(() => {
-    setActiveSubTab("payroll");
+    setActiveTab("generated");
   }, [targetEmployeeId]);
 
-  return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-slate-50/80 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {PAYROLL_SUB_TABS.map((tab) => {
-            const isActive = activeSubTab === tab.key;
-            const Icon = tab.icon;
+  const tabConfig = {
+    generated: { activeClass: "bg-emerald-500", hoverClass: "hover:text-emerald-700 hover:bg-emerald-50" },
+    preview: { activeClass: "bg-blue-600", hoverClass: "hover:text-blue-700 hover:bg-blue-50" },
+    adjustments: { activeClass: "bg-amber-500", hoverClass: "hover:text-amber-700 hover:bg-amber-50" },
+  };
 
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveSubTab(tab.key)}
-                className={[
-                  "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all duration-200",
-                  isActive
-                    ? "border-indigo-200 bg-indigo-600 text-white shadow-sm"
-                    : "border-transparent bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-100",
-                ].join(" ")}
-              >
-                <Icon size={12} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+  return (
+    <div className="space-y-4">
+      {/* Tab Navigation */}
+      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
+        {PAYROLL_TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          const Icon = tab.icon;
+          const config = tabConfig[tab.key];
+
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+                isActive
+                  ? `${config.activeClass} text-white shadow-sm`
+                  : `text-gray-600 ${config.hoverClass}`
+              }`}
+            >
+              <Icon size={12} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="p-3">
-        {activeSubTab === "payroll" ? (
-          <EmployeePayrollTab employeeId={targetEmployeeId} refreshKey={refreshKey} />
+      {/* Tab Content */}
+      <div>
+        {activeTab === "generated" || activeTab === "preview" ? (
+          <EmployeePayrollTab 
+            employeeId={targetEmployeeId} 
+            refreshKey={refreshKey}
+            filterType={activeTab}
+          />
         ) : (
           <EmployeePayrollAdjustmentsTab
             employeeId={targetEmployeeId}
