@@ -1146,7 +1146,7 @@ const useWindowWidth = () => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-const CompanyLedger = ({ employeeId }) => {
+const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
   const [transactions, setTransactions] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -1297,13 +1297,13 @@ const CompanyLedger = ({ employeeId }) => {
   const prevDep = useRef('');
 
   useEffect(() => {
-    const dep = `${debouncedSearchTerm}|${filterType?.value || ''}|${filterEntry?.value || ''}|${pagination.page}|${pagination.limit}`;
+    const dep = `${debouncedSearchTerm}|${filterType?.value || ''}|${filterEntry?.value || ''}|${pagination.page}|${pagination.limit}|${refreshKey}`;
     if (!initialDone.current || prevDep.current !== dep) {
       fetchTransactions();
       initialDone.current = true;
       prevDep.current = dep;
     }
-  }, [debouncedSearchTerm, filterType, filterEntry, pagination.page, pagination.limit, fetchTransactions]);
+  }, [debouncedSearchTerm, filterType, filterEntry, pagination.page, pagination.limit, refreshKey, fetchTransactions]);
 
   const paginatedData = transactions;
 

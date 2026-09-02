@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaCheckCircle, FaEdit, FaExchangeAlt, FaEye, FaMoneyBillWave, FaPlus, FaSpinner, FaTimesCircle, FaTrash } from "react-icons/fa";
 import { toast } from "react-toastify";
 import apiCall from "../../utils/api";
@@ -21,6 +21,7 @@ const money = (value) => value == null ? "—" : `₹${Number(value).toLocaleStr
 export default function EmployeeSalaryTab({ employeeId, refreshKey = 0 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const lastRequestKeyRef = useRef('');
   const [selectedSalary, setSelectedSalary] = useState(null);
   const [salaryToEdit, setSalaryToEdit] = useState(null);
   const [salaryToRevise, setSalaryToRevise] = useState(null);
@@ -32,6 +33,12 @@ export default function EmployeeSalaryTab({ employeeId, refreshKey = 0 }) {
   const { pagination, goToPage, changeLimit, updatePagination } = usePagination(1, 10);
   const fetchSalaries = useCallback(async () => {
     if (!employeeId) return;
+    const requestKey = `${employeeId}|${refreshKey}|${pagination.limit}`;
+    if (lastRequestKeyRef.current === requestKey) {
+      return;
+    }
+    lastRequestKeyRef.current = requestKey;
+
     setLoading(true);
     try {
       const response = await apiCall(`/salary/employee-salaries/${employeeId}`, "GET", null, getCompanyId());
@@ -46,9 +53,11 @@ export default function EmployeeSalaryTab({ employeeId, refreshKey = 0 }) {
     } finally {
       setLoading(false);
     }
-  }, [employeeId, pagination.limit, updatePagination]);
+  }, [employeeId, refreshKey, pagination.limit, updatePagination]);
 
-  useEffect(() => { fetchSalaries(); }, [fetchSalaries, refreshKey]);
+  useEffect(() => {
+    fetchSalaries();
+  }, [fetchSalaries]);
 
   const refresh = () => fetchSalaries();
   const closeSalaryModal = (setter) => { setter(null); };

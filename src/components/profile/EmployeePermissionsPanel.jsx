@@ -14,7 +14,7 @@ const employeePermissionCache = new Map();
  *  - employeeId: number
  *  - canEdit: boolean   (if true, show save/cancel and allow selection)
  */
-const EmployeePermissionsPanel = ({ employeeId, canEdit = false }) => {
+const EmployeePermissionsPanel = ({ employeeId, canEdit = false, refreshKey = 0 }) => {
   const [loading, setLoading] = useState(true);
   const [packageData, setPackageData] = useState(null);
   const [allPermissions, setAllPermissions] = useState([]);
@@ -64,13 +64,14 @@ const EmployeePermissionsPanel = ({ employeeId, canEdit = false }) => {
 
   useEffect(() => {
     setLoading(true);
+    employeePermissionCache.delete(`${getCompanyId() ?? 'none'}:${employeeId}`);
     loadPermissions()
       .catch((err) => {
         console.error(err);
         toast.error(err.message || 'Network error while loading permissions');
       })
       .finally(() => setLoading(false));
-  }, [loadPermissions]);
+  }, [employeeId, refreshKey, loadPermissions]);
 
   const loadPackages = async () => {
     setLoadingPackages(true);

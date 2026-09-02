@@ -418,18 +418,21 @@ export default function EmployeeProfilePage() {
                   {activeTab === "permissions" && (
                     <EmployeePermissionsPanel
                       employeeId={profile.employee?.id ?? employeeId}
+                      refreshKey={refreshKey}
                     />
                   )}
 
                   {activeTab === "accounts" && (
                     <EmployeeBankAccountsTab
                       employeeId={profile.employee?.id ?? employeeId}
+                      refreshKey={refreshKey}
                     />
                   )}
 
                   {activeTab === "ledger" && (
                     <CompanyLedger
                       employeeId={profile.employee?.id ?? employeeId}
+                      refreshKey={refreshKey}
                     />
                   )}
                 </div>

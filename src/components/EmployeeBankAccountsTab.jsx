@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaSearch, FaTimes, FaCheck, FaTrash, FaEdit,
-  FaUser, FaSpinner, FaUniversity, FaStar, FaPlus,
+  FaUser, FaSpinner, FaUniversity, FaStar,
   FaMoneyBillWave, FaEye, FaQrcode, FaShieldAlt,
   FaSave, FaExclamationTriangle,
 } from 'react-icons/fa';
@@ -314,7 +314,7 @@ const BankAccountViewModal = ({ account, onClose }) => {
 
 const ITEMS_PER_PAGE = 10;
 
-const EmployeeBankAccountsTab = ({ employeeId }) => {
+const EmployeeBankAccountsTab = ({ employeeId, refreshKey = 0 }) => {
   const isMountedRef = useRef(true);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -416,12 +416,12 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
 
   const prevDep = useRef('');
   useEffect(() => {
-    const dep = `${employeeId}|${debouncedSearch}|${filterStatus?.value || ''}|${filterAccountType?.value || ''}|${filterIsPrimary?.value ?? ''}|${pagination.page}|${pagination.limit}`;
+    const dep = `${employeeId}|${debouncedSearch}|${filterStatus?.value || ''}|${filterAccountType?.value || ''}|${filterIsPrimary?.value ?? ''}|${pagination.page}|${pagination.limit}|${refreshKey}`;
     if (prevDep.current !== dep) {
       fetchData();
       prevDep.current = dep;
     }
-  }, [employeeId, debouncedSearch, filterStatus, filterAccountType, filterIsPrimary, pagination.page, pagination.limit, fetchData]);
+  }, [employeeId, debouncedSearch, filterStatus, filterAccountType, filterIsPrimary, pagination.page, pagination.limit, refreshKey, fetchData]);
 
   // ── Client-side filtering (when server doesn't paginate) ──────────────────
 
@@ -590,12 +590,6 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
   }, [applyIfscLookup, formData.account_type, formData.ifsc_code, showFormModal]);
 
   // ── Open / Close modal helpers ───────────────────────────────────────────
-
-  const openAddModal = () => {
-    setFormData({ ...EMPTY_FORM });
-    resetIfscLookupState();
-    setShowFormModal(true);
-  };
 
   const handleSaveAccount = async (e) => {
     e?.preventDefault();
@@ -777,9 +771,9 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
       </div>
 
       {/* Filter and View Bar */}
-      <div className="flex flex-col gap-3 bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full">
+      <div className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex flex-nowrap items-center gap-3 overflow-x-auto scrollbar-none">
+          <div className="relative flex-1 min-w-[220px]">
             <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
             <input
               type="text"
@@ -789,18 +783,9 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none text-sm font-medium"
             />
           </div>
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-blue-200 hover:from-blue-700 hover:to-indigo-700 transition-all shrink-0"
-          >
-            <FaPlus size={11} /> Add Account
-          </button>
-        </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-50">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="w-[125px]">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-[120px] shrink-0">
               <SelectField
                 options={[
                   { value: '', label: 'All Status' },
@@ -811,7 +796,7 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
                 onChange={(opt) => setFilterStatus(opt.value ? opt : null)}
               />
             </div>
-            <div className="w-[135px]">
+            <div className="w-[130px] shrink-0">
               <SelectField
                 options={[
                   { value: '', label: 'All Types' },
@@ -826,7 +811,9 @@ const EmployeeBankAccountsTab = ({ employeeId }) => {
             </div>
           </div>
 
-          <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="blue" />
+          <div className="shrink-0">
+            <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="blue" />
+          </div>
         </div>
       </div>
 
