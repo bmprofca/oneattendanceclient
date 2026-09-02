@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { FaShieldAlt, FaSpinner, FaSave, FaExchangeAlt } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import apiCall from '../../utils/api';
+import { runDedupedRequest } from '../../utils/requestDeduper';
 import CategoryPermissionSelector from '../common/CategoryPermissionSelector';
 import Modal from '../Modal';
 import SelectField from '../SelectField';
@@ -35,36 +36,37 @@ const EmployeePermissionsPanel = ({ employeeId, canEdit = false, refreshKey = 0 
     if (!employeeId) return;
     const cacheKey = `${getCompanyId() ?? 'none'}:${employeeId}`;
     const cached = employeePermissionCache.get(cacheKey);
-    let json;
 
     if (cached?.data && cached.expiresAt > Date.now()) {
-      json = cached.data;
-    } else if (cached?.promise) {
-      json = await cached.promise;
-    } else {
-      const request = (async () => {
+      const permissions = Array.isArray(cached.data.data?.permissions) ? cached.data.data.permissions : [];
+      setPackageData(cached.data.data?.package || null);
+      setAllPermissions(permissions);
+      setSelectedIds(permissions.map((permission) => permission.id));
+      return cached.data;
+    }
+
+    try {
+      const json = await runDedupedRequest(`permission-panel:${cacheKey}`, async () => {
         const response = await apiCall(`/permissions/employee-package/${employeeId}`, 'GET', null, getCompanyId());
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.message || 'Failed to load permissions');
         employeePermissionCache.set(cacheKey, { data: result, expiresAt: Date.now() + EMPLOYEE_PERMISSION_CACHE_TTL });
         return result;
-      })().catch((error) => {
-        employeePermissionCache.delete(cacheKey);
-        throw error;
       });
-      employeePermissionCache.set(cacheKey, { promise: request });
-      json = await request;
-    }
 
-    const permissions = Array.isArray(json.data?.permissions) ? json.data.permissions : [];
-    setPackageData(json.data?.package || null);
-    setAllPermissions(permissions);
-    setSelectedIds(permissions.map((permission) => permission.id));
+      const permissions = Array.isArray(json.data?.permissions) ? json.data.permissions : [];
+      setPackageData(json.data?.package || null);
+      setAllPermissions(permissions);
+      setSelectedIds(permissions.map((permission) => permission.id));
+      return json;
+    } catch (error) {
+      employeePermissionCache.delete(cacheKey);
+      throw error;
+    }
   }, [employeeId]);
 
   useEffect(() => {
     setLoading(true);
-    employeePermissionCache.delete(`${getCompanyId() ?? 'none'}:${employeeId}`);
     loadPermissions()
       .catch((err) => {
         console.error(err);
