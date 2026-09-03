@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FaCalendarAlt, FaCheckCircle, FaChevronDown, FaEye, FaMoneyBillWave, FaSpinner, FaHistory } from "react-icons/fa";
+import { FaCalendarAlt, FaCheckCircle, FaChevronDown, FaEye, FaMoneyBillWave, FaSpinner, FaHistory, FaCalculator } from "react-icons/fa";
 import { toast } from "react-toastify";
 import apiCall from "../../utils/api";
+import AdvancedDateFilter from "../AdvancedDateFilter";
 import ManagementGrid from "../ManagementGrid";
 import ManagementViewSwitcher from "../ManagementViewSwitcher";
 import Pagination, { usePagination } from "../PaginationComponent";
@@ -28,13 +29,40 @@ const getCompanyId = () => {
 };
 
 const formatCurrency = (value) => value == null ? "—" : `₹${Number(value).toLocaleString("en-IN")}`;
-const formatDate = (value) => value
-  ? new Date(value).toLocaleDateString("en-IN", { month: "short", year: "numeric" })
-  : "—";
+const formatPayrollPeriod = ({ month, year }) =>
+  new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+const formatRecordPeriod = (payroll) => {
+  if (payroll?.month && payroll?.year) {
+    return formatPayrollPeriod({ month: Number(payroll.month), year: Number(payroll.year) });
+  }
+  return payroll?.payroll_period
+    ? new Date(payroll.payroll_period).toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+    })
+    : "—";
+};
+const getStatusClasses = (status) => ({
+  current: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  past: "border-slate-200 bg-slate-50 text-slate-600",
+  future: "border-violet-200 bg-violet-50 text-violet-700",
+  preview: "border-blue-200 bg-blue-50 text-blue-700",
+}[status] || "border-slate-200 bg-slate-50 text-slate-600");
 const formatMinutes = (value) => {
+  if (value === undefined) return "—";
+  if (value === null || value === "") return "0h 0m";
   const minutes = Number(value);
   if (!Number.isFinite(minutes)) return "—";
   return `${Math.floor(minutes / 60)}h ${Math.round(minutes % 60)}m`;
+};
+const formatMetric = (value) => {
+  if (value === undefined) return "—";
+  if (value === null || value === "") return 0;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : "—";
 };
 
 function PayrollDetailModal({ record, onClose }) {
@@ -61,9 +89,9 @@ function PayrollDetailModal({ record, onClose }) {
           <FaCalendarAlt className="text-indigo-500" />
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">Payroll Period</p>
-            <p className="text-base font-black text-indigo-800">{payroll.month && payroll.year ? `${payroll.month}/${payroll.year}` : formatDate(payroll.payroll_period)}</p>
+            <p className="text-base font-black text-indigo-800">{formatRecordPeriod(payroll)}</p>
           </div>
-          <span className="ml-auto rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">{record.status || "current"}</span>
+          <span className={`ml-auto rounded-full border px-2.5 py-1 text-xs font-bold capitalize ${getStatusClasses(record.status)}`}>{record.status || "current"}</span>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
@@ -79,13 +107,13 @@ function PayrollDetailModal({ record, onClose }) {
           {["working_days", "present_days", "absent_days", "paid_leave_days", "unpaid_leave_days"].map((key) => (
             <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-center">
               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{key.replaceAll("_", " ")}</p>
-              <p className="mt-1 text-sm font-black text-slate-700">{attendance[key] ?? "—"}</p>
+              <p className="mt-1 text-sm font-black text-slate-700">{formatMetric(attendance[key] !== undefined ? attendance[key] : payroll[key])}</p>
             </div>
           ))}
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          {[{ label: "Worked", value: work.worked_minutes }, { label: "Overtime", value: work.overtime_minutes }, { label: "Deduction", value: work.deduction_minutes }].map((item) => (
+          {[{ label: "Worked", value: work.worked_minutes !== undefined ? work.worked_minutes : payroll.worked_minutes }, { label: "Overtime", value: work.overtime_minutes !== undefined ? work.overtime_minutes : payroll.overtime_minutes }, { label: "Deduction", value: work.deduction_minutes !== undefined ? work.deduction_minutes : payroll.deduction_minutes }].map((item) => (
             <div key={item.label} className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-center">
               <p className="text-[9px] font-bold uppercase tracking-widest text-blue-500">{item.label}</p>
               <p className="mt-1 text-sm font-black text-blue-700">{formatMinutes(item.value)}</p>
@@ -117,6 +145,12 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [viewMode, setViewMode] = useState("table");
   const [activeActionMenu, setActiveActionMenu] = useState(null);
+  const [generatingPayroll, setGeneratingPayroll] = useState(false);
+  const [showGeneratePicker, setShowGeneratePicker] = useState(false);
+  const [selectedPayrollPeriod, setSelectedPayrollPeriod] = useState(() => {
+    const now = new Date();
+    return { month: now.getMonth() + 1, year: now.getFullYear() };
+  });
   const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
 
   const fetchPayroll = useCallback(async () => {
@@ -148,6 +182,42 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
     }
   }, [employeeId, updatePagination]);
 
+  const handleGenerateCurrentEmployeePayroll = useCallback(async () => {
+    if (!employeeId) {
+      toast.error("Employee not selected");
+      return;
+    }
+
+    setGeneratingPayroll(true);
+    try {
+      const companyId = getCompanyId();
+      const response = await apiCall(
+        "/payroll/generate-payroll",
+        "POST",
+        {
+          employee_id: [Number(employeeId)],
+          month: selectedPayrollPeriod.month,
+          year: selectedPayrollPeriod.year,
+          send_pdf: false,
+        },
+        companyId
+      );
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to generate payroll for the current employee");
+      }
+
+      toast.success(`Payroll generated for ${formatPayrollPeriod(selectedPayrollPeriod)}`);
+      setShowGeneratePicker(false);
+      await fetchPayroll();
+    } catch (error) {
+      toast.error(error.message || "Failed to generate payroll");
+    } finally {
+      setGeneratingPayroll(false);
+    }
+  }, [employeeId, fetchPayroll, selectedPayrollPeriod]);
+
   useEffect(() => { fetchPayroll(); }, [fetchPayroll, refreshKey]);
 
   const filteredRecords = useMemo(() => {
@@ -162,13 +232,12 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
     const start = (pagination.page - 1) * pagination.limit;
     return filteredRecords.slice(start, start + pagination.limit);
   }, [pagination.page, pagination.limit, filteredRecords]);
-
   const columns = [
-    { key: "period", label: "Period", render: (record) => <span className="font-semibold text-slate-800">{record.payroll?.month && record.payroll?.year ? `${record.payroll.month}/${record.payroll.year}` : formatDate(record.payroll?.payroll_period)}</span> },
+    { key: "period", label: "Period", render: (record) => <span className="font-semibold text-slate-800">{formatRecordPeriod(record.payroll)}</span> },
     { key: "earnings", label: "Earnings", render: (record) => <span className="font-semibold text-emerald-700">{formatCurrency(record.payroll?.total_earnings)}</span> },
     { key: "deductions", label: "Deductions", render: (record) => <span className="font-semibold text-rose-600">{formatCurrency(record.payroll?.total_deductions)}</span> },
     { key: "net_salary", label: "Net Salary", render: (record) => <span className="inline-flex rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{formatCurrency(record.payroll?.net_salary)}</span> },
-    { key: "status", label: "Status", render: (record) => <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700"><FaCheckCircle size={10} />{record.status || "current"}</span> },
+    { key: "status", label: "Status", render: (record) => <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium capitalize ${getStatusClasses(record.status)}`}><FaCheckCircle size={10} />{record.status || "current"}</span> },
   ];
 
   const actions = (record) => [{ label: "View Details", icon: <FaEye size={12} />, onClick: () => setSelectedRecord(record), className: "text-blue-600 hover:bg-blue-50" }];
@@ -178,7 +247,7 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
     const accentClasses = filterType === "generated" ? { text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-100", label: "text-emerald-500" } : { text: "text-blue-700", bg: "bg-blue-50", border: "border-blue-100", label: "text-blue-500" };
     
     return (
-      <ManagementCard key={`${payroll.id || payroll.payroll_period || index}`} accent={accentColor} delay={index * 0.04} onClick={() => setSelectedRecord(record)} activeId={activeActionMenu} onToggle={(event, id) => setActiveActionMenu((current) => current === id ? null : id)} menuId={`payroll-${payroll.id || index}`} actions={actions(record)} hoverable title={payroll.month && payroll.year ? `${payroll.month}/${payroll.year}` : formatDate(payroll.payroll_period)} subtitle={`${record.status || "current"} payroll`} eyebrow="Payroll Record" badge={<span className={`text-xs font-bold ${accentClasses.text}`}>#{payroll.id || "Preview"}</span>} footer={<div className="flex w-full justify-between text-xs text-slate-400"><span>Net: {formatCurrency(payroll.net_salary)}</span><span>Worked: {formatMinutes(payroll.work?.worked_minutes)}</span></div>}>
+      <ManagementCard key={`${payroll.id || payroll.payroll_period || index}`} accent={accentColor} delay={index * 0.04} onClick={() => setSelectedRecord(record)} activeId={activeActionMenu} onToggle={(event, id) => setActiveActionMenu((current) => current === id ? null : id)} menuId={`payroll-${payroll.id || index}`} actions={actions(record)} hoverable title={formatRecordPeriod(payroll)} subtitle={`${record.status || "current"} payroll`} eyebrow="Payroll Record" badge={<span className={`text-xs font-bold ${accentClasses.text}`}>#{payroll.id || "Preview"}</span>} footer={<div className="flex w-full justify-between text-xs text-slate-400"><span>Net: {formatCurrency(payroll.net_salary)}</span><span>Worked: {formatMinutes(payroll.work?.worked_minutes)}</span></div>}>
         <div className="grid grid-cols-3 gap-2">
          <div className={`rounded-lg border ${accentClasses.border} ${accentClasses.bg} p-2 text-center`}><p className={`text-[9px] font-bold uppercase ${accentClasses.label}`}>Earnings</p><p className={`text-xs font-black ${accentClasses.text}`}>{formatCurrency(payroll.total_earnings)}</p></div>
          <div className="rounded-lg border border-rose-100 bg-rose-50 p-2 text-center"><p className="text-[9px] font-bold uppercase text-rose-500">Deductions</p><p className="text-xs font-black text-rose-700">{formatCurrency(payroll.total_deductions)}</p></div>
@@ -201,21 +270,40 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between rounded-xl bg-white p-2 shadow-sm">
-            <p className="flex items-center gap-2 px-4 text-sm font-semibold text-slate-600">
+          <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
               {filterType === "generated" ? (
                 <>
-                  <FaMoneyBillWave className="text-emerald-600" size={14} />
-                  Generated Payrolls
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <FaMoneyBillWave size={16} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">Generated Payrolls</p>
+                  </div>
                 </>
               ) : (
                 <>
-                  <FaHistory className="text-blue-600" size={14} />
-                  Preview Payrolls
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <FaHistory size={16} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">Preview Payrolls</p>
+                  </div>
                 </>
               )}
-            </p>
-            <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent={filterType === "generated" ? "emerald" : "blue"} />
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setShowGeneratePicker(true)}
+                disabled={generatingPayroll || loading}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {generatingPayroll ? <FaSpinner className="animate-spin" size={10} /> : <FaCalculator size={10} />}
+                {generatingPayroll ? "Generating..." : "Generate Payroll"}
+              </button>
+              <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent={filterType === "generated" ? "emerald" : "blue"} />
+            </div>
           </div>
           {viewMode === "table" ? (
             <ManagementTable 
@@ -242,6 +330,54 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
         </div>
       )}
       <PayrollDetailModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
+      <Modal
+        isOpen={showGeneratePicker}
+        onClose={() => setShowGeneratePicker(false)}
+        title="Generate Payroll"
+        subtitle={`Select the payroll period for this employee`}
+        icon={<FaCalculator className="text-emerald-600" />}
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowGeneratePicker(false)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerateCurrentEmployeePayroll}
+              disabled={generatingPayroll}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingPayroll && <FaSpinner className="animate-spin" size={12} />}
+              {generatingPayroll ? "Generating..." : "Generate Payroll"}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500">
+            Payroll will be generated for <span className="font-bold text-slate-700">{formatPayrollPeriod(selectedPayrollPeriod)}</span>.
+          </p>
+          <AdvancedDateFilter
+            value={{ month: selectedPayrollPeriod.month, year: selectedPayrollPeriod.year }}
+            onChange={(value) => {
+              if (value?.month && value?.year) {
+                setSelectedPayrollPeriod({
+                  month: Number(value.month),
+                  year: Number(value.year),
+                });
+              }
+            }}
+            tabOptions={["month"]}
+            placeholder="Select payroll month"
+            buttonClassName="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50"
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

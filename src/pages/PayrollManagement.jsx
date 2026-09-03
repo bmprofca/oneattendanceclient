@@ -249,6 +249,7 @@ const PayrollManagement = () => {
 
     const isMounted = useRef(true);
     const fetchInProgress = useRef(false);
+    const payrollListRequestId = useRef(0);
     const initialFetchDone = useRef(false);
     const isInitialLoad = useRef(true);
 
@@ -288,7 +289,7 @@ const PayrollManagement = () => {
     }, []);
 
     const fetchPayrollList = useCallback(async (page = pagination.page, resetLoading = true) => {
-        if (fetchInProgress.current) return;
+        const requestId = ++payrollListRequestId.current;
         fetchInProgress.current = true;
         if (resetLoading) setLoading(true);
 
@@ -337,6 +338,8 @@ const PayrollManagement = () => {
                 result = await requestPromise;
             }
 
+            if (requestId !== payrollListRequestId.current) return;
+
             if (result.success) {
                 // Normalize the list: first convert shape, then normalize each item
                 const normalizedPayrolls = normalizePayrollList(result.data).map(normalizePayrollItem);
@@ -372,9 +375,11 @@ const PayrollManagement = () => {
         } catch (e) {
             toast.error(e.message || 'Failed to fetch payroll');
         } finally {
-            setLoading(false);
-            fetchInProgress.current = false;
-            isInitialLoad.current = false;
+            if (requestId === payrollListRequestId.current) {
+                setLoading(false);
+                fetchInProgress.current = false;
+                isInitialLoad.current = false;
+            }
         }
     }, [pagination.page, pagination.limit, selectedMonth, selectedYear, updatePagination]);
 
@@ -386,7 +391,7 @@ const PayrollManagement = () => {
     }, [fetchPayrollList]);
 
     useEffect(() => {
-        if (!isInitialLoad.current && !fetchInProgress.current && initialFetchDone.current) {
+        if (!isInitialLoad.current && initialFetchDone.current) {
             fetchPayrollList(pagination.page, true);
         }
     }, [pagination.page, fetchPayrollList]);
