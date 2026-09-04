@@ -18,6 +18,7 @@ import ManagementGrid from '../components/ManagementGrid';
 import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import SelectField from '../components/SelectField';
 import BankAccountSelectField from '../components/BankAccountSelectField';
+import EmployeeSelect from '../components/common/EmployeeSelect';
 import { DatePickerField } from '../components/DatePicker';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -51,7 +52,11 @@ const TRANSACTION_TYPES = [
 ];
 
 // Types shown inside Add Transaction dropdown (no opening_balance)
-const ADD_TRANSACTION_TYPES = TRANSACTION_TYPES.filter(t => t.value !== 'opening_balance');
+const ADD_TRANSACTION_TYPES = TRANSACTION_TYPES.filter(
+  t => !['opening_balance', 'salary'].includes(t.value)
+);
+const EDITABLE_TRANSACTION_TYPES = new Set(['bonus', 'receive', 'payment', 'fine', 'opening_balance']);
+const getTransactionType = (transaction) => transaction?.transaction_type || transaction?.type || '';
 
 const ENTRY_TYPES = [
   { value: 'debit', label: 'Debit (Payment Out)', icon: FaArrowUp, color: 'rose' },
@@ -294,12 +299,16 @@ const MobileTransactionCard = ({ transaction, onView, onEdit, onDelete }) => (
           <button onClick={() => onView(transaction)} className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-violet-50 hover:text-violet-600 text-slate-400 flex items-center justify-center transition-all">
             <FaEye size={12} />
           </button>
-          <button onClick={() => onEdit(transaction)} className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-blue-50 hover:text-blue-600 text-slate-400 flex items-center justify-center transition-all">
-            <FaEdit size={12} />
-          </button>
-          <button onClick={() => onDelete(transaction)} className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-rose-50 hover:text-rose-600 text-slate-400 flex items-center justify-center transition-all">
-            <FaTrash size={12} />
-          </button>
+          {EDITABLE_TRANSACTION_TYPES.has(transaction.transaction_type) && (
+            <>
+              <button onClick={() => onEdit(transaction)} className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-blue-50 hover:text-blue-600 text-slate-400 flex items-center justify-center transition-all">
+                <FaEdit size={12} />
+              </button>
+              <button onClick={() => onDelete(transaction)} className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-rose-50 hover:text-rose-600 text-slate-400 flex items-center justify-center transition-all">
+                <FaTrash size={12} />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -316,9 +325,9 @@ const NarrowLedgerTable = ({ rows, onView, onEdit, onDelete, tiny = false }) => 
   >
     <div className={`${tiny ? 'grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,0.72fr))_1.75rem] px-1.5 text-[7px]' : 'grid-cols-[minmax(0,1.15fr)_repeat(3,minmax(0,0.82fr))_2rem] px-2 text-[9px]'} grid bg-gradient-to-r from-gray-100 to-gray-200 py-2 text-center font-bold uppercase leading-tight text-gray-600`}>
       <span>Particulars</span>
+      <span>Amount</span>
       <span>Old</span>
       <span>New</span>
-      <span>Amount</span>
       <span />
     </div>
     <div className="divide-y divide-gray-100">
@@ -350,14 +359,14 @@ const NarrowLedgerTable = ({ rows, onView, onEdit, onDelete, tiny = false }) => 
                   </>
                 )}
               </div>
+              <span className={`break-all font-mono font-bold ${tx.entry_type === 'debit' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {tx.isTotalRow ? '—' : formatNumber(displayedAmount)}
+              </span>
               <span className="break-all font-mono font-bold text-slate-600">
                 {tx.isTotalRow ? '—' : formatNumber(tx.old_balance)}
               </span>
               <span className={`break-all font-mono font-bold ${Number(displayedBalance) >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
                 {formatNumber(displayedBalance)}
-              </span>
-              <span className={`break-all font-mono font-bold ${tx.entry_type === 'debit' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {formatNumber(displayedAmount)}
               </span>
               <div className="flex justify-end">
                 {clickable ? (
@@ -366,7 +375,7 @@ const NarrowLedgerTable = ({ rows, onView, onEdit, onDelete, tiny = false }) => 
                   trigger={
                     <button
                       type="button"
-                      className={`${tiny ? 'h-5 w-5 rounded-md' : 'h-6 w-6 rounded-lg'} flex items-center justify-center border border-gray-200 bg-white text-gray-500 transition-all hover:border-violet-300 hover:text-violet-600 hover:shadow-sm active:scale-95`}
+                      className={`${tiny ? 'h-5 w-5 rounded-md' : 'h-6 w-6 rounded-lg'} flex items-center justify-center border border-violet-200 bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-sm transition-all hover:from-violet-600 hover:to-indigo-700 hover:shadow-md active:scale-95`}
                     >
                       <FaEllipsisV size={tiny ? 8 : 10} />
                     </button>
@@ -376,20 +385,19 @@ const NarrowLedgerTable = ({ rows, onView, onEdit, onDelete, tiny = false }) => 
                       label: 'View Details',
                       icon: <FaEye size={13} />,
                       onClick: () => onView(tx),
-                      className: 'text-gray-700 hover:text-violet-600 hover:bg-violet-50',
+                      className: 'text-violet-700 hover:text-violet-700 hover:bg-violet-50',
                     },
-                    {
+                    ...(EDITABLE_TRANSACTION_TYPES.has(tx.transaction_type) ? [{
                       label: 'Edit',
                       icon: <FaEdit size={13} />,
                       onClick: () => onEdit(tx),
-                      className: 'text-gray-700 hover:text-blue-600 hover:bg-blue-50',
-                    },
-                    {
+                      className: 'text-blue-700 hover:text-blue-700 hover:bg-blue-50',
+                    }, {
                       label: 'Delete',
                       icon: <FaTrash size={13} />,
                       onClick: () => onDelete(tx),
-                      className: 'text-gray-700 hover:text-rose-600 hover:bg-rose-50',
-                    },
+                      className: 'text-rose-700 hover:text-rose-700 hover:bg-rose-50',
+                    }] : []),
                   ]}
                 />
                 ) : null}
@@ -426,7 +434,7 @@ const typeNeedsEntryType = (type) => type === 'opening_balance';
 // ─── Add Transaction Modal ────────────────────────────────────────────────────
 
 const EMPTY_FORM = {
-  transaction_type: 'salary',
+  transaction_type: 'bonus',
   amount: '',
   transaction_date: new Date().toISOString().split('T')[0],
   employee_account: '',
@@ -436,18 +444,23 @@ const EMPTY_FORM = {
 
 const AddTransactionModal = ({ open, onClose, onSuccess, employeeId }) => {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setForm(EMPTY_FORM);
+    if (open) {
+      setForm({ ...EMPTY_FORM, employee_account: '', company_account: '' });
+      setSelectedEmployee(null);
+    }
   }, [open]);
 
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
 
   const needsAccounts = typeNeedsAccounts(form.transaction_type);
+  const selectedEmployeeId = employeeId || form.employee_id;
 
   const handleSubmit = async () => {
-    if (!employeeId || !form.amount || !form.transaction_date) {
+    if (!selectedEmployeeId || !form.amount || Number(form.amount) <= 0 || !form.transaction_date) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -455,7 +468,7 @@ const AddTransactionModal = ({ open, onClose, onSuccess, employeeId }) => {
     try {
       // Build payload according to transaction type
       const body = {
-        employee_id: Number(employeeId),
+        employee_id: Number(selectedEmployeeId),
         transaction_type: form.transaction_type,
         amount: parseFloat(form.amount),
         transaction_date: form.transaction_date,
@@ -523,6 +536,19 @@ const AddTransactionModal = ({ open, onClose, onSuccess, employeeId }) => {
             />
           </FormField>
 
+          <FormField label="Employee" required>
+            <EmployeeSelect
+              value={selectedEmployeeId || ''}
+              onChange={(id, employee) => {
+                setSelectedEmployee(employee);
+                setForm(prev => ({ ...prev, employee_id: employee ? id : '', employee_account: '' }));
+              }}
+              initialEmployee={selectedEmployee}
+              disabled={Boolean(employeeId)}
+              placeholder="Select employee..."
+            />
+          </FormField>
+
           {/* Amount */}
           <FormField label="Amount" required>
             <div className="relative">
@@ -559,7 +585,7 @@ const AddTransactionModal = ({ open, onClose, onSuccess, employeeId }) => {
               <FormField label="Employee Account">
                 <BankAccountSelectField
                   ownerType="employee"
-                  employeeId={employeeId}
+                  employeeId={selectedEmployeeId}
                   value={form.employee_account}
                   onChange={(val) => set('employee_account', val)}
                   placeholder="Search employee account..."
@@ -604,11 +630,13 @@ const EMPTY_OB_FORM = {
 
 const OpeningBalanceModal = ({ open, onClose, onSuccess, employeeId, isEdit, existingBalance }) => {
   const [form, setForm] = useState(EMPTY_OB_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       if (isEdit && existingBalance) {
+        setSelectedEmployee(existingBalance.employee || null);
         setForm({
           entry_type: existingBalance.entry_type || (Number(existingBalance.debit) > 0 ? 'debit' : 'credit'),
           amount: existingBalance.amount || existingBalance.debit || existingBalance.credit || '',
@@ -617,6 +645,7 @@ const OpeningBalanceModal = ({ open, onClose, onSuccess, employeeId, isEdit, exi
         });
       } else {
         setForm(EMPTY_OB_FORM);
+        setSelectedEmployee(null);
       }
     }
   }, [open, isEdit, existingBalance]);
@@ -624,14 +653,14 @@ const OpeningBalanceModal = ({ open, onClose, onSuccess, employeeId, isEdit, exi
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
 
   const handleSubmit = async () => {
-    if (!form.amount || !form.transaction_date) {
+    if ((!employeeId && !selectedEmployee?.id) || !form.amount || Number(form.amount) <= 0 || !form.transaction_date) {
       toast.error('Please fill in all required fields');
       return;
     }
     setSaving(true);
     try {
       const body = {
-        employee_id: Number(employeeId),
+        employee_id: Number(employeeId || selectedEmployee.id),
         transaction_type: 'opening_balance',
         entry_type: form.entry_type,
         amount: parseFloat(form.amount),
@@ -693,6 +722,15 @@ const OpeningBalanceModal = ({ open, onClose, onSuccess, employeeId, isEdit, exi
         )}
 
         <div className="flex flex-col gap-4">
+          <FormField label="Employee" required>
+            <EmployeeSelect
+              value={employeeId || selectedEmployee?.id || existingBalance?.employee_id || ''}
+              onChange={(id, employee) => setSelectedEmployee(employee)}
+              initialEmployee={selectedEmployee || existingBalance?.employee || null}
+              disabled={Boolean(employeeId) || isEdit}
+              placeholder="Select employee..."
+            />
+          </FormField>
           {/* Entry Type */}
           <FormField label="Entry Type" required>
             <SelectField
@@ -757,14 +795,15 @@ const EditTransactionModal = ({ open, onClose, onSuccess, transaction }) => {
 
   useEffect(() => {
     if (transaction) {
+      const transactionType = getTransactionType(transaction);
       setForm({
         id: transaction.id,
         amount: transaction.amount || '',
         transaction_date: toInputDate(transaction.transaction_date),
-        entry_type: transaction.entry_type || 'credit',
-        employee_account: transaction.accounts?.employee_account?.bank_id ?? transaction.accounts?.employee_account?.id ?? '',
-        company_account: transaction.accounts?.company_account?.bank_id ?? transaction.accounts?.company_account?.id ?? '',
-        remark: transaction.remark || '',
+        entry_type: transaction.entry_type || (transactionType === 'opening_balance' ? 'credit' : transaction.type) || 'credit',
+        employee_account: transaction.accounts?.employee_account?.id ?? '',
+        company_account: transaction.accounts?.company_account?.id ?? '',
+        remark: transaction.remark || transaction.remarks || '',
       });
     }
   }, [transaction]);
@@ -772,7 +811,7 @@ const EditTransactionModal = ({ open, onClose, onSuccess, transaction }) => {
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
 
   const handleSubmit = async () => {
-    if (!form.amount || !form.transaction_date) {
+    if (!form.amount || Number(form.amount) <= 0 || !form.transaction_date) {
       toast.error('Please fill in required fields');
       return;
     }
@@ -782,11 +821,15 @@ const EditTransactionModal = ({ open, onClose, onSuccess, transaction }) => {
         id: form.id,
         amount: parseFloat(form.amount),
         transaction_date: form.transaction_date,
-        entry_type: form.entry_type,
       };
-      if (form.employee_account) body.employee_account = Number(form.employee_account);
-      if (form.company_account) body.company_account = Number(form.company_account);
-      if (form.remark) body.remark = form.remark;
+      if (getTransactionType(transaction) === 'opening_balance') {
+        body.entry_type = form.entry_type;
+      }
+      if (typeNeedsAccounts(getTransactionType(transaction))) {
+        if (form.employee_account) body.employee_account = Number(form.employee_account);
+        if (form.company_account) body.company_account = Number(form.company_account);
+      }
+      body.remark = form.remark.trim();
 
       const companyId = getCompanyId();
       const res = await apiCall('/transactions/update', 'PUT', body, companyId);
@@ -829,16 +872,25 @@ const EditTransactionModal = ({ open, onClose, onSuccess, transaction }) => {
         </div>
       }
     >
-      {transaction && (
+      {transaction && EDITABLE_TRANSACTION_TYPES.has(getTransactionType(transaction)) && (
         <div className="space-y-4">
           {/* Read-only info */}
           <div className="flex gap-2 flex-wrap">
-            <TransactionTypeBadge type={transaction.transaction_type} />
+            <TransactionTypeBadge type={getTransactionType(transaction)} />
             <EntryTypeBadge entryType={transaction.entry_type} />
           </div>
           <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700 font-medium flex items-center gap-2">
             <FaInfoCircle size={12} /> Transaction type and employee cannot be changed after creation.
           </div>
+
+          <FormField label="Employee">
+            <EmployeeSelect
+              value={transaction?.employee?.id || transaction?.employee_id || ''}
+              initialEmployee={transaction?.employee || null}
+              disabled
+              placeholder="Employee"
+            />
+          </FormField>
 
           <div className="flex flex-col gap-3">
             <FormField label="Amount" required>
@@ -871,35 +923,41 @@ const EditTransactionModal = ({ open, onClose, onSuccess, transaction }) => {
               />
             </FormField>
 
-            <FormField label="Entry Type">
-              <SelectField
-                options={ENTRY_TYPES}
-                value={ENTRY_TYPES.find(t => t.value === form.entry_type)}
-                onChange={opt => set('entry_type', opt.value)}
-                formatOptionLabel={formatEntryOption}
-              />
-            </FormField>
+            {getTransactionType(transaction) === 'opening_balance' && (
+              <FormField label="Entry Type" required>
+                <SelectField
+                  options={ENTRY_TYPES}
+                  value={ENTRY_TYPES.find(t => t.value === form.entry_type)}
+                  onChange={opt => set('entry_type', opt.value)}
+                  formatOptionLabel={formatEntryOption}
+                />
+              </FormField>
+            )}
 
-            <FormField label="Employee Account">
-              <BankAccountSelectField
-                ownerType="employee"
-                employeeId={transaction?.employee?.id || transaction?.employee_id}
-                value={form.employee_account}
-                onChange={(val) => set('employee_account', val)}
-                initialAccount={transaction?.accounts?.employee_account}
-                placeholder="Search employee account..."
-              />
-            </FormField>
+            {typeNeedsAccounts(getTransactionType(transaction)) && (
+              <>
+                <FormField label="Employee Account">
+                  <BankAccountSelectField
+                    ownerType="employee"
+                    employeeId={transaction?.employee?.id || transaction?.employee_id}
+                    value={form.employee_account}
+                    onChange={(val) => set('employee_account', val)}
+                    initialAccount={transaction?.accounts?.employee_account}
+                    placeholder="Search employee account..."
+                  />
+                </FormField>
 
-            <FormField label="Company Account">
-              <BankAccountSelectField
-                ownerType="company"
-                value={form.company_account}
-                onChange={(val) => set('company_account', val)}
-                initialAccount={transaction?.accounts?.company_account}
-                placeholder="Search company account..."
-              />
-            </FormField>
+                <FormField label="Company Account">
+                  <BankAccountSelectField
+                    ownerType="company"
+                    value={form.company_account}
+                    onChange={(val) => set('company_account', val)}
+                    initialAccount={transaction?.accounts?.company_account}
+                    placeholder="Search company account..."
+                  />
+                </FormField>
+              </>
+            )}
           </div>
 
           <FormField label="Remark">
@@ -966,11 +1024,11 @@ const DeleteModal = ({ open, onClose, onSuccess, transaction }) => {
         </div>
       }
     >
-      {transaction && (
+      {transaction && EDITABLE_TRANSACTION_TYPES.has(transaction.transaction_type) && (
         <div className="space-y-4">
           <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
             <div className="flex items-center gap-2 mb-2">
-              <TransactionTypeBadge type={transaction.transaction_type} />
+              <TransactionTypeBadge type={getTransactionType(transaction)} />
               <EntryTypeBadge entryType={transaction.entry_type} />
             </div>
             <p className="text-2xl font-black text-rose-700 mt-2">
@@ -1002,7 +1060,7 @@ const ViewModal = ({ open, onClose, transaction, onEdit, onDelete }) => (
         <button onClick={onClose} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all shadow-sm">
           Close
         </button>
-        {transaction && (
+        {transaction && EDITABLE_TRANSACTION_TYPES.has(transaction.transaction_type) && (
           <>
             <button
               onClick={() => { onClose(); onDelete(transaction); }}
@@ -1224,6 +1282,7 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
            const credit = tx.credit !== undefined ? tx.credit : (entry_type === 'credit' ? tx.amount : 0);
            return {
               ...tx,
+              transaction_type: tx.transaction_type || tx.type_name || tx.transactionType || '',
               entry_type,
               old_balance,
               new_balance,
@@ -1234,6 +1293,18 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
               created_by: tx.created_by || tx.create_by  || null,
               created_at: tx.created_at || tx.create_date || '',
            };
+        }).sort((a, b) => {
+          // Keep the ledger chronological: earliest transaction at the top,
+          // latest transaction at the bottom.
+          const dateA = new Date(a.transaction_date || a.created_at || 0).getTime();
+          const dateB = new Date(b.transaction_date || b.created_at || 0).getTime();
+          if (dateA !== dateB) return dateA - dateB;
+
+          const createdA = new Date(a.created_at || 0).getTime();
+          const createdB = new Date(b.created_at || 0).getTime();
+          if (createdA !== createdB) return createdA - createdB;
+
+          return String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true });
         });
         
         setTransactions(normalizedTxList);
@@ -1252,7 +1323,7 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
         setOpeningBalance(ob);
 
         // Find the opening_balance transaction row if present, for edit purposes
-        const obTx = txList.find(t => t.transaction_type === 'opening_balance') || null;
+        const obTx = normalizedTxList.find(t => t.transaction_type === 'opening_balance') || null;
         setOpeningBalanceTx(obTx);
 
         if (result.meta) {
@@ -1336,6 +1407,19 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
 
   const columns = useMemo(() => {
     // ── Shared financial columns (always shown) ──
+    const amountCol = {
+      key: 'amount',
+      label: 'Amount',
+      render: (tx) => {
+        if (tx.isTotalRow) return <span className="text-slate-400 font-semibold">—</span>;
+        return (
+          <span className={`font-mono font-bold ${tx.entry_type === 'debit' ? 'text-rose-600' : 'text-emerald-600'}`}>
+            {formatNumber(tx.amount)}
+          </span>
+        );
+      },
+      className: isNarrowLedgerView ? 'text-center text-[10px] leading-tight' : 'text-center',
+    };
     const oldBalanceCol = {
       key: 'old_balance',
       label: 'Old Balance',
@@ -1358,20 +1442,6 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
       },
       className: isNarrowLedgerView ? 'text-center text-[10px] leading-tight' : 'text-center',
     };
-    const amountCol = {
-      key: 'amount',
-      label: 'Amount',
-      render: (tx) => {
-        if (tx.isTotalRow) return <span className="font-bold text-slate-800 font-mono text-sm">{formatNumber((tx.debit || 0) + (tx.credit || 0))}</span>;
-        return (
-          <span className={`font-mono font-bold ${tx.entry_type === 'debit' ? 'text-rose-600' : 'text-emerald-600'}`}>
-            {formatNumber(tx.amount)}
-          </span>
-        );
-      },
-      className: isNarrowLedgerView ? 'text-center text-[10px] leading-tight' : 'text-center',
-    };
-
     // ── Compact view (662px – 1423px): merge Date+Particulars+Type into one column ──
     if (isCompactView) {
       return [
@@ -1399,9 +1469,9 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
           },
           className: 'text-center',
         },
+        amountCol,
         oldBalanceCol,
         newBalanceCol,
-        amountCol,
       ];
     }
 
@@ -1448,9 +1518,9 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
           return <TransactionTypeBadge type={tx.transaction_type} compact />;
         },
       },
+      amountCol,
       oldBalanceCol,
       newBalanceCol,
-      amountCol,
     ];
   }, [pagination.page, pagination.limit, isCompactView, isNarrowLedgerView]);
 
@@ -1585,7 +1655,7 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex flex-col lg:flex-row lg:items-center gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
+          className="flex flex-col xl:flex-row xl:items-end gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
         >
           <div className="relative flex-1">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm" />
@@ -1597,9 +1667,10 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
               className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-violet-500/10 focus:border-violet-400 outline-none shadow-sm transition-all text-sm font-medium"
             />
           </div>
-          <div className="flex items-center gap-3 justify-between">
-            <div className="flex items-center gap-3">
-              <div>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="grid grid-cols-2 gap-3 flex-1">
+              <div className="min-w-0">
+                <label className="block mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Transaction type</label>
                 <SelectField
                   options={[{ value: '', label: 'All Types' }, ...TRANSACTION_TYPES]}
                   value={filterType || { value: '', label: 'All Types' }}
@@ -1607,17 +1678,18 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
                   formatOptionLabel={opt => opt.value === '' ? opt.label : formatTransactionOption(opt)}
                 />
               </div>
-              <div>
+              <div className="min-w-0">
+                <label className="block mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Entry type</label>
                 <SelectField
-                  options={[{ value: '', label: 'All Entries' }, ...ENTRY_TYPES]}
-                  value={filterEntry || { value: '', label: 'All Entries' }}
+                  options={[{ value: '', label: 'All Entry Types' }, ...ENTRY_TYPES]}
+                  value={filterEntry || { value: '', label: 'All Entry Types' }}
                   onChange={opt => { setFilterEntry(opt.value ? opt : null); goToPage(1); }}
                   formatOptionLabel={opt => opt.value === '' ? opt.label : formatEntryOption(opt)}
                 />
               </div>
             </div>
 
-            <div>
+            <div className="sm:pb-0.5">
               <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent="violet" />
             </div>
           </div>
@@ -1665,26 +1737,26 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
               }}
               getActions={(row) => {
                 if (row.isOpeningBalance || row.isTotalRow) return [];
-                return [
+                const actions = [
                   {
                     label: 'View Details',
                     icon: <FaEye size={13} />,
                     onClick: () => setViewModal({ open: true, transaction: row }),
-                    className: 'text-gray-700 hover:text-violet-600 hover:bg-violet-50',
+                    className: 'text-green-700 hover:text-green-600 hover:bg-green-50',
                   },
-                  {
+                  ...(EDITABLE_TRANSACTION_TYPES.has(getTransactionType(row)) ? [{
                     label: 'Edit',
                     icon: <FaEdit size={13} />,
                     onClick: () => setEditModal({ open: true, transaction: row }),
-                    className: 'text-gray-700 hover:text-blue-600 hover:bg-blue-50',
-                  },
-                  {
+                    className: 'text-blue-700 hover:text-blue-700 hover:bg-blue-50',
+                  }, {
                     label: 'Delete',
                     icon: <FaTrash size={13} />,
                     onClick: () => setDeleteModal({ open: true, transaction: row }),
-                    className: 'text-gray-700 hover:text-rose-600 hover:bg-rose-50',
-                  },
+                    className: 'text-rose-700 hover:text-rose-700 hover:bg-rose-50',
+                  }] : []),
                 ];
+                return actions;
               }}
               accent="violet"
             />
@@ -1727,14 +1799,14 @@ const CompanyLedger = ({ employeeId, refreshKey = 0 }) => {
         open={addModal}
         onClose={() => setAddModal(false)}
         onSuccess={fetchTransactions}
-        employeeId={employeeId || 19}
+        employeeId={employeeId}
       />
 
       <OpeningBalanceModal
         open={obModal}
         onClose={() => setObModal(false)}
         onSuccess={fetchTransactions}
-        employeeId={employeeId || 19}
+        employeeId={employeeId}
         isEdit={!obIsEmpty}
         existingBalance={openingBalanceTx || {
           entry_type: openingBalance.debit > 0 ? 'debit' : 'credit',
