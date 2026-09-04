@@ -697,7 +697,21 @@ const SubscriptionPage = ({ publicView = false, defaultCompanyId = null, default
                 </p>
               </div>
               <button
-                onClick={() => window.location.href = 'mailto:support@oneattendance.com'}
+                onClick={() => {
+                  const subject = "Enterprise and custom plan enquiry";
+                  const body = [
+                    "Hello OneAttendance Sales Team,",
+                    "",
+                    "I would like to learn more about your enterprise and custom plans.",
+                    "",
+                    "Organisation:",
+                    "Number of employees:",
+                    "Requirements:",
+                    "",
+                    "Thank you.",
+                  ].join("\n");
+                  window.location.href = `mailto:support@oneattendance.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                }}
                 className="relative z-10 shrink-0 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-8 rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 active:scale-95 whitespace-nowrap flex items-center gap-2"
               >
                 Contact Sales
