@@ -52,16 +52,16 @@ const faqs = [
   {
     id: 6,
     category: "Account",
-    question: "What should I do if I forget my password?",
+    question: "What should I do if I cannot access my account?",
     answer:
-      "Select Forgot password on the sign-in page and enter your registered email address. Follow the link in the email to create a new password. If you do not receive it, check your spam folder or contact support.",
+      "Request a one-time code (OTP) using your registered email address or phone number. If you do not receive it, check your details and contact support.",
   },
   {
     id: 7,
     category: "Account",
     question: "How can I keep attendance data secure?",
     answer:
-      "Use a unique password, sign out on shared devices, and only give staff the access they need. Avoid sharing account credentials. Contact an administrator if you notice an unfamiliar change in your data.",
+      "Sign out on shared devices and only give staff the access they need. Avoid sharing account credentials. Contact an administrator if you notice an unfamiliar change in your data.",
   },
 ];
 

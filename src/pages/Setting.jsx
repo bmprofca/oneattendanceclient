@@ -14,7 +14,6 @@ import ModalScrollLock from "../components/ModalScrollLock";
 import Skeleton from "../components/SkeletonComponent";
 import apiCall, { getMediaUrl } from "../utils/api";
 import { TabbedManagementHub } from "../components/common";
-import { usePasswordValidation } from "../hooks/usePasswordValidation";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -390,15 +389,7 @@ const CompaniesTab = () => {
 
 const SecurityTab = () => {
   const { user, loading, refreshUser } = useAuth();
-  const { validatePassword } = usePasswordValidation();
-
-  const [securitySubTab, setSecuritySubTab] = useState("password"); // "password" | "sessions" | "ownership"
-
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [keepLogin, setKeepLogin] = useState(false);
+  const [securitySubTab, setSecuritySubTab] = useState("sessions"); // "sessions" | "ownership"
 
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
@@ -531,74 +522,6 @@ const SecurityTab = () => {
     }
   };
 
-  const validatePasswords = () => {
-    if (!currentPassword.trim()) {
-      toast.error('Current password is required');
-      return false;
-    }
-    if (!newPassword.trim()) {
-      toast.error('New password is required');
-      return false;
-    }
-    const validation = validatePassword(newPassword);
-    if (!validation.isValid) {
-      toast.error('New password does not meet security requirements');
-      return false;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match');
-      return false;
-    }
-    if (currentPassword === newPassword) {
-      toast.error('New password must be different from current password');
-      return false;
-    }
-    return true;
-  };
-
-  const handlePasswordUpdate = async () => {
-    if (!validatePasswords()) return;
-
-    setIsUpdatingPassword(true);
-
-    try {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        toast.error("Authentication expired. Please login again.");
-        return;
-      }
-
-      const response = await apiCall('/users/update-password', 'PUT', {
-        user_id: user?.id,
-        old_password: currentPassword,
-        new_password: newPassword,
-        keep_login: keepLogin,
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        toast.success(data.message || "Password updated successfully!");
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setKeepLogin(false);
-      } else {
-        if (response.status === 401) {
-          toast.error("Current password is incorrect");
-        } else {
-          toast.error(data.message || "Failed to update password");
-        }
-      }
-    } catch (error) {
-      console.error("Password update error:", error);
-      toast.error("Network error. Please check your connection and try again.");
-    } finally {
-      setIsUpdatingPassword(false);
-    }
-  };
-
   if (loading) {
     return <Skeleton />;
   }
@@ -625,17 +548,6 @@ const SecurityTab = () => {
       {/* Premium capsule sub-tabs */}
       <div className="flex flex-wrap gap-2 p-1.5 bg-gray-50 border border-gray-200/80 rounded-xl mb-6 max-w-lg">
         <button
-          onClick={() => setSecuritySubTab("password")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300
-          ${securitySubTab === "password"
-              ? "bg-white text-indigo-600 shadow-sm"
-              : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
-            }`}
-        >
-          <FiLock className="w-3.5 h-3.5" />
-          <span className="whitespace-nowrap">Change Password</span>
-        </button>
-        <button
           onClick={() => setSecuritySubTab("sessions")}
           className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300
           ${securitySubTab === "sessions"
@@ -658,114 +570,6 @@ const SecurityTab = () => {
           <span className="whitespace-nowrap">Account Ownership</span>
         </button>
       </div>
-
-      {/* Change Password Sub-Tab */}
-      {securitySubTab === "password" && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-xl border border-gray-100 p-5 sm:p-6 space-y-4"
-        >
-          <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
-            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
-              <FiLock className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-gray-800">Change Password</h3>
-              <p className="text-xs text-slate-500">Update your account login password to ensure security</p>
-            </div>
-          </div>
-
-          <div className="space-y-4 w-full">
-            <input
-              type="password"
-              placeholder="Current Password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-              disabled={isUpdatingPassword}
-            />
-            <div className="space-y-1">
-              <input
-                type="password"
-                placeholder="New Password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                disabled={isUpdatingPassword}
-              />
-              {newPassword && (
-                <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl space-y-1.5 text-xs mt-1.5">
-                  <p className="font-semibold text-gray-700">Password requirements:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    <div className={`flex items-center gap-1.5 ${validatePassword(newPassword).minLength ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>
-                      <span>{validatePassword(newPassword).minLength ? '✓' : '•'}</span>
-                      <span>At least 8 characters</span>
-                    </div>
-                    <div className={`flex items-center gap-1.5 ${validatePassword(newPassword).hasUpper ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>
-                      <span>{validatePassword(newPassword).hasUpper ? '✓' : '•'}</span>
-                      <span>At least 1 uppercase letter</span>
-                    </div>
-                    <div className={`flex items-center gap-1.5 ${validatePassword(newPassword).hasNumber ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>
-                      <span>{validatePassword(newPassword).hasNumber ? '✓' : '•'}</span>
-                      <span>At least 1 number</span>
-                    </div>
-                    <div className={`flex items-center gap-1.5 ${validatePassword(newPassword).hasSpecial ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>
-                      <span>{validatePassword(newPassword).hasSpecial ? '✓' : '•'}</span>
-                      <span>At least 1 special character</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <input
-              type="password"
-              placeholder="Confirm New Password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-              disabled={isUpdatingPassword}
-            />
-
-            {/* Premium Caution & Keep Login Switch */}
-            <div className="p-4 bg-amber-50/60 border border-amber-100/70 rounded-2xl space-y-3">
-              <div className="flex items-start gap-2.5">
-                <span className="text-amber-500 mt-0.5 text-sm">⚠️</span>
-                <div>
-                  <p className="text-xs font-bold text-amber-800">Security Warning</p>
-                  <p className="text-[11px] text-amber-700/90 leading-relaxed mt-0.5">
-                    By default, changing your password will automatically log you out of all other devices for security.
-                    Turn on the switch below if you wish to remain logged in on other active devices.
-                  </p>
-                </div>
-              </div>
-
-              <label className="flex items-center justify-between cursor-pointer select-none py-1 border-t border-amber-100/50 pt-2.5">
-                <span className="text-xs font-semibold text-slate-700">Keep other devices logged in</span>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={keepLogin}
-                    onChange={(e) => setKeepLogin(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-                </div>
-              </label>
-            </div>
-
-            <button
-              onClick={handlePasswordUpdate}
-              disabled={isUpdatingPassword}
-              className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isUpdatingPassword ? (
-                <><FaSpinner className="w-4 h-4 animate-spin inline mr-2" />Updating...</>
-              ) : "Update Password"}
-            </button>
-          </div>
-        </motion.div>
-      )}
 
       {/* Sessions Sub-Tab */}
       {securitySubTab === "sessions" && (
@@ -1154,7 +958,7 @@ const SETTINGS_HUB_TABS = [
     id: "security",
     label: "Security",
     shortLabel: "Security",
-    description: "Update your password, manage active sessions, and delete account.",
+    description: "Manage active sessions and delete account.",
     icon: FaShieldAlt,
     component: SecurityTab,
     accent: "bg-indigo-50 text-indigo-700 border-indigo-200",

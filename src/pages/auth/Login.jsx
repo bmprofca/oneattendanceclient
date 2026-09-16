@@ -32,13 +32,11 @@ const Login = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mobile, setMobile] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpSent, setOtpSent] = useState(false);
   const [loadingAction, setLoadingAction] = useState(null);
   const [resendTimer, setResendTimer] = useState(0);
   const [focusedField, setFocusedField] = useState(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [userCompanies, setUserCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const firstOtpInputRef = useRef(null);
@@ -143,13 +141,13 @@ const Login = () => {
   const handleRequestOtp = async () => {
     if (isLoading) return;
     if (activeTab === "phone") {
-      if (!mobile || !password) {
-        toast.error("Please enter both phone number and password");
+      if (!mobile) {
+        toast.error("Please enter your phone number");
         return;
       }
     } else {
-      if (!email || !password) {
-        toast.error("Please enter both email and password");
+      if (!email) {
+        toast.error("Please enter your email");
         return;
       }
     }
@@ -160,7 +158,6 @@ const Login = () => {
         login_type: activeTab === "phone" ? "mobile" : "email",
         phone: activeTab === "phone" ? (countryCode + mobile) : "",
         email: activeTab === "email" ? email : "",
-        password: password
       };
 
       const res = await apiCall('/auth/login/request-otp', 'POST', payload);
@@ -208,7 +205,6 @@ const Login = () => {
         login_type: activeTab === "phone" ? "phone" : "email",
         phone: activeTab === "phone" ? (countryCode + mobile) : "",
         email: activeTab === "email" ? email : "",
-        password: password,
         otp: otpString,
         platform: "web",
         latitude: locationData?.latitude ?? "",
@@ -235,13 +231,13 @@ const Login = () => {
   const handleResendOtp = async () => {
     if (resendTimer > 0 || isLoading) return;
     if (activeTab === "phone") {
-      if (!mobile || !password) {
-        toast.error("Please enter both phone number and password");
+      if (!mobile) {
+        toast.error("Please enter your phone number");
         return;
       }
     } else {
-      if (!email || !password) {
-        toast.error("Please enter both email and password");
+      if (!email) {
+        toast.error("Please enter your email");
         return;
       }
     }
@@ -252,7 +248,6 @@ const Login = () => {
         login_type: activeTab === "phone" ? "mobile" : "email",
         phone: activeTab === "phone" ? mobile : "",
         email: activeTab === "email" ? email : "",
-        password: password
       };
 
       const res = await apiCall('/auth/login/request-otp', 'POST', payload);
@@ -460,30 +455,6 @@ const Login = () => {
                           </div>
                         )}
 
-                        <div className="relative">
-                          <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            onFocus={() => setFocusedField('password')}
-                            onBlur={() => setFocusedField(null)}
-                            disabled={isLoading}
-                            onKeyDown={handleKeyPress}
-                            className="w-full pl-11 pr-11 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-gray-50 text-sm disabled:opacity-60"
-                          />
-                          <button type="button" onClick={() => setShowPassword(!showPassword)} disabled={isLoading} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 disabled:opacity-50">{showPassword ? "👁️" : "👁️‍🗨️"}</button>
-                        </div>
-                        <div className="flex items-center justify-end -mt-1.5">
-                          <Link
-                            to="/forgot-password"
-                            state={{ email }}
-                            className="text-xs font-semibold text-blue-600 hover:underline"
-                          >
-                            Forgot password?
-                          </Link>
-                        </div>
                         <motion.button whileHover={{ scale: isLoading ? 1 : 1.02 }} whileTap={{ scale: isLoading ? 1 : 0.98 }} onClick={handleRequestOtp} disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2.5 rounded-xl font-semibold shadow-lg text-sm disabled:opacity-60">
                           {loadingAction === "request-otp" ? <FaSpinner className="mx-auto h-5 w-5 animate-spin" /> : "Request OTP"}
                         </motion.button>

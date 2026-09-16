@@ -19,13 +19,11 @@ import { CountryCodeModal, getFlagEmoji } from "../../components/common";
 import apiCall from "../../utils/api";
 import { toast } from "react-toastify";
 import { useAuth } from "../../context/AuthContext";
-import { usePasswordValidation } from "../../hooks/usePasswordValidation";
 import GoogleAuthButton from "../../components/GoogleAuthButton";
 import FacebookAuthButton from "../../components/FacebookAuthButton";
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { validatePassword } = usePasswordValidation();
 
   const [activeTab, setActiveTab] = useState("phone"); // default to "phone"
   const [isTabLocked, setIsTabLocked] = useState(false);
@@ -33,7 +31,6 @@ const Signup = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
 
@@ -41,7 +38,6 @@ const Signup = () => {
   const [loadingAction, setLoadingAction] = useState(null);
   const [resendTimer, setResendTimer] = useState(0);
   const [focusedField, setFocusedField] = useState(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const { login } = useAuth();
   const firstOtpInputRef = useRef(null);
@@ -195,17 +191,6 @@ const Signup = () => {
       return;
     }
 
-    if (!password) {
-      toast.error("Please set a password");
-      return;
-    }
-
-    const validation = validatePassword(password);
-    if (!validation.isValid) {
-      toast.error("Password does not meet the security requirements");
-      return;
-    }
-
     const otpString = otp.join("");
     if (otpString.length !== 6) {
       toast.error("Please enter 6-digit OTP");
@@ -218,7 +203,6 @@ const Signup = () => {
       const payload = {
         signup_type: activeTab,
         otp: Number(otpString),
-        password: password,
         name: fullName,
         platform: "web"
       };
@@ -589,50 +573,6 @@ const Signup = () => {
                           disabled={isLoading}
                           className="w-full pl-11 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-all duration-300 bg-gray-50 focus:bg-white text-sm disabled:opacity-60"
                         />
-                      </div>
-
-                      <div className="relative mb-3">
-                        <HiOutlineLockClosed className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Choose password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          onFocus={() => setFocusedField('password')}
-                          onBlur={() => setFocusedField(null)}
-                          disabled={isLoading}
-                          className="w-full pl-11 pr-11 py-2.5 border-2 border-purple-300 focus:border-purple-500 focus:outline-none transition-all duration-300 bg-gray-50 focus:bg-white text-sm rounded-xl disabled:opacity-60"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          disabled={isLoading}
-                          className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                        >
-                          {showPassword ? "👁️" : "👁️‍🗨️"}
-                        </button>
-                      </div>
-
-                      <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl space-y-1.5 text-xs mb-3">
-                        <p className="font-semibold text-gray-700">Password must contain:</p>
-                        <div className="grid grid-cols-1 gap-1">
-                          <div className={`flex items-center gap-1.5 ${validatePassword(password).minLength ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
-                            <span>{validatePassword(password).minLength ? '✓' : '•'}</span>
-                            <span>At least 8 characters</span>
-                          </div>
-                          <div className={`flex items-center gap-1.5 ${validatePassword(password).hasUpper ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
-                            <span>{validatePassword(password).hasUpper ? '✓' : '•'}</span>
-                            <span>At least 1 uppercase letter</span>
-                          </div>
-                          <div className={`flex items-center gap-1.5 ${validatePassword(password).hasNumber ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
-                            <span>{validatePassword(password).hasNumber ? '✓' : '•'}</span>
-                            <span>At least 1 number</span>
-                          </div>
-                          <div className={`flex items-center gap-1.5 ${validatePassword(password).hasSpecial ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
-                            <span>{validatePassword(password).hasSpecial ? '✓' : '•'}</span>
-                            <span>At least 1 special character</span>
-                          </div>
-                        </div>
                       </div>
 
                       <div className="flex justify-center gap-2">

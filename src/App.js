@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import LandingPage from "./pages/Landing";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
-import ForgotPassword from "./pages/auth/ForgotPassword";
 import AcceptInvite from "./pages/AcceptInvite";
 import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
 import DataDeletion from "./pages/legal/DataDeletion";
@@ -337,7 +336,6 @@ function AppContent() {
             user ? <Navigate to={mustSelectCompany ? "/login" : "/home"} replace /> : <Signup />
           }
         />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/accept-invite" element={<AcceptInvite />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/data-deletion" element={<DataDeletion />} />
