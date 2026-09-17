@@ -19,6 +19,7 @@ import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import ActionMenu from '../components/ActionMenu';
 import { RefreshButton, ManagementHub } from '../components/common';
 import usePermissionAccess from '../hooks/usePermissionAccess';
+import AdvancedDateFilter from '../components/AdvancedDateFilter';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -243,6 +244,10 @@ const MyPayroll = () => {
     const [activeActionMenu, setActiveActionMenu] = useState(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isSummary, setIsSummary] = useState(true);
+    const [period, setPeriod] = useState(() => ({
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
+    }));
 
     const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 12);
     const fetchInProgress = useRef(false);
@@ -310,6 +315,8 @@ const MyPayroll = () => {
             const company = JSON.parse(localStorage.getItem('company'));
             const companyId = company?.id ?? null;
             const params = new URLSearchParams({ page: page.toString(), limit: pagination.limit.toString() });
+            params.set('month', String(period.month));
+            params.set('year', String(period.year));
             if (debouncedSearch) params.append('search', debouncedSearch);
 
             const response = await apiCall(`/payroll/my?${params}`, 'GET', null, companyId);
@@ -350,9 +357,13 @@ const MyPayroll = () => {
             setLoading(false);
             fetchInProgress.current = false;
         }
-    }, [pageAccess.allowed, pagination.page, pagination.limit, debouncedSearch, updatePagination]);
+    }, [pageAccess.allowed, pagination.page, pagination.limit, debouncedSearch, period, updatePagination]);
 
-    const lastFetchParams = useRef({ page: null, limit: null, search: null });
+    const lastFetchParams = useRef({ page: null, limit: null, search: null, month: null, year: null });
+
+    useEffect(() => {
+        if (pageAccess.allowed) goToPage(1);
+    }, [pageAccess.allowed, period, goToPage]);
 
     useEffect(() => {
         if (!pageAccess.allowed) return;
@@ -365,7 +376,13 @@ const MyPayroll = () => {
     useEffect(() => {
         if (!pageAccess.allowed) return;
 
-        const currentParams = { page: pagination.page, limit: pagination.limit, search: debouncedSearch };
+        const currentParams = {
+            page: pagination.page,
+            limit: pagination.limit,
+            search: debouncedSearch,
+            month: period.month,
+            year: period.year,
+        };
 
         if (
             lastFetchParams.current.page === currentParams.page &&
@@ -377,7 +394,7 @@ const MyPayroll = () => {
 
         lastFetchParams.current = currentParams;
         fetchPayroll(pagination.page, true);
-    }, [pageAccess.allowed, pagination.page, pagination.limit, debouncedSearch, fetchPayroll]);
+    }, [pageAccess.allowed, pagination.page, pagination.limit, debouncedSearch, period, fetchPayroll]);
 
     // ─── Summary Stats ──────────────────────────────────────────────────────────
 
@@ -567,6 +584,20 @@ const MyPayroll = () => {
                 className="flex flex-col lg:flex-row lg:items-center md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-2"
             >
                 <div className="flex items-center gap-4 flex-1">
+                    <AdvancedDateFilter
+                        value={period}
+                        onChange={nextPeriod => {
+                            if (nextPeriod.month && nextPeriod.year) {
+                                setPeriod({
+                                    month: Number(nextPeriod.month),
+                                    year: Number(nextPeriod.year),
+                                });
+                            }
+                        }}
+                        tabOptions={["month"]}
+                        placeholder="Select payroll month"
+                        buttonClassName="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm hover:bg-gray-50 transition-all font-bold text-gray-600 text-xs"
+                    />
                     <div className="relative flex-1 w-full">
                         <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
                         <input
