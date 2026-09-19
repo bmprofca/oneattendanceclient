@@ -73,6 +73,7 @@ const getDefaultCreateFormData = () => {
         phone: '',
         otp: '',
         name: '',
+        existing_user: false,
         platform: 'web',
         permission_package_id: null,
         selectedPackage: null,
@@ -786,7 +787,7 @@ const ManualCreateEmployeeModal = ({
                                         {['email', 'phone'].map(type => (
                                             <button key={type} type="button"
                                                 onClick={() => {
-                                                    setFormData(p => ({ ...p, signup_type: type, otp: '' }));
+                                                    setFormData(p => ({ ...p, signup_type: type, otp: '', existing_user: false }));
                                                     setOtpRequested(false);
                                                 }}
                                                 className={`rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${formData.signup_type === type
@@ -806,7 +807,7 @@ const ManualCreateEmployeeModal = ({
                                         <input type="email"
                                             value={formData.email}
                                             onChange={e => {
-                                                setFormData(p => ({ ...p, email: e.target.value, otp: '' }));
+                                                setFormData(p => ({ ...p, email: e.target.value, otp: '', existing_user: false }));
                                                 setOtpRequested(false);
                                             }}
                                             placeholder="employee@example.com"
@@ -823,7 +824,7 @@ const ManualCreateEmployeeModal = ({
                                             <input type="tel"
                                                 value={formData.phone}
                                                 onChange={e => {
-                                                    setFormData(p => ({ ...p, phone: e.target.value.replace(/\D/g, '').slice(0, 15), otp: '' }));
+                                                    setFormData(p => ({ ...p, phone: e.target.value.replace(/\D/g, '').slice(0, 15), otp: '', existing_user: false }));
                                                     setOtpRequested(false);
                                                 }}
                                                 placeholder="9876543210"
@@ -867,9 +868,13 @@ const ManualCreateEmployeeModal = ({
                             >
                                 <div className="space-y-2">
                                     <label className="flex items-center gap-2 text-sm font-semibold text-slate-700"><FaUser className="text-indigo-500" />Employee Name</label>
-                                    <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                                    <input value={formData.name}
+                                        readOnly={formData.existing_user}
+                                        onChange={e => {
+                                            if (!formData.existing_user) setFormData(p => ({ ...p, name: e.target.value }));
+                                        }}
                                         placeholder="Employee name"
-                                        className={inputClass} required />
+                                        className={`${inputClass} ${formData.existing_user ? 'cursor-not-allowed bg-slate-100 text-slate-500' : ''}`} required />
                                 </div>
 
                                 <div className="grid gap-4 md:grid-cols-2 mt-4">
@@ -1242,6 +1247,7 @@ const EmployeeManagement = () => {
 
     const constantsFetched = useRef(false);
     const permissionsFetched = useRef(false);
+    const permissionDenied = useRef(false);
     const isMounted = useRef(true);
     const fetchInProgress = useRef(false);
     const initialFetchDone = useRef(false);
@@ -1273,7 +1279,7 @@ const EmployeeManagement = () => {
     }, [searchTerm]);
 
     useEffect(() => {
-        if (!isInitialLoad.current && debouncedSearchTerm !== undefined) {
+        if (!permissionDenied.current && !isInitialLoad.current && debouncedSearchTerm !== undefined) {
             if (pagination.page !== 1) goToPage(1);
             else fetchEmployees(1);
         }
@@ -1281,6 +1287,7 @@ const EmployeeManagement = () => {
 
     // Pre‑fetch on mount
     useEffect(() => {
+        if (permissionDenied.current) return;
         fetchConstants();
         fetchPermissionPackages();
     }, []);
@@ -1288,7 +1295,7 @@ const EmployeeManagement = () => {
     // ─── API Calls ────────────────────────────────────────────────────────────
 
     const fetchConstants = useCallback(async () => {
-        if (constantsFetched.current) return;
+        if (permissionDenied.current || constantsFetched.current) return;
         setConstantsLoading(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
@@ -1305,6 +1312,10 @@ const EmployeeManagement = () => {
             if (!constantsRequestCache.promise) {
                 constantsRequestCache.promise = (async () => {
                     const response = await apiCall('/constants/', 'GET', null, companyId);
+                        if (response.status === 403) {
+                            permissionDenied.current = true;
+                            return null;
+                        }
                     const result = await response.json();
                     if (!result.success) throw new Error(result.message || 'Failed to load constants');
                     const d = result.data;
@@ -1320,6 +1331,7 @@ const EmployeeManagement = () => {
                 })().catch(e => { constantsRequestCache = { companyId, promise: null, data: null }; throw e; });
             }
             const mapped = await constantsRequestCache.promise;
+            if (!mapped) return;
             setConstants(mapped);
             constantsFetched.current = true;
         } catch (e) {
@@ -1329,7 +1341,7 @@ const EmployeeManagement = () => {
     }, []);
 
     const fetchPermissionPackages = useCallback(async () => {
-        if (permissionsFetched.current) return permissionPackagesRef.current;
+        if (permissionDenied.current || permissionsFetched.current) return permissionPackagesRef.current;
         setPermissionsLoading(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
@@ -1347,6 +1359,10 @@ const EmployeeManagement = () => {
             if (!permissionPackagesRequestCache.promise) {
                 permissionPackagesRequestCache.promise = (async () => {
                     const response = await apiCall('/permissions/permission-packages', 'GET', null, companyId);
+                        if (response.status === 403) {
+                            permissionDenied.current = true;
+                            return [];
+                        }
                     const result = await response.json();
                     if (!result.success) throw new Error(result.message || 'Failed to load permission packages');
                     const packages = (result.data?.packages || []).map(pkg => ({
@@ -1360,6 +1376,7 @@ const EmployeeManagement = () => {
                 })().catch(e => { permissionPackagesRequestCache = { companyId, promise: null, data: null }; throw e; });
             }
             const packages = await permissionPackagesRequestCache.promise;
+            if (!packages) return [];
             setPermissionPackages(packages);
             permissionPackagesRef.current = packages;
             permissionsFetched.current = true;
@@ -1411,6 +1428,7 @@ const EmployeeManagement = () => {
     }, []);
 
     const fetchSalaryPackages = useCallback(async () => {
+        if (permissionDenied.current) return;
         setSalaryPackagesLoading(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
@@ -1421,18 +1439,22 @@ const EmployeeManagement = () => {
     }, []);
 
     const fetchSalaryComponents = useCallback(async () => {
-        if (availableComponents.length > 0) return; // already loaded
+        if (permissionDenied.current || availableComponents.length > 0) return; // already loaded or forbidden
         setAvailableComponentsLoading(true);
         try {
             const company = JSON.parse(localStorage.getItem('company'));
             const response = await apiCall('/salary/components/list', 'GET', null, company?.id);
+            if (response.status === 403) {
+                permissionDenied.current = true;
+                return;
+            }
             const result = await response.json();
             if (result.success) setAvailableComponents(result.data || []);
         } catch (e) { console.error(e); } finally { setAvailableComponentsLoading(false); }
     }, [availableComponents.length]);
 
     const fetchEmployees = useCallback(async (page = pagination.page, resetLoading = true) => {
-        if (fetchInProgress.current) return;
+        if (permissionDenied.current || fetchInProgress.current) return;
         fetchInProgress.current = true;
         if (resetLoading) setLoading(true);
         try {
@@ -1453,6 +1475,10 @@ const EmployeeManagement = () => {
             } else {
                 const requestPromise = (async () => {
                     const response = await apiCall(`/employees/list?${params}`, 'GET', null, companyId);
+                    if (response.status === 403) {
+                        permissionDenied.current = true;
+                        return { success: false, permissionDenied: true };
+                    }
                     const json = await response.json();
                     if (!json.success) throw new Error(json.message || 'Failed to fetch employees');
                     employeeListRequestCache.set(requestKey, { data: json, expiresAt: Date.now() + EMPLOYEE_REQUEST_CACHE_TTL });
@@ -1474,6 +1500,7 @@ const EmployeeManagement = () => {
                     is_last_page: meta.is_last_page ?? (meta.page || page) >= totalPages,
                 });
             } else {
+                if (result.permissionDenied) return;
                 throw new Error(result.message || 'Failed to fetch employees');
             }
         } catch (e) {
@@ -1486,11 +1513,11 @@ const EmployeeManagement = () => {
     }, [pagination.page, pagination.limit, debouncedSearchTerm, employeeStatusFilter, updatePagination]);
 
     useEffect(() => {
-        if (!initialFetchDone.current) { fetchEmployees(1, true); initialFetchDone.current = true; }
+        if (!permissionDenied.current && !initialFetchDone.current) { fetchEmployees(1, true); initialFetchDone.current = true; }
     }, [fetchEmployees]);
 
     useEffect(() => {
-        if (!isInitialLoad.current && !fetchInProgress.current && initialFetchDone.current) {
+        if (!permissionDenied.current && !isInitialLoad.current && !fetchInProgress.current && initialFetchDone.current) {
             fetchEmployees(pagination.page, true);
         }
     }, [pagination.page, fetchEmployees]);
@@ -1572,7 +1599,13 @@ const EmployeeManagement = () => {
 
             const response = await apiCall('/employees/request-create-otp', 'POST', payload, company?.id);
             const result = await response.json();
-            if (result.success) return { success: true };
+            if (result.success) {
+                return {
+                    success: true,
+                    existingUser: result.data?.existing_user === true,
+                    name: result.data?.name || '',
+                };
+            }
             throw new Error(result.message || 'Failed to send OTP');
         } catch (e) {
             return { success: false, error: e.message };
@@ -1781,6 +1814,11 @@ const EmployeeManagement = () => {
         const result = await requestCreateOtp();
         if (result.success) {
             setCreateOtpRequested(true);
+            setCreateFormData(p => ({
+                ...p,
+                existing_user: result.existingUser,
+                name: result.existingUser && result.name ? result.name : p.name,
+            }));
             toast.success('OTP sent successfully');
         } else {
             toast.error(result.error || 'Failed to send OTP');
