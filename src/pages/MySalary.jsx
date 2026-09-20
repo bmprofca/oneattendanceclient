@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import apiCall from "../utils/api";
 import { useAuth } from "../context/AuthContext";
@@ -24,6 +24,7 @@ export default function MySalary() {
   const [activeTab, setActiveTab] = useState("overview");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const lastAutomaticFetchRef = useRef("");
 
   const fetchSalary = useCallback(async (m, y) => {
     try {
@@ -58,6 +59,9 @@ export default function MySalary() {
   }, []);
 
   useEffect(() => {
+    const requestKey = `${month}-${year}`;
+    if (lastAutomaticFetchRef.current === requestKey) return;
+    lastAutomaticFetchRef.current = requestKey;
     fetchSalary(month, year);
   }, [month, year, fetchSalary]);
 
