@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -114,6 +114,12 @@ export default function LandingPage() {
               </h1>
             </motion.div>
             <div className="flex space-x-4 xsm:space-x-0 items-center">
+              <Link
+                to="/public-subscription"
+                className="hidden sm:inline-flex px-4 py-2 text-blue-600 font-semibold hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                View Pricing
+              </Link>
               {isAuthenticated ? (
                 <motion.button
                   whileHover={{ scale: 1.05, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" }}
@@ -456,6 +462,28 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </motion.section>
+
+      <footer className="bg-slate-950 text-slate-300">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-sm">© 2026 OneAttendance. All rights reserved.</p>
+            <nav aria-label="Legal and product links" className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
+              <Link to="/public-subscription" className="hover:text-white transition-colors">
+                Pricing
+              </Link>
+              <Link to="/privacy-policy" className="hover:text-white transition-colors">
+                Privacy Policy
+              </Link>
+              <Link to="/data-deletion" className="hover:text-white transition-colors">
+                Data Deletion
+              </Link>
+              <Link to="/terms" className="hover:text-white transition-colors">
+                Terms of Service
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </footer>
     </motion.div>
   );
 }

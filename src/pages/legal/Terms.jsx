@@ -1,75 +1,21 @@
 import React from "react";
-import { motion } from "framer-motion";
-import { FaFileContract, FaHandshake, FaUserCheck } from "react-icons/fa";
+import { Link } from "react-router-dom";
+import { FaBalanceScale, FaFileContract, FaLock, FaMoneyCheckAlt, FaUsers } from "react-icons/fa";
+import LegalLayout, { LegalHeading } from "./LegalLayout";
 
 const Terms = () => {
+  const sections = [{ id: "acceptance", label: "Acceptance" }, { id: "accounts", label: "Accounts and access" }, { id: "features", label: "Workforce features" }, { id: "responsibilities", label: "Responsibilities" }, { id: "subscriptions", label: "Subscriptions" }, { id: "termination", label: "Suspension and deletion" }, { id: "contact", label: "Contact" }];
+
   return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl p-8 border border-slate-100"
-      >
-        <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-100">
-          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600">
-            <FaFileContract size={24} />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">Terms of Service</h1>
-            <p className="text-slate-500">Last updated: May 15, 2026</p>
-          </div>
-        </div>
-
-        <div className="space-y-6 text-slate-600 leading-relaxed">
-          <section>
-            <h2 className="text-xl font-bold text-slate-800 mb-3 flex items-center gap-2">
-              <FaHandshake className="text-blue-500" />
-              1. Acceptance of Terms
-            </h2>
-            <p>
-              By accessing and using OneAttendance, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-slate-800 mb-3 flex items-center gap-2">
-              <FaUserCheck className="text-blue-500" />
-              2. User Accounts
-            </h2>
-            <p>
-              To use OneAttendance, you must register for an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-slate-800 mb-3">3. Use of Service</h2>
-            <p>
-              OneAttendance is designed for workforce management and attendance tracking. You agree to use the service only for lawful purposes and in accordance with these Terms.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-slate-800 mb-3">4. Intellectual Property</h2>
-            <p>
-              The service and its original content, features, and functionality are and will remain the exclusive property of OneAttendance and its licensors.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-slate-800 mb-3">5. Termination</h2>
-            <p>
-              We may terminate or suspend your account and bar access to the service immediately, without prior notice or liability, under our sole discretion, for any reason whatsoever.
-            </p>
-          </section>
-
-          <div className="mt-12 p-6 bg-slate-50 rounded-xl border border-slate-200">
-            <p className="text-sm">
-              OneAttendance reserves the right to modify or replace these Terms at any time. Your continued use of the service after any changes constitutes acceptance of the new Terms.
-            </p>
-          </div>
-        </div>
-      </motion.div>
-    </div>
+    <LegalLayout icon={FaFileContract} accent={{ tint: "bg-blue-100", text: "text-blue-600" }} title="Terms of Service" description="The terms that govern access to OneAttendance workforce tools." updated="September 21, 2026" sections={sections}>
+      <section id="acceptance"><LegalHeading icon={FaBalanceScale}>1. Acceptance and scope</LegalHeading><p>These Terms of Service form an agreement between you and OneSaaS India Pvt. Ltd. for use of OneAttendance. By creating an account, accepting an invitation, or using the service, you agree to these terms and the <Link className="font-semibold text-blue-600 hover:underline" to="/privacy-policy">Privacy Policy</Link>. If you use OneAttendance for a company, you confirm that you are authorized to accept these terms for that company.</p></section>
+      <section id="accounts"><LegalHeading icon={FaLock}>2. Accounts and access</LegalHeading><p>Accounts may be authenticated with email or phone OTP and supported sign-in providers. You are responsible for providing accurate information, protecting OTPs and session access, and promptly reporting unauthorized use. Company owners and administrators are responsible for inviting the right people and assigning permissions appropriate to their roles.</p></section>
+      <section id="features"><LegalHeading icon={FaUsers}>3. Workforce features</LegalHeading><p>OneAttendance provides company and employee management, invitations, role-based permissions, shifts, attendance and break records, leave workflows, calendars, salary and payroll tools, ledgers, bank-account records, reports, and subscriptions. Attendance may use manual, GPS, QR, face, fingerprint, or IP-based methods when configured by the company. The company and its authorized users remain responsible for configuring policies, obtaining any required employee permissions, and checking records before relying on them.</p></section>
+      <section id="responsibilities"><LegalHeading icon={FaBalanceScale}>4. Acceptable use and responsibilities</LegalHeading><p>You may use the service only for lawful workforce and business operations. Do not misuse access controls, submit malicious or unlawful content, impersonate another person, interfere with the service, attempt unauthorized access, or use the service to violate another person&apos;s privacy or rights. You are responsible for the accuracy and lawfulness of company, employee, attendance, payroll, bank, and uploaded information you submit.</p></section>
+      <section id="subscriptions"><LegalHeading icon={FaMoneyCheckAlt}>5. Subscriptions and payments</LegalHeading><p>Company subscriptions may be offered in monthly, quarterly, half-yearly, or yearly periods and may include employee limits and custom packages. Plan availability, pricing, payment status, and expiry are shown in the service at the time of purchase. Keep billing and payment information accurate, and do not use the service to submit payment details that you are not authorized to use.</p></section>
+      <section id="termination"><LegalHeading icon={FaLock}>6. Suspension, termination, and deletion</LegalHeading><p>We may restrict or suspend access when necessary to protect the service, users, or company data, or when these terms are violated. You may request account deletion through the authenticated <Link className="font-semibold text-blue-600 hover:underline" to="/data-deletion">Data Deletion</Link> flow. Because company ownership affects other users and workspace records, an account that owns an active company must transfer ownership before deletion. Deletion deactivates the account and active sessions through the current account workflow.</p></section>
+      <section id="contact" className="rounded-xl border border-slate-200 bg-slate-50 p-5"><LegalHeading icon={FaFileContract}>7. Changes and contact</LegalHeading><p>We may update these terms when the service or applicable requirements change. The updated version will be posted on this page with a new date. Questions about these terms can be sent to <a className="font-semibold text-blue-600 hover:underline" href="mailto:support@onesaas.in">support@onesaas.in</a>.</p></section>
+    </LegalLayout>
   );
 };
 
