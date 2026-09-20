@@ -13,6 +13,7 @@ import Modal from "../components/Modal";
 import CategoryPermissionSelector from "../components/common/CategoryPermissionSelector";
 import { CountryCodeModal, getFlagEmoji } from "../components/common";
 import countryCodes from "../utils/countryCodes.json";
+import CreateCompanyModal from "../components/CompanyModals/CreateCompanyModal";
 
 // ─── Constants & Helpers ─────────────────────────────────────────────────────
 
@@ -101,6 +102,7 @@ export default function ProfilePage() {
     const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
     const [isWhatsappCodeModalOpen, setIsWhatsappCodeModalOpen] = useState(false);
     const [isContactCodeModalOpen, setIsContactCodeModalOpen] = useState(false);
+    const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState(false);
     const fileInputRef = useRef(null);
     const currentUser = userDetails?.user;
     const groupedPermissions = useMemo(() => (
@@ -778,11 +780,21 @@ export default function ProfilePage() {
                             className="flex flex-col gap-4"
                         >
                             {/* Count pill */}
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm self-start">
-                                <FaLayerGroup className="text-indigo-500 text-xs" />
-                                <p className="text-xs font-semibold text-slate-600">
-                                    {total_companies} {total_companies === 1 ? "Company" : "Companies"} found
-                                </p>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200 shadow-sm self-start">
+                                    <FaLayerGroup className="text-indigo-500 text-xs" />
+                                    <p className="text-xs font-semibold text-slate-600">
+                                        {total_companies} {total_companies === 1 ? "Company" : "Companies"} found
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCreateCompanyModalOpen(true)}
+                                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-sm hover:from-indigo-700 hover:to-purple-700 transition-all"
+                                >
+                                    <FaBuilding className="text-xs" />
+                                    Create Company
+                                </button>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -1060,6 +1072,13 @@ export default function ProfilePage() {
                 onClose={() => setIsContactCodeModalOpen(false)}
                 onSelect={(code) => setContactForm((prev) => ({ ...prev, country_code: "+" + code }))}
                 selectedCode={contactForm.country_code.replace("+", "")}
+            />
+
+            <CreateCompanyModal
+                isOpen={isCreateCompanyModalOpen}
+                onClose={() => setIsCreateCompanyModalOpen(false)}
+                onSuccess={() => setIsCreateCompanyModalOpen(false)}
+                userId={user?.id}
             />
 
             <style>{`

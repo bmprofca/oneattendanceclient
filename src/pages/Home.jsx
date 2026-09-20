@@ -31,7 +31,7 @@ import CreateCompanyModal from "../components/CompanyModals/CreateCompanyModal";
 
 
 function HomePage() {
-  const { user, loading, company, refreshUser } = useAuth();
+  const { user, loading, company, companies = [], refreshUser } = useAuth();
   const { checkPageAccess, checkActionAccess } = usePermissionAccess();
   const navigate = useNavigate();
   const [openAddStaffModal, setOpenAddStaffModal] = useState(false);
@@ -169,7 +169,7 @@ function HomePage() {
     const holidaysAccess = checkPageAccess("holidays");
     const companySettingsAccess = checkPageAccess("companySettings");
 
-    return [
+    const actions = [
       {
         title: "Punch Attendance",
         description: punchActionAccess.allowed
@@ -318,16 +318,18 @@ function HomePage() {
         gradient: companySettingsAccess.allowed ? "bg-gradient-to-r from-slate-600 to-slate-800" : "bg-slate-200",
         disabled: !companySettingsAccess.allowed
       },
-      {
+      ...(companies.length === 0 ? [{
         title: "Create Company",
         description: "Launch a new organization",
         icon: FaBuilding,
         color: "from-blue-600 to-indigo-700",
         onClick: () => setOpenCreateCompanyModal(true),
         gradient: "bg-gradient-to-r from-blue-600 to-indigo-700",
-        disabled: false // Global action
-      }
+        disabled: false
+      }] : [])
     ];
+
+    return actions;
   };
 
   const quickActions = getQuickActions().filter((action) => !action.disabled);
