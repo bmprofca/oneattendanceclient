@@ -110,7 +110,8 @@ export default function ProfilePage() {
             return {
                 id,
                 code: permission.permission_code ?? permission.code ?? "",
-                name: permission.permission_name ?? permission.name ?? fallbackName,
+                name: permission.description ?? permission.permission_description ?? fallbackName,
+                description: permission.description ?? permission.permission_description ?? fallbackName,
                 action: permission.permission_action ?? permission.action ?? "",
                 category: getPermissionCategory(permission),
             };

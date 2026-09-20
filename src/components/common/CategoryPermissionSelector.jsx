@@ -6,20 +6,15 @@ import {
 
 // ─── Category color map ────────────────────────────────────────────────────────
 const CAT_STYLES = {
+  'Employees': { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500', border: 'border-orange-200', checkBg: 'bg-orange-600' },
   'Attendance': { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500', border: 'border-blue-200', checkBg: 'bg-blue-600' },
-  'OT Method': { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500', border: 'border-amber-200', checkBg: 'bg-amber-600' },
-  'Report': { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500', border: 'border-green-200', checkBg: 'bg-green-600' },
-  'Export': { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500', border: 'border-violet-200', checkBg: 'bg-violet-600' },
   'Leave': { bg: 'bg-rose-50', text: 'text-rose-700', dot: 'bg-rose-500', border: 'border-rose-200', checkBg: 'bg-rose-600' },
-  'Leave Type': { bg: 'bg-pink-50', text: 'text-pink-700', dot: 'bg-pink-500', border: 'border-pink-200', checkBg: 'bg-pink-600' },
-  'Salary': { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500', border: 'border-teal-200', checkBg: 'bg-teal-600' },
-  'Bank': { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-500', border: 'border-indigo-200', checkBg: 'bg-indigo-600' },
-  'Invite': { bg: 'bg-cyan-50', text: 'text-cyan-700', dot: 'bg-cyan-500', border: 'border-cyan-200', checkBg: 'bg-cyan-600' },
+  'Financial': { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', border: 'border-emerald-200', checkBg: 'bg-emerald-600' },
+  'Permissions': { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500', border: 'border-purple-200', checkBg: 'bg-purple-600' },
+  // Backward compatibility
   'Employee': { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500', border: 'border-orange-200', checkBg: 'bg-orange-600' },
+  'Salary': { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500', border: 'border-teal-200', checkBg: 'bg-teal-600' },
   'Permission': { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500', border: 'border-purple-200', checkBg: 'bg-purple-600' },
-  'Shift': { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500', border: 'border-sky-200', checkBg: 'bg-sky-600' },
-  'Company Manage': { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', border: 'border-emerald-200', checkBg: 'bg-emerald-600' },
-  'Holiday Manage': { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', dot: 'bg-fuchsia-500', border: 'border-fuchsia-200', checkBg: 'bg-fuchsia-600' },
 };
 
 const DEFAULT_STYLE = {
@@ -102,7 +97,7 @@ const CategoryRow = React.memo(({ cat, perms, selectedIds, onToggleCat, onToggle
             transition={{ duration: 0.22, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50/60 border-t border-slate-100">
+            <div className="grid grid-cols-1 gap-1.5 p-2 bg-slate-50/60 border-t border-slate-100 sm:grid-cols-2">
               {perms.map(perm => {
                 const isSelected = selectedIds.has(perm.id);
                 return (
@@ -122,8 +117,8 @@ const CategoryRow = React.memo(({ cat, perms, selectedIds, onToggleCat, onToggle
                     )}
                     {/* Labels */}
                     <div className="min-w-0 flex-1">
-                      <p className={`text-xs font-semibold leading-tight truncate ${isSelected ? style.text : 'text-slate-700'}`}>
-                        {perm.name}
+                      <p className={`text-xs font-semibold leading-snug line-clamp-2 ${isSelected ? style.text : 'text-slate-700'}`}>
+                        {perm.description}
                       </p>
                     </div>
                   </div>
@@ -147,8 +142,6 @@ CategoryRow.displayName = 'CategoryRow';
  *   onChange        — (newIds: number[]) => void
  */
 const CategoryPermissionSelector = ({ allPermissions = [], selectedIds = [], onChange, readOnly = false, listHeightClass = "max-h-[38vh]" }) => {
-  const [openCategories, setOpenCategories] = useState(new Set());
-
   // Build a Set for O(1) lookup
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
@@ -190,35 +183,24 @@ const CategoryPermissionSelector = ({ allPermissions = [], selectedIds = [], onC
     onChange([...next]);
   }, [grouped, selectedSet, onChange]);
 
-  // Toggle open/close category
-  const handleToggleOpen = useCallback((cat) => {
-    setOpenCategories(prev => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
-  }, []);
-
   // Select / clear all
   const handleSelectAll = () => onChange(allPermissions.map(p => p.id));
   const handleClearAll = () => onChange([]);
 
-  // Expand / collapse all categories
-  const handleExpandAll = () => setOpenCategories(new Set(categories));
-  const handleCollapseAll = () => setOpenCategories(new Set());
-
   return (
-    <div className="border border-slate-100 rounded-2xl overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* Section header */}
-      <div className="flex items-center gap-3 p-3.5 bg-slate-50/50 border-b border-slate-100">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 flex-shrink-0">
+      <div className="flex flex-col gap-4 border-b border-slate-200 bg-gradient-to-r from-indigo-50/80 via-white to-emerald-50/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
           <FaShieldAlt size={13} />
         </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-            {readOnly ? 'Assigned permissions' : 'Assign permissions'}
-            <span className={`px-2 py-0.5 rounded-lg text-sm font-bold border uppercase tracking-wider ${allSelected
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 sm:text-base">
+              {readOnly ? 'Assigned permissions' : 'Choose permissions'}
+            </h3>
+            <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${allSelected
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                 : noneSelected
                   ? 'bg-slate-50 text-slate-500 border-slate-100'
@@ -226,68 +208,88 @@ const CategoryPermissionSelector = ({ allPermissions = [], selectedIds = [], onC
               }`}>
               {selectedCount} / {totalCount}
             </span>
-          </h3>
-          <p className="text-sm text-slate-400 font-medium">{categories.length} categories</p>
+          </div>
+          <p className="mt-1 text-xs font-medium text-slate-500">{totalCount} access areas available</p>
+        </div>
         </div>
         {/* Toolbar */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:flex-shrink-0">
           {!readOnly && (
             <>
               <button
                 type="button"
                 onClick={handleSelectAll}
-                className="text-sm px-2 py-1 bg-white text-indigo-600 rounded-lg hover:bg-indigo-50 border border-slate-200 font-bold transition-all"
+                className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50"
               >
                 All
               </button>
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="text-sm px-2 py-1 bg-white text-slate-500 rounded-lg hover:bg-slate-100 border border-slate-200 font-bold transition-all"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50"
               >
                 None
               </button>
-              <div className="w-px h-4 bg-slate-200" />
             </>
           )}
-          <button
-            type="button"
-            onClick={handleExpandAll}
-            className="text-sm px-2 py-1 bg-white text-slate-500 rounded-lg hover:bg-slate-100 border border-slate-200 font-bold transition-all"
-          >
-            Expand
-          </button>
-          <button
-            type="button"
-            onClick={handleCollapseAll}
-            className="text-sm px-2 py-1 bg-white text-slate-500 rounded-lg hover:bg-slate-100 border border-slate-200 font-bold transition-all"
-          >
-            Collapse
-          </button>
         </div>
       </div>
 
       {/* Category list */}
-      <div className={`p-2.5 space-y-1.5 ${listHeightClass} overflow-y-auto custom-scrollbar bg-white`}>
+      <div className={`grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5 ${listHeightClass} overflow-y-auto custom-scrollbar bg-white`}>
         {allPermissions.length === 0 ? (
-          <div className="text-center py-10 text-slate-400 text-sm italic">
+          <div className="col-span-full py-10 text-center text-sm italic text-slate-400">
             No permissions available
           </div>
-        ) : (
-          categories.map(cat => (
-            <CategoryRow
-              key={cat}
-              cat={cat}
-              perms={grouped[cat]}
-              selectedIds={selectedSet}
-              onToggleCat={handleToggleCat}
-              onTogglePerm={handleTogglePerm}
-              isOpen={openCategories.has(cat)}
-              onToggleOpen={() => handleToggleOpen(cat)}
-              readOnly={readOnly}
-            />
-          ))
-        )}
+        ) : allPermissions.map((permission) => {
+            const style = getCatStyle(permission.category);
+            const isSelected = selectedSet.has(permission.id);
+
+            return (
+              <button
+                key={permission.id}
+                type="button"
+                disabled={readOnly}
+                onClick={() => handleTogglePerm(permission.id)}
+                className={`group relative flex min-h-[132px] flex-col items-start justify-between rounded-2xl border p-4 text-left transition-all ${isSelected
+                    ? `${style.bg} ${style.border} shadow-md ring-2 ring-indigo-100`
+                    : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md'
+                  } ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
+              >
+                <div className="flex w-full items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
+                    <span className={`text-xs font-bold uppercase tracking-[0.16em] ${isSelected ? style.text : 'text-slate-500'}`}>
+                      {permission.category || 'General'}
+                    </span>
+                  </div>
+                  {!readOnly && (
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-lg border transition ${isSelected
+                        ? `${style.checkBg} border-transparent text-white`
+                        : 'border-slate-300 bg-white text-transparent group-hover:border-indigo-300'
+                      }`}>
+                      <FaCheck size={10} />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-4">
+                  <p className={`text-sm font-bold leading-snug ${isSelected ? style.text : 'text-slate-800'}`}>
+                    {permission.description}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-white/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {permission.code}
+                    </span>
+                    {permission.action && (
+                      <span className="rounded-md bg-slate-900/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        {permission.action}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
       </div>
 
       {/* Footer hint */}
@@ -295,7 +297,7 @@ const CategoryPermissionSelector = ({ allPermissions = [], selectedIds = [], onC
         <div className="px-3 py-2 bg-indigo-50/40 border-t border-indigo-100/60">
           <p className="text-[10.5px] text-indigo-700 flex items-start gap-1.5">
             <FaInfoCircle className="text-indigo-400 flex-shrink-0 mt-0.5" size={10} />
-            Click a category checkbox to toggle all. Expand to pick individual permissions.
+            Select a permission card to add or remove access. Use All or None to update the full package.
           </p>
         </div>
       )}

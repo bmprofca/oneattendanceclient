@@ -1032,7 +1032,7 @@ function ViewPackageModal({ isOpen, onClose, package: pkg, onEdit, onDelete, onT
                               >
                                 <FaCheckCircle className="text-indigo-400 mt-0.5 shrink-0" size={12} />
                                 <div className="min-w-0">
-                                  <p className="text-xs font-semibold text-slate-700 leading-snug truncate">{perm.name}</p>
+                                  <p className="text-xs font-semibold text-slate-700 leading-snug truncate">{perm.description}</p>
                                   <p className="text-[10px] text-slate-400 font-mono truncate mt-0.5">{perm.code}</p>
                                 </div>
                               </div>

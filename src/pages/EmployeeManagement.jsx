@@ -2374,7 +2374,7 @@ const EmployeeManagement = () => {
                                                             <div className="flex flex-wrap gap-1.5 mt-2">
                                                                 {selectedEmployee.permissions.map((perm, idx) => (
                                                                     <span key={idx} className="px-2 py-1 bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg border border-slate-100">
-                                                                        {perm.name}
+                                                                        {perm.description}
                                                                     </span>
                                                                 ))}
                                                             </div>

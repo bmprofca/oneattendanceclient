@@ -84,7 +84,7 @@ const PackageFormBody = ({
 }) => {
 
   return (
-    <div className="p-4 sm:p-5 space-y-4">
+    <div className="space-y-5 bg-slate-50/40 p-4 sm:p-6">
       {permsLoading ? (
         <div className="flex justify-center py-12 text-center">
           <div>
@@ -116,7 +116,12 @@ const PackageFormBody = ({
           )}
 
           {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-600">Package details</p>
+              <p className="mt-1 text-sm text-slate-500">Give this access bundle a clear name and purpose.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
                 <FaLayerGroup className="text-indigo-500" /> Package Name <span className="text-red-500">*</span>
@@ -148,15 +153,16 @@ const PackageFormBody = ({
               <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
                 <FaAlignLeft className="text-emerald-500" /> Description
               </label>
-              <input
-                type="text"
+              <textarea
                 name="description"
                 value={formData.description}
                 onChange={onInputChange}
                 placeholder="Brief description..."
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all bg-white text-sm"
+                rows={2}
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
               />
             </div>
+          </div>
           </div>
 
           {/* Permissions Selection */}
@@ -687,12 +693,13 @@ const PermissionManagement = () => {
       return {
         id: permEntry.permission_id ?? permEntry.id,
         code: permEntry.permission_code ?? permEntry.code ?? '',
-        name: permEntry.permission_name ?? permEntry.name ?? 'Unknown Permission',
+        name: permEntry.description ?? permEntry.permission_description ?? permEntry.permission_name ?? permEntry.name ?? 'Unknown Permission',
+        description: permEntry.description ?? permEntry.permission_description ?? permEntry.permission_name ?? permEntry.name ?? '',
         action: permEntry.permission_action ?? permEntry.action ?? '',
       };
     }
     const found = allPermissions.find(p => p.id === permEntry || p.id === Number(permEntry));
-    return found ? { id: found.id, code: found.code, name: found.name, action: found.action } : null;
+    return found ? { id: found.id, code: found.code, name: found.description ?? found.name, description: found.description ?? found.name, action: found.action } : null;
   }, [allPermissions]);
 
   const getUsedByEmployees = useCallback((pkg) => {
@@ -1097,7 +1104,7 @@ const PermissionManagement = () => {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 18 }}
               transition={{ type: "spring", damping: 25, stiffness: 280 }}
-              className={`relative w-full ${modalType === MODAL_TYPES.DELETE_CONFIRM ? 'max-w-md' : modalType === MODAL_TYPES.EMPLOYEE_LIST ? 'max-w-6xl' : 'max-w-4xl'} max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200`}
+              className={`relative w-full ${modalType === MODAL_TYPES.DELETE_CONFIRM ? 'max-w-md' : modalType === MODAL_TYPES.EMPLOYEE_LIST ? 'max-w-6xl' : 'max-w-5xl'} max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200`}
               onClick={e => e.stopPropagation()}
             >
               {/* CREATE & EDIT Modals */}

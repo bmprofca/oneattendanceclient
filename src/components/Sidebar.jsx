@@ -27,17 +27,43 @@ import usePermissionAccess from "../hooks/usePermissionAccess";
 
 const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [openSections, setOpenSections] = useState({});
+  const [manualOpenSections, setManualOpenSections] = useState({});
   const location = useLocation();
   const currentPath = location.pathname;
 
   const { checkPageAccess, isCompanyOwnerForCurrentCompany } = usePermissionAccess();
 
-  // Toggle section
+  const MANAGEMENT_ROUTE_PATTERNS = [
+    '/attendance-management',
+    '/employee-management',
+    '/permission-management',
+    '/salary-management',
+    '/payroll-management',
+    '/company-ledger',
+    '/bank-account-management',
+    '/leave-management',
+    '/company-settings',
+    '/holiday-management',
+  ];
+
+  const isManagementRouteActive = MANAGEMENT_ROUTE_PATTERNS.some((route) =>
+    currentPath === route || currentPath.startsWith(`${route}/`)
+  );
+
+  const isSectionOpen = (sectionName) => {
+    if (sectionName === 'Management') {
+      const manualState = manualOpenSections[sectionName];
+      return manualState !== undefined ? manualState : isManagementRouteActive;
+    }
+
+    return manualOpenSections[sectionName] ?? false;
+  };
+
+  // Toggle section while preserving a user-driven override.
   const toggleSection = (sectionName) => {
-    setOpenSections(prev => ({
+    setManualOpenSections(prev => ({
       ...prev,
-      [sectionName]: !prev[sectionName]
+      [sectionName]: !isSectionOpen(sectionName),
     }));
   };
 
@@ -183,6 +209,9 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
   const getVisibleChildren = (children) =>
     children.filter((child) => {
       if (child.ownerOnly && !isCompanyOwnerForCurrentCompany) return false;
+      if (child.pageKey && ['myLeaves', 'mySalary', 'myLedger', 'employeeBankAccount', 'holidays'].includes(child.pageKey)) {
+        return !isCompanyOwnerForCurrentCompany && getItemAccess(child).allowed;
+      }
       return getItemAccess(child).allowed;
     });
 
@@ -209,7 +238,7 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
             <nav className="space-y-1">
               {menuItems.map((item) => {
                 if (item.isSection) {
-                  const isOpen = openSections[item.label];
+                  const isOpen = isSectionOpen(item.label);
                   const authorizedChildren = getVisibleChildren(item.children);
                   const isActive = isSectionActive(item.children);
 
@@ -285,7 +314,7 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
                 const access = getItemAccess(item);
                 const Icon = item.icon;
 
-                if (access.disabled) {
+                if (access.disabled || (item.pageKey && ['myLeaves','mySalary','myLedger','employeeBankAccount','holidays'].includes(item.pageKey) && isCompanyOwnerForCurrentCompany)) {
                   return null;
                 }
 
@@ -343,7 +372,7 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
     const access = getItemAccess(item);
     const Icon = item.icon;
 
-    if (access.disabled) {
+    if (access.disabled || (item.pageKey && ['myLeaves','mySalary','myLedger','employeeBankAccount','holidays'].includes(item.pageKey) && isCompanyOwnerForCurrentCompany)) {
       return null;
     }
 
@@ -389,7 +418,7 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
   };
 
   const renderSection = (item, isExpandedState) => {
-    const isOpen = openSections[item.label];
+    const isOpen = isSectionOpen(item.label);
     const Icon = item.icon;
     const authorizedChildren = getVisibleChildren(item.children);
     const isActive = isSectionActive(item.children);

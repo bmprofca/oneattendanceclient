@@ -14,193 +14,114 @@ const PERMISSION_ACCESS_CONFIG = {
   pages: {
     home: { permissions: null },
     attendance: {
-      permissions: ["att_punch", "att_view_own"],
+      permissions: null,
       disableForCompanyOwner: true,
       requireAttendanceMethods: true,
     },
     attendanceHistory: {
-      permissions: ["att_punch", "att_view_own"],
+      permissions: null,
       disableForCompanyOwner: true,
     },
     myShifts: {
-      permissions: ["att_punch", "att_view_own"],
+      permissions: null,
       disableForCompanyOwner: true,
     },
     myLeaves: {
-      permissions: ["leave_apply", "leave_view_own", "leave_cancel_own"],
+      permissions: null,
       disableForCompanyOwner: true,
     },
     mySalary: {
-      permissions: ["salary_view_own"],
+      permissions: null,
       disableForCompanyOwner: true,
     },
     myPayroll: {
-      permissions: ["payroll_view", "payroll_view_all"],
+      permissions: null,
       disableForCompanyOwner: true,
     },
     myLedger: {
-      permissions: ["salary_view_own"],
+      permissions: null,
       disableForCompanyOwner: true,
     },
     companyLedger: {
-      permissions: ["payroll_view_all", "cmp_bank_view_all"],
-      allowCompanyOwner: true,
+      requireCompanyOwner: true,
     },
     employeeBankAccount: {
-      permissions: ["emp_bnk_create", "emp_bnk_view", "emp_bnk_update", "emp_bnk_delete"],
+      permissions: null,
       disableForCompanyOwner: true,
     },
     employeeBankAccountManagement: {
-      permissions: ["emp_bnk_create", "emp_bnk_view", "emp_bnk_update", "emp_bnk_delete"],
+      permissions: ["financial"],
       allowCompanyOwner: true,
     },
     myInvites: { permissions: null },
     holidays: {
       permissions: null,
-      requireCompany: true,
       disableForCompanyOwner: true,
+      requireCompany: true,
       requireAttendanceMethods: true,
     },
     companyInvites: {
-      permissions: ["invite_create", "invite_view_all", "invite_cancel", "invite_resend"],
+      permissions: ["employees"],
     },
     invitePackages: {
-      permissions: ["invite_package_create", "invite_package_view", "invite_package_update", "invite_package_delete"],
+      permissions: ["employees"],
     },
     employeeManagement: {
-      permissions: [
-        "employee_create",
-        "employee_view",
-        "employee_view_all",
-        "employee_update",
-        "employee_delete",
-        "invite_create",
-        "invite_view_all",
-        "invite_cancel",
-        "invite_resend",
-        "invite_package_create",
-        "invite_package_view",
-        "invite_package_update",
-        "invite_package_delete",
-        "shift_create",
-        "shift_view",
-        "shift_view_all",
-        "shift_update",
-      ],
+      permissions: ["employees"],
     },
     employeeProfile: {
-      permissions: ["profile_view_employee", "employee_view", "employee_view_all"],
+      permissions: ["employees"],
     },
     permissionManagement: {
-      permissions: [
-        "permission_package_create",
-        "permission_package_view",
-        "permission_package_update",
-        "permission_package_delete",
-        "permission_package_assign",
-      ],
+      permissions: ["permissions"],
     },
     attendanceManagement: {
-      permissions: ["att_view_all", "att_create", "att_update", "att_delete", "att_verify"],
+      permissions: ["attendance"],
     },
     salaryManagement: {
-      permissions: [
-        "salary_create",
-        "salary_view_all",
-        "salary_update",
-        "salary_delete",
-        "salary_component_create",
-        "salary_component_view",
-        "salary_component_update",
-        "salary_component_delete",
-        "salary_package_create",
-        "salary_package_view",
-        "salary_package_update",
-        "salary_package_delete",
-      ],
+      permissions: ["financial"],
       allowCompanyOwner: true,
     },
     salaryComponentsManagement: {
-      permissions: ["salary_component_create", "salary_component_view", "salary_component_update", "salary_component_delete"],
+      permissions: ["financial"],
       allowCompanyOwner: true,
     },
     salaryPackageManagement: {
-      permissions: ["salary_package_create", "salary_package_view", "salary_package_update", "salary_package_delete"],
+      permissions: ["financial"],
       allowCompanyOwner: true,
     },
     employeesShifts: {
-      permissions: ["shift_view", "shift_view_all", "shift_create", "shift_update"],
+      permissions: ["attendance"],
     },
     leaveManagement: {
-      permissions: [
-        "leave_view_all",
-        "leave_approve",
-        "leave_reject",
-        "leave_update",
-        "leave_config_create",
-        "leave_config_view",
-        "leave_config_update",
-        "leave_config_delete",
-        "leave_balance_assign",
-        "leave_balance_view_all",
-        "leave_balance_update",
-        "leave_balance_delete",
-      ],
+      permissions: ["leave"],
     },
     leaveConfig: {
-      permissions: ["leave_config_create", "leave_config_view", "leave_config_update", "leave_config_delete"],
+      permissions: ["leave"],
     },
     leaveBalance: {
-      permissions: ["leave_balance_assign", "leave_balance_view_all", "leave_balance_update", "leave_balance_delete"],
+      permissions: ["leave"],
     },
     payrollManagement: {
-      permissions: [
-        "payroll_generate",
-        "payroll_view",
-        "payroll_view_all",
-        "payroll_update",
-        "payroll_delete",
-        "payroll_approve",
-        "payroll_hold",
-        "payroll_release",
-        "payroll_adjustment_create",
-        "payroll_adjustment_view",
-        "payroll_adjustment_update",
-        "payroll_adjustment_delete",
-      ],
+      permissions: ["financial"],
       allowCompanyOwner: true,
     },
     payrollAdjustment: {
-      permissions: [
-        "payroll_adjustment_create",
-        "payroll_adjustment_view",
-        "payroll_adjustment_update",
-        "payroll_adjustment_delete",
-      ],
+      permissions: ["financial"],
       allowCompanyOwner: true,
     },
     bankAccountManagement: {
-      permissions: [
-        "cmp_bank_create",
-        "cmp_bank_view_own",
-        "cmp_bank_view_all",
-        "cmp_bank_update",
-        "cmp_bank_delete",
-        "emp_bnk_create",
-        "emp_bnk_view",
-        "emp_bnk_update",
-        "emp_bnk_delete",
-      ],
+      permissions: ["financial"],
       allowCompanyOwner: true,
     },
     pendingAttendance: {
-      permissions: ["att_view_all", "att_verify"],
+      permissions: ["attendance"],
     },
     companySettings: {
       requireCompanyOwner: true,
     },
     holidayManagement: {
-      permissions: ["holiday_create", "holiday_view", "holiday_update", "holiday_delete"],
+      permissions: ["attendance"],
     },
     help: { permissions: null },
     createCompany: { permissions: null },
@@ -208,148 +129,148 @@ const PERMISSION_ACCESS_CONFIG = {
   actions: {
     attendance: {
       punch: {
-        permissions: "att_punch",
+        permissions: null,
         disableForCompanyOwner: true,
       },
       viewOwn: {
-        permissions: "att_view_own",
+        permissions: null,
         disableForCompanyOwner: true,
       },
     },
     myLeaves: {
       apply: {
-        permissions: "leave_apply",
+        permissions: null,
         disableForCompanyOwner: true,
       },
       viewOwn: {
-        permissions: "leave_view_own",
+        permissions: null,
         disableForCompanyOwner: true,
       },
       cancelOwn: {
-        permissions: "leave_cancel_own",
+        permissions: null,
         disableForCompanyOwner: true,
       },
     },
     mySalary: {
       viewOwn: {
-        permissions: "salary_view_own",
+        permissions: null,
         disableForCompanyOwner: true,
       },
       advanceView: {
-        permissions: "salary_view_own",
+        permissions: null,
         disableForCompanyOwner: true,
       },
     },
     myPayroll: {
       read: {
-        permissions: ["payroll_view", "payroll_view_all"],
+        permissions: null,
         disableForCompanyOwner: true,
       },
       download: {
-        permissions: ["payroll_view", "payroll_view_all"],
+        permissions: null,
         disableForCompanyOwner: true,
       },
     },
     employeeBankAccount: {
-      create: { permissions: "emp_bnk_create" },
-      read: { permissions: "emp_bnk_view" },
-      update: { permissions: "emp_bnk_update" },
-      delete: { permissions: "emp_bnk_delete" },
+      create: { permissions: null },
+      read: { permissions: null },
+      update: { permissions: null },
+      delete: { permissions: null },
     },
     employeeBankAccountManagement: {
-      create: { permissions: "emp_bnk_create", allowCompanyOwner: true },
-      read: { permissions: "emp_bnk_view", allowCompanyOwner: true },
-      update: { permissions: "emp_bnk_update", allowCompanyOwner: true },
-      delete: { permissions: "emp_bnk_delete", allowCompanyOwner: true },
+      create: { permissions: "financial", allowCompanyOwner: true },
+      read: { permissions: "financial", allowCompanyOwner: true },
+      update: { permissions: "financial", allowCompanyOwner: true },
+      delete: { permissions: "financial", allowCompanyOwner: true },
     },
     companyInvites: {
-      create: { permissions: "invite_create" },
-      update: { permissions: "invite_create" },
-      cancel: { permissions: "invite_cancel" },
-      resend: { permissions: "invite_resend" },
-      read: { permissions: "invite_view_all" },
+      create: { permissions: "employees" },
+      update: { permissions: "employees" },
+      cancel: { permissions: "employees" },
+      resend: { permissions: "employees" },
+      read: { permissions: "employees" },
     },
     invitePackages: {
-      create: { permissions: "invite_package_create" },
-      update: { permissions: "invite_package_update" },
-      delete: { permissions: "invite_package_delete" },
-      read: { permissions: "invite_package_view" },
+      create: { permissions: "employees" },
+      update: { permissions: "employees" },
+      delete: { permissions: "employees" },
+      read: { permissions: "employees" },
     },
     employeeManagement: {
-      create: { permissions: "employee_create" },
-      read: { permissions: ["employee_view", "employee_view_all"] },
-      update: { permissions: "employee_update" },
-      delete: { permissions: "employee_delete" },
-      report: { permissions: "employee_view_all" },
-      export: { permissions: "employee_view_all" },
+      create: { permissions: "employees" },
+      read: { permissions: "employees" },
+      update: { permissions: "employees" },
+      delete: { permissions: "employees" },
+      report: { permissions: "employees" },
+      export: { permissions: "employees" },
     },
     permissionManagement: {
-      create: { permissions: "permission_package_create" },
-      read: { permissions: "permission_package_view" },
-      update: { permissions: "permission_package_update" },
-      delete: { permissions: "permission_package_delete" },
-      assign: { permissions: "permission_package_assign" },
+      create: { permissions: "permissions" },
+      read: { permissions: "permissions" },
+      update: { permissions: "permissions" },
+      delete: { permissions: "permissions" },
+      assign: { permissions: "permissions" },
     },
     attendanceManagement: {
-      read: { permissions: "att_view_all" },
-      review: { permissions: "att_verify" },
-      approve: { permissions: "att_verify" },
-      reject: { permissions: "att_verify" },
-      edit: { permissions: "att_update" },
-      create: { permissions: "att_create" },
-      delete: { permissions: "att_delete" },
-      assignMethod: { permissions: "att_update" },
-      updateMethod: { permissions: "att_update" },
-      removeMethod: { permissions: "att_update" },
-      report: { permissions: "att_view_all" },
-      export: { permissions: "att_view_all" },
+      read: { permissions: "attendance" },
+      review: { permissions: "attendance" },
+      approve: { permissions: "attendance" },
+      reject: { permissions: "attendance" },
+      edit: { permissions: "attendance" },
+      create: { permissions: "attendance" },
+      delete: { permissions: "attendance" },
+      assignMethod: { permissions: "attendance" },
+      updateMethod: { permissions: "attendance" },
+      removeMethod: { permissions: "attendance" },
+      report: { permissions: "attendance" },
+      export: { permissions: "attendance" },
     },
     salaryManagement: {
-      create: { permissions: "salary_create", allowCompanyOwner: true },
-      read: { permissions: "salary_view_all", allowCompanyOwner: true },
-      assign: { permissions: "salary_create", allowCompanyOwner: true },
-      update: { permissions: "salary_update", allowCompanyOwner: true },
-      revise: { permissions: "salary_update", allowCompanyOwner: true },
-      delete: { permissions: "salary_delete", allowCompanyOwner: true },
+      create: { permissions: "financial", allowCompanyOwner: true },
+      read: { permissions: "financial", allowCompanyOwner: true },
+      assign: { permissions: "financial", allowCompanyOwner: true },
+      update: { permissions: "financial", allowCompanyOwner: true },
+      revise: { permissions: "financial", allowCompanyOwner: true },
+      delete: { permissions: "financial", allowCompanyOwner: true },
     },
     salaryComponentsManagement: {
-      create: { permissions: "salary_component_create", allowCompanyOwner: true },
-      read: { permissions: "salary_component_view", allowCompanyOwner: true },
-      update: { permissions: "salary_component_update", allowCompanyOwner: true },
-      delete: { permissions: "salary_component_delete", allowCompanyOwner: true },
+      create: { permissions: "financial", allowCompanyOwner: true },
+      read: { permissions: "financial", allowCompanyOwner: true },
+      update: { permissions: "financial", allowCompanyOwner: true },
+      delete: { permissions: "financial", allowCompanyOwner: true },
     },
     salaryPackageManagement: {
-      create: { permissions: "salary_package_create", allowCompanyOwner: true },
-      read: { permissions: "salary_package_view", allowCompanyOwner: true },
-      update: { permissions: "salary_package_update", allowCompanyOwner: true },
-      delete: { permissions: "salary_package_delete", allowCompanyOwner: true },
+      create: { permissions: "financial", allowCompanyOwner: true },
+      read: { permissions: "financial", allowCompanyOwner: true },
+      update: { permissions: "financial", allowCompanyOwner: true },
+      delete: { permissions: "financial", allowCompanyOwner: true },
     },
     employeesShifts: {
-      create: { permissions: "shift_create" },
-      read: { permissions: ["shift_view", "shift_view_all"] },
-      update: { permissions: "shift_update" },
-      delete: { permissions: "shift_update" },
+      create: { permissions: "attendance" },
+      read: { permissions: "attendance" },
+      update: { permissions: "attendance" },
+      delete: { permissions: "attendance" },
     },
     leaveManagement: {
-      read: { permissions: "leave_view_all" },
-      review: { permissions: ["leave_approve", "leave_reject"] },
-      create: { permissions: "leave_apply" },
-      approve: { permissions: "leave_approve" },
-      reject: { permissions: "leave_reject" },
-      update: { permissions: "leave_update" },
-      cancel: { permissions: "leave_update" },
+      read: { permissions: "leave" },
+      review: { permissions: "leave" },
+      create: { permissions: "leave" },
+      approve: { permissions: "leave" },
+      reject: { permissions: "leave" },
+      update: { permissions: "leave" },
+      cancel: { permissions: "leave" },
     },
     leaveConfig: {
-      create: { permissions: "leave_config_create" },
-      read: { permissions: "leave_config_view" },
-      update: { permissions: "leave_config_update" },
-      delete: { permissions: "leave_config_delete" },
+      create: { permissions: "leave" },
+      read: { permissions: "leave" },
+      update: { permissions: "leave" },
+      delete: { permissions: "leave" },
     },
     leaveBalance: {
-      create: { permissions: "leave_balance_assign" },
-      update: { permissions: "leave_balance_update" },
-      delete: { permissions: "leave_balance_delete" },
-      read: { permissions: "leave_balance_view_all" },
+      create: { permissions: "leave" },
+      update: { permissions: "leave" },
+      delete: { permissions: "leave" },
+      read: { permissions: "leave" },
     },
     companySettings: {
       read: { requireCompanyOwner: true },
@@ -366,44 +287,44 @@ const PERMISSION_ACCESS_CONFIG = {
       shiftDelete: { requireCompanyOwner: true },
     },
     holidayManagement: {
-      create: { permissions: "holiday_create" },
-      read: { permissions: "holiday_view" },
-      update: { permissions: "holiday_update" },
-      delete: { permissions: "holiday_delete" },
+      create: { permissions: "attendance" },
+      read: { permissions: "attendance" },
+      update: { permissions: "attendance" },
+      delete: { permissions: "attendance" },
     },
     pendingAttendance: {
-      read: { permissions: "att_view_all" },
-      review: { permissions: "att_verify" },
-      approve: { permissions: "att_verify" },
-      reject: { permissions: "att_verify" },
+      read: { permissions: "attendance" },
+      review: { permissions: "attendance" },
+      approve: { permissions: "attendance" },
+      reject: { permissions: "attendance" },
     },
     payrollManagement: {
-      read: { permissions: ["payroll_view", "payroll_view_all"], allowCompanyOwner: true },
-      create: { permissions: "payroll_generate", allowCompanyOwner: true },
-      update: { permissions: "payroll_update", allowCompanyOwner: true },
-      delete: { permissions: "payroll_delete", allowCompanyOwner: true },
-      approve: { permissions: "payroll_approve", allowCompanyOwner: true },
-      hold: { permissions: "payroll_hold", allowCompanyOwner: true },
-      release: { permissions: "payroll_release", allowCompanyOwner: true },
-      createAdjustment: { permissions: "payroll_adjustment_create", allowCompanyOwner: true },
-      readAdjustment: { permissions: "payroll_adjustment_view", allowCompanyOwner: true },
-      updateAdjustment: { permissions: "payroll_adjustment_update", allowCompanyOwner: true },
-      deleteAdjustment: { permissions: "payroll_adjustment_delete", allowCompanyOwner: true },
+      read: { permissions: "financial", allowCompanyOwner: true },
+      create: { permissions: "financial", allowCompanyOwner: true },
+      update: { permissions: "financial", allowCompanyOwner: true },
+      delete: { permissions: "financial", allowCompanyOwner: true },
+      approve: { permissions: "financial", allowCompanyOwner: true },
+      hold: { permissions: "financial", allowCompanyOwner: true },
+      release: { permissions: "financial", allowCompanyOwner: true },
+      createAdjustment: { permissions: "financial", allowCompanyOwner: true },
+      readAdjustment: { permissions: "financial", allowCompanyOwner: true },
+      updateAdjustment: { permissions: "financial", allowCompanyOwner: true },
+      deleteAdjustment: { permissions: "financial", allowCompanyOwner: true },
     },
     payrollAdjustment: {
-      create: { permissions: "payroll_adjustment_create", allowCompanyOwner: true },
-      read: { permissions: "payroll_adjustment_view", allowCompanyOwner: true },
-      update: { permissions: "payroll_adjustment_update", allowCompanyOwner: true },
-      delete: { permissions: "payroll_adjustment_delete", allowCompanyOwner: true },
+      create: { permissions: "financial", allowCompanyOwner: true },
+      read: { permissions: "financial", allowCompanyOwner: true },
+      update: { permissions: "financial", allowCompanyOwner: true },
+      delete: { permissions: "financial", allowCompanyOwner: true },
     },
     bankAccountManagement: {
-      create: { permissions: "cmp_bank_create" },
-      read: { permissions: ["cmp_bank_view_own", "cmp_bank_view_all"] },
-      update: { permissions: "cmp_bank_update" },
-      delete: { permissions: "cmp_bank_delete" },
+      create: { permissions: "financial", allowCompanyOwner: true },
+      read: { permissions: "financial", allowCompanyOwner: true },
+      update: { permissions: "financial", allowCompanyOwner: true },
+      delete: { permissions: "financial", allowCompanyOwner: true },
     },
     workspace: {
-      addStaff: { permissions: ["employee_create", "invite_create"] },
+      addStaff: { permissions: ["employees"] },
     },
   },
 };
@@ -481,19 +402,19 @@ export const usePermissionAccess = () => {
       return true;
     }
 
-    if (isSystemAdmin) {
+    if (isSystemAdmin || isCompanyOwnerForCurrentCompany) {
       return true;
     }
 
     return permissions.some(
       (permission) => permission.code === permissionCode && isAllowedPermission(permission)
     );
-  }, [isSystemAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyOwnerForCurrentCompany, permissions]);
 
   const matchPermissions = useCallback((requiredPermissions, match = "any") => {
     const normalizedPermissions = normalizePermissions(requiredPermissions);
 
-    if (normalizedPermissions.length === 0 || isSystemAdmin) {
+    if (normalizedPermissions.length === 0 || isSystemAdmin || isCompanyOwnerForCurrentCompany) {
       return true;
     }
 
@@ -502,12 +423,12 @@ export const usePermissionAccess = () => {
     }
 
     return normalizedPermissions.some(hasPermissionCode);
-  }, [isSystemAdmin, hasPermissionCode]);
+  }, [isSystemAdmin, isCompanyOwnerForCurrentCompany, hasPermissionCode]);
 
   const resolveAccess = useCallback(({
     requiredPermissions,
     match = "any",
-    allowCompanyOwner = false,
+    allowCompanyOwner = true,
     disableForCompanyOwner = false,
     requireCompany = false,
     requireAttendanceMethods = false,
@@ -515,28 +436,26 @@ export const usePermissionAccess = () => {
   }) => {
     const normalizedPermissions = normalizePermissions(requiredPermissions);
 
-    if (isSystemAdmin) {
-      return buildAccessResult(true, ACCESS_REASONS.ALLOWED, normalizedPermissions);
-    }
-
+    // Personal/self-service pages are hidden for company owners even though they are company admins.
     if (disableForCompanyOwner && isCompanyOwnerForCurrentCompany) {
       return buildAccessResult(false, ACCESS_REASONS.OWNER_RESTRICTED, normalizedPermissions);
+    }
+
+    // Company owner and System admin have unrestricted access to everything in the company
+    if (isSystemAdmin || isCompanyOwnerForCurrentCompany) {
+      return buildAccessResult(true, ACCESS_REASONS.ALLOWED, normalizedPermissions);
     }
 
     // Hard gate: only company owners are allowed, regardless of permissions
     if (requireCompanyOwner) {
       return buildAccessResult(
-        isCompanyOwnerForCurrentCompany,
-        isCompanyOwnerForCurrentCompany ? ACCESS_REASONS.ALLOWED : ACCESS_REASONS.OWNER_ONLY,
+        false,
+        ACCESS_REASONS.OWNER_ONLY,
         normalizedPermissions
       );
     }
 
-    if (allowCompanyOwner && isCompanyOwnerForCurrentCompany && normalizedPermissions.length === 0) {
-      return buildAccessResult(true, ACCESS_REASONS.ALLOWED, normalizedPermissions);
-    }
-
-    if (requireCompany && !company?.id && !isCompanyOwnerForCurrentCompany) {
+    if (requireCompany && !company?.id) {
       return buildAccessResult(false, ACCESS_REASONS.NO_COMPANY, normalizedPermissions);
     }
 
