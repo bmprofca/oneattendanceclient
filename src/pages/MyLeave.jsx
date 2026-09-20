@@ -1056,11 +1056,14 @@ const MyLeave = () => {
   }, [loadBalances, loadLeaves]);
 
   useEffect(() => {
-    goToPage(1);
-    loadLeaves(1, true);
-  }, [status, search, leaveTypeFilter, dateFilter, goToPage, loadLeaves]);
+    if (!initialFetchDoneRef.current) return;
+    updatePagination({ page: 1, limit: pagination.limit });
+    loadLeaves(1);
+  }, [status, search, leaveTypeFilter, dateFilter, updatePagination, pagination.limit, loadLeaves]);
 
   useEffect(() => {
+    if (!initialFetchDoneRef.current) return;
+    if (pagination.page <= 1) return;
     loadLeaves(pagination.page);
   }, [pagination.page, loadLeaves]);
 

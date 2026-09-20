@@ -247,23 +247,44 @@ export const usePagination = (initialPage = 1, initialLimit = 10) => {
 
     const updatePagination = useCallback((data) => {
         setPagination(prev => {
-            const page = data.page || prev.page;
-            const limit = data.limit || prev.limit;
+            const page = data.page ?? prev.page;
+            const limit = data.limit ?? prev.limit;
             const total = data.total ?? prev.total;
-            const total_pages = data.total_pages || Math.ceil(total / limit) || 1;
-            return {
-                page, limit, total, total_pages,
+            const total_pages = data.total_pages ?? ((Math.ceil(total / limit) || 1));
+            const next = {
+                page,
+                limit,
+                total,
+                total_pages,
                 is_last_page: data.is_last_page ?? (page >= total_pages)
             };
+
+            if (
+                prev.page === next.page &&
+                prev.limit === next.limit &&
+                prev.total === next.total &&
+                prev.total_pages === next.total_pages &&
+                prev.is_last_page === next.is_last_page
+            ) {
+                return prev;
+            }
+
+            return next;
         });
     }, []);
 
     const goToPage = useCallback((page) => {
-        setPagination(prev => ({ ...prev, page }));
+        setPagination(prev => {
+            if (prev.page === page) return prev;
+            return { ...prev, page };
+        });
     }, []);
 
     const changeLimit = useCallback((limit) => {
-        setPagination(prev => ({ ...prev, limit, page: 1 }));
+        setPagination(prev => {
+            if (prev.limit === limit) return prev;
+            return { ...prev, limit, page: 1 };
+        });
     }, []);
 
     const resetPagination = useCallback(() => {
