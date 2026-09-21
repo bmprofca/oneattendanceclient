@@ -8,6 +8,7 @@ import ManagementViewSwitcher from "../ManagementViewSwitcher";
 import Pagination, { usePagination } from "../PaginationComponent";
 import { ManagementCard, ManagementTable } from "../common";
 import Modal from "../Modal";
+import { useAuth } from "../../context/AuthContext";
 
 const inFlightRequests = new Map();
 function runDedupedRequest(key, requestFn) {
@@ -139,7 +140,8 @@ function PayrollDetailModal({ record, onClose }) {
   );
 }
 
-export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterType = "generated" }) {
+export default function EmployeePayrollTab({ employee, employeeId, refreshKey = 0, filterType = "generated" }) {
+  const { user, company } = useAuth();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState(null);
@@ -152,6 +154,10 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
     return { month: now.getMonth() + 1, year: now.getFullYear() };
   });
   const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
+  const isCurrentEmployee = (
+    Number(employee?.user_id) === Number(user?.id) ||
+    Number(employeeId) === Number(company?.employee_id)
+  );
 
   const fetchPayroll = useCallback(async () => {
     if (!employeeId) return;
@@ -293,15 +299,17 @@ export default function EmployeePayrollTab({ employeeId, refreshKey = 0, filterT
               )}
             </div>
             <div className="flex items-center gap-2 self-end sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setShowGeneratePicker(true)}
-                disabled={generatingPayroll || loading}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {generatingPayroll ? <FaSpinner className="animate-spin" size={10} /> : <FaCalculator size={10} />}
-                {generatingPayroll ? "Generating..." : "Generate Payroll"}
-              </button>
+              {!isCurrentEmployee && (
+                <button
+                  type="button"
+                  onClick={() => setShowGeneratePicker(true)}
+                  disabled={generatingPayroll || loading}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {generatingPayroll ? <FaSpinner className="animate-spin" size={10} /> : <FaCalculator size={10} />}
+                  {generatingPayroll ? "Generating..." : "Generate Payroll"}
+                </button>
+              )}
               <ManagementViewSwitcher viewMode={viewMode} onChange={setViewMode} accent={filterType === "generated" ? "emerald" : "blue"} />
             </div>
           </div>

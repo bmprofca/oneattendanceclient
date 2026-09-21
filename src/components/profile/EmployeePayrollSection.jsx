@@ -55,6 +55,7 @@ export default function EmployeePayrollSection({ employee, employeeId, refreshKe
       <div>
         {activeTab === "generated" || activeTab === "preview" ? (
           <EmployeePayrollTab 
+            employee={employee}
             employeeId={targetEmployeeId} 
             refreshKey={refreshKey}
             filterType={activeTab}

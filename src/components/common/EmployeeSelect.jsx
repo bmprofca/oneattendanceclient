@@ -18,7 +18,7 @@ const avatarGradient = (id) => AVATAR_GRADIENTS[id % AVATAR_GRADIENTS.length];
 const getInitials = (name = '') =>
     name.trim().split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
-export default function EmployeeSelect({ value, onChange, placeholder = "Select an employee...", error, disabled=false, initialEmployee = null }) {
+export default function EmployeeSelect({ value, onChange, placeholder = "Select an employee...", error, disabled=false, initialEmployee = null, isOptionDisabled = () => false }) {
     const [isOpen, setIsOpen] = useState(false);
     const [employees, setEmployees] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -211,10 +211,18 @@ export default function EmployeeSelect({ value, onChange, placeholder = "Select 
                             ) : (
                                 <div className="space-y-1">
                                     {employees.map(emp => (
-                                        <div 
+                                        (() => {
+                                            const optionDisabled = isOptionDisabled(emp);
+                                            return <div
                                             key={emp.id}
-                                            onClick={() => handleSelect(emp)}
-                                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${String(value) === String(emp.id) ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50 border border-transparent'}`}
+                                            title={optionDisabled ? 'You cannot select your own profile' : 'Select employee'}
+                                            aria-disabled={optionDisabled}
+                                            onClick={() => {
+                                                if (!optionDisabled) handleSelect(emp);
+                                            }}
+                                            className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${optionDisabled
+                                                ? 'cursor-not-allowed border border-amber-100 bg-amber-50/60 opacity-70'
+                                                : `cursor-pointer ${String(value) === String(emp.id) ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50 border border-transparent'}`}`}
                                         >
                                             <ProfileAvatar
                                                 record={emp}
@@ -233,7 +241,9 @@ export default function EmployeeSelect({ value, onChange, placeholder = "Select 
                                                     </span>
                                                 </p>
                                             </div>
-                                        </div>
+                                            {optionDisabled && <span className="text-[10px] font-semibold text-amber-700">Your profile</span>}
+                                        </div>;
+                                        })()
                                     ))}
                                     {loading && (
                                         <div className="py-4 flex justify-center">

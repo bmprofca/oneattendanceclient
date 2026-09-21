@@ -25,6 +25,7 @@ import ProfileAvatar from '../components/common/ProfileAvatar';
 import useEmployeeNavigation from '../hooks/useEmployeeNavigation';
 import Modal from '../components/Modal';
 import CurrencyIcon from "../components/common/CurrencyIcon";
+import { useAuth } from '../context/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,7 @@ const StatusBadge = ({ status }) => {
 const PayrollManagement = () => {
     const navigateToEmployeeProfile = useEmployeeNavigation();
     const { checkActionAccess, getAccessMessage } = usePermissionAccess();
+    const { user, company } = useAuth();
     const [payrollList, setPayrollList] = useState([]);
     const [employeeList, setEmployeeList] = useState([]);
     const [employeesLoading, setEmployeesLoading] = useState(false);
@@ -257,6 +259,14 @@ const PayrollManagement = () => {
     const generatePayrollAccess = checkActionAccess('payrollManagement', 'create');
     const downloadPayrollAccess = checkActionAccess('payrollManagement', 'read');
     const emailPayrollAccess = checkActionAccess('payrollManagement', 'read');
+
+    const isCurrentUserEmployee = useCallback((employee) => (
+        Boolean(employee) && (
+            Number(employee.user_id) === Number(user?.id) ||
+            Number(employee.id) === Number(company?.employee_id) ||
+            (employee.email && user?.email && employee.email.toLowerCase() === user.email.toLowerCase())
+        )
+    ), [company?.employee_id, user?.email, user?.id]);
 
     useEffect(() => {
         isMounted.current = true;
@@ -454,7 +464,7 @@ const PayrollManagement = () => {
     };
 
     const openPreviewGenerateConfirm = (item) => {
-        if (generatePayrollAccess.disabled) return;
+        if (generatePayrollAccess.disabled || isCurrentUserEmployee(item?.employee)) return;
         setSelectedPayroll(item);
         setPreviewGenerateSendPdf(true);
         setModalType(MODAL_TYPES.CONFIRM_GENERATE);
@@ -511,6 +521,13 @@ const PayrollManagement = () => {
             return;
         }
 
+        if (generateFormData.employee_ids.some(employeeId => (
+            isCurrentUserEmployee(employeeList.find(employee => employee.id === employeeId))
+        ))) {
+            toast.error('You cannot generate your own payroll');
+            return;
+        }
+
         const result = await generatePayroll(GENERATION_MODES.MULTIPLE, {
             employee_ids: generateFormData.employee_ids,
             month: generateFormData.month,
@@ -529,6 +546,10 @@ const PayrollManagement = () => {
     const handleConfirmPreviewGenerate = async () => {
         if (!selectedPayroll?.employee?.id) {
             toast.error('Employee details not found');
+            return;
+        }
+        if (isCurrentUserEmployee(selectedPayroll.employee)) {
+            toast.error('You cannot generate your own payroll');
             return;
         }
 
@@ -801,7 +822,7 @@ const PayrollManagement = () => {
             .filter(emp => !generateFormData.employee_ids.includes(emp.id))
             .filter(emp => emp.name.toLowerCase().includes(availableSearch.toLowerCase()) ||
                 emp.employee_code.toLowerCase().includes(availableSearch.toLowerCase()));
-    }, [employeeList, generateFormData.employee_ids, availableSearch]);
+    }, [employeeList, generateFormData.employee_ids, availableSearch, isCurrentUserEmployee]);
 
     const selectedEmployees = useMemo(() => {
         return employeeList
@@ -1093,8 +1114,8 @@ const PayrollManagement = () => {
                                                                     label: 'Generate Payroll',
                                                                     icon: <FaCalculator size={14} />,
                                                                     onClick: () => openPreviewGenerateConfirm(item),
-                                                                    disabled: generatePayrollAccess.disabled,
-                                                                    title: generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : '',
+                                                                    disabled: generatePayrollAccess.disabled || isCurrentUserEmployee(item.employee),
+                                                                    title: isCurrentUserEmployee(item.employee) ? 'You cannot generate your own payroll' : (generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : ''),
                                                                     className: 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
                                                                 },
                                                             ] : [
@@ -1193,8 +1214,8 @@ const PayrollManagement = () => {
                                                                     label: 'Generate Payroll',
                                                                     icon: <FaCalculator size={14} />,
                                                                     onClick: () => openPreviewGenerateConfirm(item),
-                                                                    disabled: generatePayrollAccess.disabled,
-                                                                    title: generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : '',
+                                                                    disabled: generatePayrollAccess.disabled || isCurrentUserEmployee(item.employee),
+                                                                    title: isCurrentUserEmployee(item.employee) ? 'You cannot generate your own payroll' : (generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : ''),
                                                                     className: 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
                                                                 },
                                                             ] : [
@@ -1347,8 +1368,8 @@ const PayrollManagement = () => {
                                     closeModal();
                                     openPreviewGenerateConfirm(selectedPayroll);
                                 }}
-                                disabled={generatePayrollAccess.disabled}
-                                title={generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : ''}
+                                disabled={generatePayrollAccess.disabled || isCurrentUserEmployee(selectedPayroll?.employee)}
+                                title={isCurrentUserEmployee(selectedPayroll?.employee) ? 'You cannot generate your own payroll' : (generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : '')}
                                 className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-xl hover:from-emerald-700 hover:to-green-700 transition-all duration-300 font-medium shadow-md shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <FaCalculator size={14} /> Generate Payroll
@@ -1497,8 +1518,8 @@ const PayrollManagement = () => {
                         <button
                             type="button"
                             onClick={handleConfirmPreviewGenerate}
-                            disabled={loading || generatePayrollAccess.disabled}
-                            title={generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : ''}
+                            disabled={loading || generatePayrollAccess.disabled || isCurrentUserEmployee(selectedPayroll?.employee)}
+                            title={isCurrentUserEmployee(selectedPayroll?.employee) ? 'You cannot generate your own payroll' : (generatePayrollAccess.disabled ? getAccessMessage(generatePayrollAccess) : '')}
                             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-lg shadow-emerald-200 hover:shadow-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {loading ? (
@@ -1712,14 +1733,24 @@ const PayrollManagement = () => {
                                             {availableEmployees.length === 0 ? (
                                                 <div className="text-center py-8 text-sm text-gray-400">No employees found</div>
                                             ) : (
-                                                availableEmployees.map(emp => (
+                                                availableEmployees.map(emp => {
+                                                    const isOwnProfile = isCurrentUserEmployee(emp);
+                                                    return (
                                                     <div
                                                         key={emp.id}
-                                                        onClick={() => setGenerateFormData(prev => ({
-                                                            ...prev,
-                                                            employee_ids: [...prev.employee_ids, emp.id]
-                                                        }))}
-                                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-emerald-50 border border-transparent hover:border-emerald-100 cursor-pointer transition-colors group"
+                                                        title={isOwnProfile ? 'You cannot select your own profile' : 'Select employee'}
+                                                        aria-disabled={isOwnProfile}
+                                                        onClick={() => {
+                                                            if (isOwnProfile) return;
+                                                            setGenerateFormData(prev => ({
+                                                                ...prev,
+                                                                employee_ids: [...prev.employee_ids, emp.id]
+                                                            }));
+                                                        }}
+                                                        className={`flex items-center gap-3 p-2 rounded-lg border transition-colors group ${isOwnProfile
+                                                            ? 'cursor-not-allowed border-amber-100 bg-amber-50/60 opacity-70'
+                                                            : 'cursor-pointer border-transparent hover:border-emerald-100 hover:bg-emerald-50'
+                                                            }`}
                                                     >
                                                         <ProfileAvatar
                                                             record={emp}
@@ -1732,11 +1763,16 @@ const PayrollManagement = () => {
                                                             <div className="text-sm font-semibold text-gray-800 truncate">{emp.name}</div>
                                                             <div className="text-xs text-gray-500 truncate">{emp.employee_code}</div>
                                                         </div>
-                                                        <div className="opacity-0 group-hover:opacity-100 text-emerald-500">
-                                                            <FaCheckCircle size={14} />
-                                                        </div>
+                                                        {isOwnProfile ? (
+                                                            <span className="text-[10px] font-semibold text-amber-700">Your profile</span>
+                                                        ) : (
+                                                            <div className="opacity-0 group-hover:opacity-100 text-emerald-500">
+                                                                <FaCheckCircle size={14} />
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                ))
+                                                    );
+                                                })
                                             )}
                                         </div>
                                     </div>
@@ -1748,7 +1784,12 @@ const PayrollManagement = () => {
                                             title="Select All"
                                             onClick={() => setGenerateFormData(prev => ({
                                                 ...prev,
-                                                employee_ids: [...new Set([...prev.employee_ids, ...availableEmployees.map(emp => emp.id)])]
+                                                employee_ids: [...new Set([
+                                                    ...prev.employee_ids,
+                                                    ...availableEmployees
+                                                        .filter(emp => !isCurrentUserEmployee(emp))
+                                                        .map(emp => emp.id)
+                                                ])]
                                             }))}
                                             className="p-2 rounded-lg bg-gray-50 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 border border-gray-200 hover:border-emerald-200 transition-colors"
                                         >

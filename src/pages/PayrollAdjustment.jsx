@@ -18,13 +18,22 @@ import ManagementGrid from '../components/ManagementGrid';
 import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import AdvancedDateFilter from '../components/AdvancedDateFilter';
 import useEmployeeNavigation from '../hooks/useEmployeeNavigation';
+import { useAuth } from '../context/AuthContext';
 
 export default function PayrollAdjustment() {
     const navigateToEmployeeProfile = useEmployeeNavigation();
     const { checkActionAccess, getAccessMessage } = usePermissionAccess();
+    const { user, company } = useAuth();
     const createAccess = checkActionAccess('payrollAdjustment', 'create');
     const updateAccess = checkActionAccess('payrollAdjustment', 'update');
     const deleteAccess = checkActionAccess('payrollAdjustment', 'delete');
+    const isCurrentUserEmployee = useCallback((employee) => (
+        Boolean(employee) && (
+            Number(employee.user_id ?? employee.employee_user_id) === Number(user?.id) ||
+            Number(employee.id ?? employee.employee_id) === Number(company?.employee_id) ||
+            (employee.email && user?.email && employee.email.toLowerCase() === user.email.toLowerCase())
+        )
+    ), [company?.employee_id, user?.email, user?.id]);
 
     const [adjustments, setAdjustments] = useState([]);
     const [summary, setSummary] = useState(null);
@@ -157,6 +166,11 @@ export default function PayrollAdjustment() {
             return;
         }
 
+        if (!editingAdjustment && isCurrentUserEmployee({ id: formData.employee_id })) {
+            toast.error('You cannot create an adjustment for your own record');
+            return;
+        }
+
         if (!formData.name || !formData.amount || !formData.adjustment_period) {
             toast.warning('Please fill in all required fields');
             return;
@@ -216,14 +230,15 @@ export default function PayrollAdjustment() {
 
     // ─── Selection helpers ────────────────────────────────────────────────
     const allVisibleSelected = useMemo(() => {
-        return adjustments.length > 0 && adjustments.every(adj => selectedIds.includes(adj.id));
-    }, [adjustments, selectedIds]);
+        const selectableAdjustments = adjustments.filter(adj => !isCurrentUserEmployee(adj));
+        return selectableAdjustments.length > 0 && selectableAdjustments.every(adj => selectedIds.includes(adj.id));
+    }, [adjustments, isCurrentUserEmployee, selectedIds]);
 
     const toggleSelectAll = () => {
         if (allVisibleSelected) {
-            setSelectedIds([]);
+            setSelectedIds(prev => prev.filter(id => !adjustments.some(adj => adj.id === id && !isCurrentUserEmployee(adj))));
         } else {
-            setSelectedIds(adjustments.map(adj => adj.id));
+            setSelectedIds(adjustments.filter(adj => !isCurrentUserEmployee(adj)).map(adj => adj.id));
         }
     };
 
@@ -238,17 +253,23 @@ export default function PayrollAdjustment() {
 
     // ─── Delete handlers ──────────────────────────────────────────────────
     const handleDeleteClick = (id) => {
+        const adjustment = adjustments.find(item => item.id === id);
+        if (isCurrentUserEmployee(adjustment)) {
+            toast.error('You cannot delete an adjustment for your own record');
+            return;
+        }
         setDeleteConfirmState({ type: 'single', id });
     };
 
     const handleBulkDeleteSelected = () => {
-        if (selectedIds.length === 0) return;
-        setDeleteConfirmState({ type: 'selected', ids: selectedIds });
+        const safeIds = selectedIds.filter(id => !isCurrentUserEmployee(adjustments.find(item => item.id === id)));
+        if (safeIds.length === 0) return;
+        setDeleteConfirmState({ type: 'selected', ids: safeIds });
     };
 
     const handleBulkDeleteAllVisible = () => {
         if (!allVisibleSelected || adjustments.length === 0) return;
-        setDeleteConfirmState({ type: 'allVisible', ids: adjustments.map(adj => adj.id) });
+        setDeleteConfirmState({ type: 'allVisible', ids: adjustments.filter(adj => !isCurrentUserEmployee(adj)).map(adj => adj.id) });
     };
 
     const confirmDelete = async () => {
@@ -322,16 +343,16 @@ export default function PayrollAdjustment() {
             label: 'Edit',
             icon: <FaEdit size={13} />,
             onClick: () => openEditModal(adj),
-            disabled: updateAccess.disabled,
-            title: updateAccess.disabled ? getAccessMessage(updateAccess) : 'Edit adjustment',
+            disabled: updateAccess.disabled || isCurrentUserEmployee(adj),
+            title: isCurrentUserEmployee(adj) ? 'You cannot edit your own adjustment' : (updateAccess.disabled ? getAccessMessage(updateAccess) : 'Edit adjustment'),
             className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
         },
         {
             label: 'Delete',
             icon: <FaTrash size={13} />,
             onClick: () => handleDeleteClick(adj.id),
-            disabled: deleteAccess.disabled,
-            title: deleteAccess.disabled ? getAccessMessage(deleteAccess) : 'Delete adjustment',
+            disabled: deleteAccess.disabled || isCurrentUserEmployee(adj),
+            title: isCurrentUserEmployee(adj) ? 'You cannot delete your own adjustment' : (deleteAccess.disabled ? getAccessMessage(deleteAccess) : 'Delete adjustment'),
             className: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50'
         }
     ];
@@ -348,6 +369,8 @@ export default function PayrollAdjustment() {
                                 type="checkbox"
                                 checked={selectedIds.includes(adj.id)}
                                 onChange={(e) => toggleSelectRow(e, adj.id)}
+                                disabled={isCurrentUserEmployee(adj)}
+                                title={isCurrentUserEmployee(adj) ? 'You cannot delete your own adjustment' : 'Select adjustment'}
                                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                             />
                         </div>
@@ -605,7 +628,9 @@ export default function PayrollAdjustment() {
                                                             type="checkbox"
                                                             checked={selectedIds.includes(adj.id)}
                                                             onChange={(e) => toggleSelectRow(e, adj.id)}
-                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer mr-2"
+                                                            disabled={isCurrentUserEmployee(adj)}
+                                                            title={isCurrentUserEmployee(adj) ? 'You cannot delete your own adjustment' : 'Select adjustment'}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer mr-2 disabled:cursor-not-allowed"
                                                         />
                                                     </div>
                                                 )}
@@ -782,6 +807,7 @@ export default function PayrollAdjustment() {
                                 <EmployeeSelect
                                     value={formData.employee_id}
                                     onChange={(id) => setFormData({ ...formData, employee_id: id })}
+                                    isOptionDisabled={isCurrentUserEmployee}
                                 />
                             </div>
                         )}
@@ -905,8 +931,8 @@ export default function PayrollAdjustment() {
                                         setDeleteConfirmState({ type: 'single', id: detailAdjustment.id });
                                         setDetailAdjustment(null);
                                     }}
-                                    disabled={deleteAccess.disabled}
-                                    title={deleteAccess.disabled ? getAccessMessage(deleteAccess) : 'Delete adjustment'}
+                                    disabled={deleteAccess.disabled || isCurrentUserEmployee(detailAdjustment)}
+                                    title={isCurrentUserEmployee(detailAdjustment) ? 'You cannot delete your own adjustment' : (deleteAccess.disabled ? getAccessMessage(deleteAccess) : 'Delete adjustment')}
                                     className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-rose-200 transition-all hover:from-rose-700 hover:to-red-700 disabled:opacity-50"
                                 >
                                     <FaTrash size={13} /> Delete
@@ -917,8 +943,8 @@ export default function PayrollAdjustment() {
                                         openEditModal(detailAdjustment);
                                         setDetailAdjustment(null);
                                     }}
-                                    disabled={updateAccess.disabled}
-                                    title={updateAccess.disabled ? getAccessMessage(updateAccess) : 'Edit adjustment'}
+                                    disabled={updateAccess.disabled || isCurrentUserEmployee(detailAdjustment)}
+                                    title={isCurrentUserEmployee(detailAdjustment) ? 'You cannot edit your own adjustment' : (updateAccess.disabled ? getAccessMessage(updateAccess) : 'Edit adjustment')}
                                     className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-200 transition-all hover:from-indigo-700 hover:to-blue-700 disabled:opacity-50"
                                 >
                                     <FaEdit size={13} /> Edit
