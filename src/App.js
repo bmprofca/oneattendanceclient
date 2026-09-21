@@ -263,7 +263,7 @@ const BANK_HUB_TABS = [
     shortLabel: "Company",
     description: "Manage company bank accounts and cash wallets.",
     icon: FaBuilding,
-    pageKey: "bankAccountManagement",
+    pageKey: "companyBankAccountManagement",
     component: BankAccountManagement,
     accent: "bg-violet-50 text-violet-700 border-violet-200",
   },

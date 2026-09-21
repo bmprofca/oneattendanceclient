@@ -114,6 +114,9 @@ const PERMISSION_ACCESS_CONFIG = {
       permissions: ["financial"],
       allowCompanyOwner: true,
     },
+    companyBankAccountManagement: {
+      requireCompanyOwner: true,
+    },
     pendingAttendance: {
       permissions: ["attendance"],
     },
