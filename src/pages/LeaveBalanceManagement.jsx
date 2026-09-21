@@ -19,6 +19,7 @@ import EmployeeSelect from '../components/common/EmployeeSelect';
 import ProfileAvatar from '../components/common/ProfileAvatar';
 import CurrencyIcon from "../components/common/CurrencyIcon";
 import ActionMenu from '../components/ActionMenu';
+import { useAuth } from '../context/AuthContext';
 
 const ITEMS_PER_PAGE = 10;
 const FETCH_BATCH_SIZE = 100;
@@ -58,6 +59,7 @@ const normalizeEmployeeBalances = (data, year) => {
   if (!data || !Array.isArray(data)) return [];
   return data.map((employee) => ({
     employee_id: employee.employee_id || employee.employee?.id || employee.id,
+    user_id: employee.user_id ?? employee.employee_user_id ?? employee.employee?.user_id ?? null,
     employee_name: employee.employee_name || employee.employee?.name || employee.name || 'N/A',
     email: employee.email || employee.employee?.email,
     employee_code: employee.employee_code || employee.employee?.employee_code,
@@ -254,6 +256,7 @@ const fetchEmployeeAvailableConfigsAsync = async (employeeId, year) => {
 // ─── LeaveBalanceManagement ────────────────────────────────────────────────────
 const LeaveBalanceManagement = () => {
   const { checkActionAccess, getAccessMessage } = usePermissionAccess();
+  const { user } = useAuth();
   const [balances, setBalances] = useState([]);
   const [filteredBalances, setFilteredBalances] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -524,7 +527,15 @@ const LeaveBalanceManagement = () => {
     },
   ], [balances]);
 
-  const getActionButtons = (employee) => [
+  const isCurrentUserRow = (employee) => {
+    if (!employee || !user?.id) return false;
+    return Number(employee.user_id ?? employee.employee_user_id ?? employee.employee?.user_id ?? employee.user_id) === Number(user.id);
+  };
+
+  const getActionButtons = (employee) => {
+    const isSelf = isCurrentUserRow(employee);
+
+    return [
     {
       label: 'View Details',
       icon: <FaEye size={13} />,
@@ -534,20 +545,21 @@ const LeaveBalanceManagement = () => {
     {
       label: 'Edit Balance',
       icon: <FaEdit size={13} />,
-      onClick: () => openModal('edit', employee),
-      disabled: updateAccess.disabled,
-      title: updateAccess.disabled ? updateMessage : '',
+      onClick: () => !isSelf && openModal('edit', employee),
+      disabled: updateAccess.disabled || isSelf,
+      title: isSelf ? 'You cannot edit your own leave configuration' : (updateAccess.disabled ? updateMessage : ''),
       className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
     },
     {
       label: 'Delete',
       icon: <FaTrash size={13} />,
-      onClick: () => openModal('delete', employee),
-      disabled: deleteAccess.disabled,
-      title: deleteAccess.disabled ? deleteMessage : '',
+      onClick: () => !isSelf && openModal('delete', employee),
+      disabled: deleteAccess.disabled || isSelf,
+      title: isSelf ? 'You cannot delete your own leave configuration' : (deleteAccess.disabled ? deleteMessage : ''),
       className: 'text-red-600 hover:text-red-700 hover:bg-red-50'
     }
-  ];
+    ];
+  };
 
   const columns = [
     {
@@ -940,17 +952,25 @@ const LeaveBalanceManagement = () => {
                   Close
                 </button>
                 <button
-                  onClick={() => { closeViewModal(); openModal('delete', viewModal.balance); }}
-                  disabled={deleteAccess.disabled}
-                  title={deleteAccess.disabled ? deleteMessage : ''}
+                  onClick={() => {
+                    if (isCurrentUserRow(viewModal.balance)) return;
+                    closeViewModal();
+                    openModal('delete', viewModal.balance);
+                  }}
+                  disabled={deleteAccess.disabled || isCurrentUserRow(viewModal.balance)}
+                  title={isCurrentUserRow(viewModal.balance) ? 'You cannot delete your own leave configuration' : (deleteAccess.disabled ? deleteMessage : '')}
                   className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-bold text-[13px] hover:from-red-600 hover:to-rose-700 transition-all shadow-lg shadow-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FaTrash size={12} /> Delete
                 </button>
                 <button
-                  onClick={() => { closeViewModal(); openModal('edit', viewModal.balance); }}
-                  disabled={updateAccess.disabled}
-                  title={updateAccess.disabled ? updateMessage : ''}
+                  onClick={() => {
+                    if (isCurrentUserRow(viewModal.balance)) return;
+                    closeViewModal();
+                    openModal('edit', viewModal.balance);
+                  }}
+                  disabled={updateAccess.disabled || isCurrentUserRow(viewModal.balance)}
+                  title={isCurrentUserRow(viewModal.balance) ? 'You cannot edit your own leave configuration' : (updateAccess.disabled ? updateMessage : '')}
                   className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-bold text-[13px] hover:from-violet-700 hover:to-indigo-700 transition-all shadow-lg shadow-violet-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FaEdit size={12} /> Edit Balances

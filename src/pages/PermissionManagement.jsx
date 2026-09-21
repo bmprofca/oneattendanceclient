@@ -17,6 +17,7 @@ import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import { ManagementButton, RefreshButton } from '../components/common';
 import SelectField from '../components/SelectField';
 import CategoryPermissionSelector from '../components/common/CategoryPermissionSelector';
+import { useAuth } from '../context/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -180,6 +181,7 @@ const PackageFormBody = ({
 // ─── Main Component ───────────────────────────────────────────────────────────
 const PermissionManagement = () => {
   const { checkActionAccess, getAccessMessage } = usePermissionAccess();
+  const { user, company } = useAuth();
   const [packages, setPackages] = useState([]);
   const [allPermissions, setAllPermissions] = useState([]);
   const [allPermissionPackages, setAllPermissionPackages] = useState([]);
@@ -211,6 +213,13 @@ const PermissionManagement = () => {
   const [windowWidth, setWindowWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1440
   );
+
+  const isCurrentUserEmployee = useCallback((employee) => (
+    Boolean(employee) && (
+      Number(employee.user_id) === Number(user?.id) ||
+      Number(employee.employee_id ?? employee.id) === Number(company?.employee_id)
+    )
+  ), [company?.employee_id, user?.id]);
 
   // Debounce search
   useEffect(() => {
@@ -584,6 +593,15 @@ const PermissionManagement = () => {
       return;
     }
 
+    if (selectedEmployeeIds.some((employeeId) => (
+      getUsedByEmployees(selectedPackage).some((employee) => (
+        String(employee.employee_id ?? employee.id) === String(employeeId) && isCurrentUserEmployee(employee)
+      ))
+    ))) {
+      toast.error('You cannot change your own permission package');
+      return;
+    }
+
     const assignments = selectedEmployeeIds
       .map((employeeId) => {
         const chosenPackage = employeePackageSelections[employeeId] || bulkTargetPackage;
@@ -623,6 +641,13 @@ const PermissionManagement = () => {
   };
 
   const handleSingleEmployeeApply = async (employeeId, targetPackage) => {
+    const employee = getUsedByEmployees(selectedPackage).find((item) => (
+      String(item.employee_id ?? item.id) === String(employeeId)
+    ));
+    if (isCurrentUserEmployee(employee)) {
+      toast.error('You cannot change your own permission package');
+      return;
+    }
     if (!targetPackage?.value) {
       toast.warning('Select a target permission package');
       return;
@@ -651,6 +676,10 @@ const PermissionManagement = () => {
   };
 
   const toggleEmployeeSelection = (employeeId) => {
+    const employee = getUsedByEmployees(selectedPackage).find((item) => (
+      String(item.employee_id ?? item.id) === String(employeeId)
+    ));
+    if (isCurrentUserEmployee(employee)) return;
     setSelectedEmployeeIds((prev) => (
       prev.includes(employeeId)
         ? prev.filter((id) => id !== employeeId)
@@ -659,7 +688,10 @@ const PermissionManagement = () => {
   };
 
   const toggleSelectAllEmployees = () => {
-    const employeeIds = getUsedByEmployees(selectedPackage).map((employee) => employee.employee_id ?? employee.id).filter(Boolean);
+    const employeeIds = getUsedByEmployees(selectedPackage)
+      .filter((employee) => !isCurrentUserEmployee(employee))
+      .map((employee) => employee.employee_id ?? employee.id)
+      .filter(Boolean);
     const allSelected = selectedEmployeeIds.length === employeeIds.length && employeeIds.length > 0;
     if (allSelected) {
       setSelectedEmployeeIds([]);
@@ -670,7 +702,7 @@ const PermissionManagement = () => {
 
     const nextSelections = {};
     const bulkOption = bulkTargetPackage || null;
-    getUsedByEmployees(selectedPackage).forEach((employee) => {
+    getUsedByEmployees(selectedPackage).filter((employee) => !isCurrentUserEmployee(employee)).forEach((employee) => {
       const employeeId = employee.employee_id ?? employee.id;
       if (employeeId) nextSelections[employeeId] = bulkOption;
     });
@@ -1245,7 +1277,7 @@ const PermissionManagement = () => {
                                     onClick={toggleSelectAllEmployees}
                                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50"
                                   >
-                                    {selectedEmployeeIds.length === getUsedByEmployees(selectedPackage).length ? 'Clear' : 'Select all'}
+                                    {selectedEmployeeIds.length === getUsedByEmployees(selectedPackage).filter((employee) => !isCurrentUserEmployee(employee)).length ? 'Clear' : 'Select all'}
                                   </button>
                                   <button
                                     type="button"
@@ -1300,6 +1332,7 @@ const PermissionManagement = () => {
                               {selectedPackageUsage?.employees?.length > 0 ? (
                                 selectedPackageUsage.employees.map((employee, idx) => {
                                   const employeeId = employee.employee_id ?? employee.id;
+                                  const isSelf = isCurrentUserEmployee(employee);
                                   const selectedOption = employeePackageSelections[employeeId] || null;
                                   const isSelected = selectedEmployeeIds.includes(employeeId);
 
@@ -1313,7 +1346,9 @@ const PermissionManagement = () => {
                                           type="checkbox"
                                           checked={isSelected}
                                           onChange={() => toggleEmployeeSelection(employeeId)}
-                                          className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                          disabled={isSelf}
+                                          title={isSelf ? 'You cannot change your own permission package' : ''}
+                                          className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
                                         />
                                         <div className="flex-1 min-w-0">
                                           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1326,6 +1361,7 @@ const PermissionManagement = () => {
                                                   <p className="truncate text-sm font-bold text-slate-900">{employee.name || 'Unknown Employee'}</p>
                                                   <p className="truncate text-[11px] text-slate-500">{employee.employee_code || employee.email || 'No employee code'}</p>
                                                   <p className="mt-1 text-[11px] text-slate-400">{employee.designation || 'No designation'}</p>
+                                                  {isSelf && <p className="mt-1 text-[11px] font-semibold text-amber-600">Your account cannot be transferred</p>}
                                                 </div>
                                               </div>
                                             </div>
@@ -1334,7 +1370,7 @@ const PermissionManagement = () => {
                                               <SelectField
                                                 isClearable
                                                 isSearchable
-                                                isDisabled={assignmentLoading || packageOptionsLoading}
+                                                isDisabled={isSelf || assignmentLoading || packageOptionsLoading}
                                                 options={employeeOptionsForModal}
                                                 value={selectedOption}
                                                 onChange={(option) => {
@@ -1349,7 +1385,8 @@ const PermissionManagement = () => {
                                               <button
                                                 type="button"
                                                 onClick={() => handleSingleEmployeeApply(employeeId, selectedOption)}
-                                                disabled={assignmentLoading || !selectedOption}
+                                                disabled={isSelf || assignmentLoading || !selectedOption}
+                                                title={isSelf ? 'You cannot change your own permission package' : ''}
                                                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                                               >
                                                 {assignmentLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />}

@@ -15,6 +15,7 @@ import Pagination, { usePagination } from '../PaginationComponent';
 import { ManagementTable } from '../common';
 import ManagementGrid from '../ManagementGrid';
 import ManagementViewSwitcher from '../ManagementViewSwitcher';
+import { useAuth } from '../../context/AuthContext';
 
 const fmt = (d) => {
   if (!d) return '—';
@@ -65,6 +66,7 @@ function StatusBadge({ status }) {
 }
 
 export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
+  const { user, company } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('table');
@@ -105,6 +107,14 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
   const [rejectRemarks, setRejectRemarks] = useState('');
 
   const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
+
+  const isCurrentEmployee = Number(employeeId) === Number(company?.employee_id);
+  const isCurrentUserLeave = (leave) => (
+    Boolean(user?.id) && (
+      Number(leave?.employee_user_id) === Number(user.id) ||
+      (isCurrentEmployee && String(leave?.employee_id) === String(employeeId))
+    )
+  );
 
   const fetchLeaves = useCallback(async (page = pagination.page) => {
     if (!employeeId) return;
@@ -245,6 +255,7 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
 
   const handleCreateSubmit = async (e) => {
     e?.preventDefault();
+    if (isCurrentEmployee) return toast.error('You cannot create leave for yourself');
     if (!createForm.leave_config_id) return toast.warning('Please select a leave type');
     if (!createForm.start_date || !createForm.end_date) return toast.warning('Please select a date range');
     if (createForm.end_date < createForm.start_date) return toast.warning('End date cannot be before start date');
@@ -290,6 +301,7 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
 
   const handleApproveSubmit = async () => {
     if (!approveLeave) return;
+    if (isCurrentUserLeave(approveLeave)) return toast.error('You cannot approve or edit your own leave');
     setSubmitting(true);
     try {
       const company = JSON.parse(localStorage.getItem('company') || '{}');
@@ -317,6 +329,7 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
 
   const handleRejectSubmit = async () => {
     if (!rejectLeave) return;
+    if (isCurrentUserLeave(rejectLeave)) return toast.error('You cannot reject your own leave');
     if (!rejectRemarks.trim()) return toast.warning('Rejection reason is required');
 
     setSubmitting(true);
@@ -463,6 +476,8 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
           <button
             type="button"
             onClick={openCreateModal}
+            disabled={isCurrentEmployee}
+            title={isCurrentEmployee ? 'You cannot create leave for yourself' : 'Create leave'}
             className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-amber-200 hover:from-amber-600 hover:to-orange-600 transition-all"
           >
             <FaPlus size={10} /> Create Leave
@@ -490,6 +505,8 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
           <button
             type="button"
             onClick={openCreateModal}
+            disabled={isCurrentEmployee}
+            title={isCurrentEmployee ? 'You cannot create leave for yourself' : 'Request first leave'}
             className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100 transition-all border border-amber-200"
           >
             <FaPlus size={10} /> Request First Leave
@@ -507,8 +524,8 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
             { label: 'View Details', icon: <FaEye size={12} />, onClick: () => setDetailLeave(l), className: 'text-blue-600 hover:bg-blue-50' },
             ...(l.status === 'pending'
               ? [
-                  { label: 'Approve / Edit', icon: <FaCheck size={12} />, onClick: () => openApproveModal(l), className: 'text-emerald-600 hover:bg-emerald-50' },
-                  { label: 'Reject', icon: <FaTimes size={12} />, onClick: () => { setRejectLeave(l); setRejectRemarks(''); }, className: 'text-rose-600 hover:bg-rose-50' },
+                  { label: 'Approve / Edit', icon: <FaCheck size={12} />, onClick: () => { if (!isCurrentUserLeave(l)) openApproveModal(l); }, disabled: isCurrentUserLeave(l), title: isCurrentUserLeave(l) ? 'You cannot approve or edit your own leave' : '', className: 'text-emerald-600 hover:bg-emerald-50' },
+                  { label: 'Reject', icon: <FaTimes size={12} />, onClick: () => { if (isCurrentUserLeave(l)) return; setRejectLeave(l); setRejectRemarks(''); }, disabled: isCurrentUserLeave(l), title: isCurrentUserLeave(l) ? 'You cannot reject your own leave' : '', className: 'text-rose-600 hover:bg-rose-50' },
                 ]
               : []),
           ]}
@@ -547,16 +564,18 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setRejectLeave(l); setRejectRemarks(''); }}
+                      disabled={isCurrentUserLeave(l)}
+                      title={isCurrentUserLeave(l) ? 'You cannot reject your own leave' : 'Reject'}
                       className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg text-xs"
-                      title="Reject"
                     >
                       <FaTimes size={13} />
                     </button>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); openApproveModal(l); }}
+                      disabled={isCurrentUserLeave(l)}
+                      title={isCurrentUserLeave(l) ? 'You cannot approve or edit your own leave' : 'Approve / Edit'}
                       className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg text-xs"
-                      title="Approve / Edit"
                     >
                       <FaCheck size={13} />
                     </button>
@@ -800,6 +819,8 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
                   <button
                     type="button"
                     onClick={() => { setRejectLeave(detailLeave); setRejectRemarks(''); setDetailLeave(null); }}
+                    disabled={isCurrentUserLeave(detailLeave)}
+                    title={isCurrentUserLeave(detailLeave) ? 'You cannot reject your own leave' : 'Reject'}
                     className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-rose-200 transition-all hover:from-rose-700 hover:to-red-700"
                   >
                     <FaTrash size={13} /> Reject
@@ -807,6 +828,8 @@ export default function EmployeeLeaveRequestsTab({ employeeId, employeeName }) {
                   <button
                     type="button"
                     onClick={() => { openApproveModal(detailLeave); setDetailLeave(null); }}
+                    disabled={isCurrentUserLeave(detailLeave)}
+                    title={isCurrentUserLeave(detailLeave) ? 'You cannot approve or edit your own leave' : 'Approve / Edit'}
                     className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-200 transition-all hover:from-emerald-700 hover:to-green-700"
                   >
                     <FaCheck size={13} /> Approve / Edit

@@ -17,6 +17,7 @@ import ManagementViewSwitcher from '../components/ManagementViewSwitcher';
 import { EmployeeSelect, ManagementButton, ManagementCard, ManagementHub, ManagementTable } from '../components/common';
 import ProfileAvatar from '../components/common/ProfileAvatar';
 import useEmployeeNavigation from '../hooks/useEmployeeNavigation';
+import { useAuth } from '../context/AuthContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (d) => {
@@ -182,6 +183,7 @@ const ToggleSwitch = ({ isOn, onToggle, accent = "blue", disabled = false }) => 
 const LeaveManagement = () => {
     const navigateToEmployeeProfile = useEmployeeNavigation();
     const { checkActionAccess, getAccessMessage } = usePermissionAccess();
+    const { user, company } = useAuth();
     const [leaves, setLeaves] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
@@ -229,6 +231,19 @@ const LeaveManagement = () => {
     const rejectAccess = checkActionAccess('leaveManagement', 'reject');
     const reviewMessage = getAccessMessage(approveAccess.disabled ? approveAccess : rejectAccess);
     const createMessage = getAccessMessage(createAccess);
+
+    const isCurrentUserLeave = useCallback((leave) => (
+        Boolean(user?.id) && Number(leave?.employee_user_id ?? leave?.user_id) === Number(user.id)
+    ), [user?.id]);
+
+    const isCurrentUserCreateTarget = useMemo(() => {
+        if (!createForm.employee_id) return false;
+        if (Number(createEmployee?.user_id) === Number(user?.id)) return true;
+        if (Number(company?.employee_id) === Number(createForm.employee_id)) return true;
+        return leaves.some((leave) => (
+            String(leave.employee_id) === String(createForm.employee_id) && isCurrentUserLeave(leave)
+        ));
+    }, [company?.employee_id, createEmployee?.user_id, createForm.employee_id, isCurrentUserLeave, leaves, user?.id]);
 
     const fetchInProgress = useRef(false);
 
@@ -414,6 +429,7 @@ const LeaveManagement = () => {
 
     const submitCreateLeave = async ({ skipBalanceConfirm = false } = {}) => {
         if (!createForm.employee_id) return toast.warn('Employee is required');
+        if (isCurrentUserCreateTarget) return toast.error('You cannot create leave for yourself');
         if (!createForm.leave_config_id) return toast.warn('Leave type is required');
         if (!createForm.start_date || !createForm.end_date) return toast.warn('Leave date range is required');
         if (createForm.end_date < createForm.start_date) return toast.warn('End date cannot be before start date');
@@ -456,6 +472,7 @@ const LeaveManagement = () => {
 
     const submitApprove = async ({ skipBalanceConfirm = false } = {}) => {
         if (!approveLeave) return;
+        if (isCurrentUserLeave(approveLeave)) return toast.error('You cannot approve or edit your own leave');
 
         const originalStartDate = toDateInputValue(approveLeave.start_date);
         const originalEndDate = toDateInputValue(approveLeave.end_date);
@@ -517,6 +534,7 @@ const LeaveManagement = () => {
 
     const submitReject = async () => {
         if (!rejectLeave) return;
+        if (isCurrentUserLeave(rejectLeave)) return toast.error('You cannot reject your own leave');
         if (!rejectRemarks.trim()) return toast.warn('Rejection reason is required');
         setSubmitting(true);
         try {
@@ -535,7 +553,7 @@ const LeaveManagement = () => {
     };
 
     const toggleSelectAll = () => {
-        const pendingLeaves = visibleLeaves.filter(l => l.status === 'pending');
+        const pendingLeaves = visibleLeaves.filter(l => l.status === 'pending' && !isCurrentUserLeave(l));
         const pendingIds = pendingLeaves.map(l => l.id);
         const allPendingSelected = pendingIds.length > 0 && pendingIds.every(id => selectedIds.includes(id));
 
@@ -549,11 +567,16 @@ const LeaveManagement = () => {
     const toggleSelectRow = (eOrId, maybeId) => {
         if (eOrId?.stopPropagation) eOrId.stopPropagation();
         const id = maybeId ?? eOrId;
+        const leave = visibleLeaves.find((item) => String(item.id) === String(id));
+        if (isCurrentUserLeave(leave)) return;
         setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
     const handleBulkApprove = async () => {
         if (selectedIds.length === 0) return;
+        if (selectedIds.some((id) => isCurrentUserLeave(visibleLeaves.find((leave) => leave.id === id)))) {
+            return toast.error('You cannot approve your own leave');
+        }
         setSubmitting(true);
         try {
             const companyId = JSON.parse(localStorage.getItem('company'))?.id;
@@ -574,6 +597,9 @@ const LeaveManagement = () => {
 
     const handleBulkReject = async () => {
         if (selectedIds.length === 0) return;
+        if (selectedIds.some((id) => isCurrentUserLeave(visibleLeaves.find((leave) => leave.id === id)))) {
+            return toast.error('You cannot reject your own leave');
+        }
         if (!bulkRejectRemarks.trim()) return toast.warn('Rejection reason is required');
         setSubmitting(true);
         try {
@@ -595,6 +621,7 @@ const LeaveManagement = () => {
 
     const ActionMenuButtons = (leave) => {
         const isPending = leave.status === 'pending';
+        const isSelf = isCurrentUserLeave(leave);
         return [
             { label: 'View Details', icon: <FaEye size={13} />, onClick: () => setDetailLeave(leave), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
             ...(isPending ? [
@@ -602,6 +629,7 @@ const LeaveManagement = () => {
                     label: 'Approve / Edit',
                     icon: <FaCheck size={13} />,
                     onClick: () => {
+                        if (isSelf) return;
                         setApproveLeave(leave);
                         setApproveRemarks('');
                         setApproveForm({
@@ -611,11 +639,11 @@ const LeaveManagement = () => {
                             half_day_type: leave.half_day_type || 'first_half',
                         });
                     },
-                    disabled: approveAccess.disabled,
-                    title: approveAccess.disabled ? reviewMessage : '',
+                    disabled: approveAccess.disabled || isSelf,
+                    title: isSelf ? 'You cannot approve or edit your own leave' : (approveAccess.disabled ? reviewMessage : ''),
                     className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
                 },
-                { label: 'Reject', icon: <FaTrash size={13} />, onClick: () => { setRejectLeave(leave); setRejectRemarks(''); }, disabled: rejectAccess.disabled, title: rejectAccess.disabled ? reviewMessage : '', className: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50' }
+                { label: 'Reject', icon: <FaTrash size={13} />, onClick: () => { if (isSelf) return; setRejectLeave(leave); setRejectRemarks(''); }, disabled: rejectAccess.disabled || isSelf, title: isSelf ? 'You cannot reject your own leave' : (rejectAccess.disabled ? reviewMessage : ''), className: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50' }
             ] : [])
         ];
     };
@@ -654,8 +682,8 @@ const LeaveManagement = () => {
     const visibleLeaves = leaves;
 
     const visiblePendingLeaves = useMemo(
-        () => visibleLeaves.filter((leave) => leave.status === 'pending'),
-        [visibleLeaves]
+        () => visibleLeaves.filter((leave) => leave.status === 'pending' && !isCurrentUserLeave(leave)),
+        [isCurrentUserLeave, visibleLeaves]
     );
     const allVisibleSelected = visiblePendingLeaves.length > 0 && visiblePendingLeaves.every((leave) => selectedIds.includes(leave.id));
 
@@ -794,7 +822,7 @@ const LeaveManagement = () => {
                             type="checkbox"
                             checked={selectedIds.includes(leave.id)}
                             onChange={() => toggleSelectRow(leave.id)}
-                            disabled={leave.status !== 'pending'}
+                            disabled={leave.status !== 'pending' || isCurrentUserLeave(leave)}
                             className="w-3 h-3 lg:w-4 lg:h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 accent-blue-600"
                             onClick={(e) => e.stopPropagation()}
                         />
@@ -1023,7 +1051,7 @@ const LeaveManagement = () => {
                                                         type="checkbox"
                                                         checked={selectedIds.includes(leave.id)}
                                                         onChange={() => toggleSelectRow(leave.id)}
-                                                        disabled={leave.status !== 'pending'}
+                                                        disabled={leave.status !== 'pending' || isCurrentUserLeave(leave)}
                                                         className="w-3 h-3 lg:w-4 lg:h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 accent-blue-600"
                                                         onClick={(e) => e.stopPropagation()}
                                                     />
@@ -1116,7 +1144,8 @@ const LeaveManagement = () => {
                                 <button
                                     type="button"
                                     onClick={submitCreateLeave}
-                                    disabled={submitting || createUploading}
+                                    disabled={submitting || createUploading || createAccess.disabled || isCurrentUserCreateTarget}
+                                    title={isCurrentUserCreateTarget ? 'You cannot create leave for yourself' : (createAccess.disabled ? createMessage : '')}
                                     className="flex px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {submitting ? <FaSpinner className="animate-spin" /> : <FaPlus />}
@@ -1402,8 +1431,8 @@ const LeaveManagement = () => {
                                                 setRejectRemarks('');
                                                 setDetailLeave(null);
                                             }}
-                                            disabled={rejectAccess.disabled}
-                                            title={rejectAccess.disabled ? reviewMessage : ''}
+                                            disabled={rejectAccess.disabled || isCurrentUserLeave(detailLeave)}
+                                            title={isCurrentUserLeave(detailLeave) ? 'You cannot reject your own leave' : (rejectAccess.disabled ? reviewMessage : '')}
                                             className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-rose-200 transition-all hover:from-rose-700 hover:to-red-700 disabled:opacity-50"
                                         >
                                             <FaTrash size={13} /> Reject
@@ -1421,8 +1450,8 @@ const LeaveManagement = () => {
                                                 });
                                                 setDetailLeave(null);
                                             }}
-                                            disabled={approveAccess.disabled}
-                                            title={approveAccess.disabled ? reviewMessage : ''}
+                                            disabled={approveAccess.disabled || isCurrentUserLeave(detailLeave)}
+                                            title={isCurrentUserLeave(detailLeave) ? 'You cannot approve or edit your own leave' : (approveAccess.disabled ? reviewMessage : '')}
                                             className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-200 transition-all hover:from-emerald-700 hover:to-green-700 disabled:opacity-50"
                                         >
                                             <FaCheck size={13} /> Approve / Edit
@@ -1864,7 +1893,7 @@ const LeaveManagement = () => {
                                 variant="solid"
                                 leftIcon={<FaCheck />}
                                 onClick={() => { setBulkApproveRemarks(''); setShowBulkApproveModal(true); }}
-                                disabled={approveAccess.disabled}
+                                disabled={approveAccess.disabled || selectedIds.some((id) => isCurrentUserLeave(visibleLeaves.find((leave) => leave.id === id)))}
                                 className="shadow-lg shadow-green-200 !text-xs !px-3 !py-1.5"
                                 title={approveAccess.disabled ? reviewMessage : ""}
                             >
@@ -1875,7 +1904,7 @@ const LeaveManagement = () => {
                                 variant="solid"
                                 leftIcon={<FaTimes />}
                                 onClick={() => { setBulkRejectRemarks(''); setShowBulkRejectModal(true); }}
-                                disabled={rejectAccess.disabled}
+                                disabled={rejectAccess.disabled || selectedIds.some((id) => isCurrentUserLeave(visibleLeaves.find((leave) => leave.id === id)))}
                                 className="shadow-lg shadow-red-200 !text-xs !px-3 !py-1.5"
                                 title={rejectAccess.disabled ? reviewMessage : ""}
                             >

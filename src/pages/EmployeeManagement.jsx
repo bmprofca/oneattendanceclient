@@ -23,7 +23,6 @@ import Modal from '../components/Modal';
 import AdvancedDateFilter from '../components/AdvancedDateFilter';
 import { CountryCodeModal, getFlagEmoji, ManagementHub, ManagementTable, RefreshButton, ManagementCard } from '../components/common';
 import ProfileAvatar from '../components/common/ProfileAvatar';
-import useEmployeeNavigation from '../hooks/useEmployeeNavigation';
 import CurrencyIcon from "../components/common/CurrencyIcon";
 import { useAuth } from '../context/AuthContext'; // ← new import
 
@@ -1195,9 +1194,8 @@ const ManualCreateEmployeeModal = ({
 // ─── Main Component ───────────────────────────────────────────────────────────
 const EmployeeManagement = () => {
     const navigate = useNavigate();
-    const navigateToEmployeeProfile = useEmployeeNavigation();
     const { checkActionAccess, getAccessMessage } = usePermissionAccess();
-    const { attendanceMethods: companyAttendanceMethods, loading: authLoading } = useAuth(); // ← new
+    const { attendanceMethods: companyAttendanceMethods, loading: authLoading, user, company } = useAuth();
 
     const [employees, setEmployees] = useState([]);
     const [constants, setConstants] = useState({
@@ -1257,6 +1255,13 @@ const EmployeeManagement = () => {
     const deleteEmployeeAccess = checkActionAccess('employeeManagement', 'delete');
     const readEmployeeAccess = checkActionAccess('employeeManagement', 'read');
     const createEmployeeAccess = checkActionAccess('employeeManagement', 'create');
+
+    const isCurrentUserEmployee = useCallback((employee) => (
+        Boolean(employee) && (
+            Number(employee.user_id) === Number(user?.id) ||
+            Number(employee.id) === Number(company?.employee_id)
+        )
+    ), [company?.employee_id, user?.id]);
 
     // Memoised attendance method options from AuthContext
     const attendanceMethodOptions = useMemo(() => {
@@ -1688,7 +1693,7 @@ const EmployeeManagement = () => {
     };
 
     const openEditModal = async (employee) => {
-        if (updateEmployeeAccess.disabled) return;
+        if (updateEmployeeAccess.disabled || isCurrentUserEmployee(employee)) return;
         setConstantsLoading(true);
         setPermissionsLoading(true);
         try {
@@ -1766,13 +1771,13 @@ const EmployeeManagement = () => {
     };
 
     const openEmployeeProfile = (employee) => {
-        if (readEmployeeAccess.disabled || !employee?.id) return;
+        if (readEmployeeAccess.disabled || isCurrentUserEmployee(employee) || !employee?.id) return;
         setActiveActionMenu(null);
         navigate(`/employee-profile/${employee.id}`);
     };
 
     const openDeleteModal = (emp) => {
-        if (deleteEmployeeAccess.disabled) return;
+        if (deleteEmployeeAccess.disabled || isCurrentUserEmployee(emp)) return;
         setSelectedEmployee(emp);
         setModalType(MODAL_TYPES.DELETE_CONFIRM);
         setActiveActionMenu(null);
@@ -1923,7 +1928,10 @@ const EmployeeManagement = () => {
 
     // ─── Per-row action builder ───────────────────────────────────────────────
 
-    const getRowActions = useCallback((emp) => [
+    const getRowActions = useCallback((emp) => {
+        const isSelf = isCurrentUserEmployee(emp);
+
+        return [
         {
             label: 'View Details', icon: <FaEye size={14} />,
             onClick: () => openViewModal(emp),
@@ -1932,25 +1940,26 @@ const EmployeeManagement = () => {
         {
             label: 'Profile', icon: <FaUserCircle size={14} />,
             onClick: () => openEmployeeProfile(emp),
-            disabled: readEmployeeAccess.disabled,
-            title: readEmployeeAccess.disabled ? getAccessMessage(readEmployeeAccess) : '',
+            disabled: readEmployeeAccess.disabled || isSelf,
+            title: isSelf ? 'You cannot open your own employee profile here' : (readEmployeeAccess.disabled ? getAccessMessage(readEmployeeAccess) : ''),
             className: 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50',
         },
         {
             label: 'Edit', icon: <FaEdit size={14} />,
             onClick: () => openEditModal(emp),
-            disabled: updateEmployeeAccess.disabled,
-            title: updateEmployeeAccess.disabled ? getAccessMessage(updateEmployeeAccess) : '',
+            disabled: updateEmployeeAccess.disabled || isSelf,
+            title: isSelf ? 'You cannot edit your own employee configuration' : (updateEmployeeAccess.disabled ? getAccessMessage(updateEmployeeAccess) : ''),
             className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50',
         },
         {
             label: 'Delete', icon: <FaTrash size={14} />,
             onClick: () => openDeleteModal(emp),
-            disabled: deleteEmployeeAccess.disabled,
-            title: deleteEmployeeAccess.disabled ? getAccessMessage(deleteEmployeeAccess) : '',
+            disabled: deleteEmployeeAccess.disabled || isSelf,
+            title: isSelf ? 'You cannot delete yourself as an employee' : (deleteEmployeeAccess.disabled ? getAccessMessage(deleteEmployeeAccess) : ''),
             className: 'text-red-600 hover:text-red-700 hover:bg-red-50',
         },
-    ], [readEmployeeAccess, updateEmployeeAccess, deleteEmployeeAccess]);
+        ];
+    }, [deleteEmployeeAccess, getAccessMessage, isCurrentUserEmployee, readEmployeeAccess, updateEmployeeAccess]);
 
     // ─── Table column definitions ─────────────────────────────────────────────
 
@@ -1962,12 +1971,12 @@ const EmployeeManagement = () => {
                 <div className="flex items-center gap-3">
                     <ProfileAvatar record={emp} name={emp.name}
                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-purple-100 overflow-hidden shrink-0"
-                        onClick={(e) => { e.stopPropagation(); navigateToEmployeeProfile(emp.id); }}>
+                        onClick={(e) => { e.stopPropagation(); openEmployeeProfile(emp); }}>
                         <FaUser className="text-purple-500 text-sm" />
                     </ProfileAvatar>
                     <div className="min-w-0">
                         <p className="font-semibold text-gray-800 truncate max-w-[160px] hover:text-indigo-600 cursor-pointer transition-colors"
-                            onClick={(e) => { e.stopPropagation(); navigateToEmployeeProfile(emp.id); }}>
+                            onClick={(e) => { e.stopPropagation(); openEmployeeProfile(emp); }}>
                             {emp.name}
                         </p>
                         <p className="text-xs text-gray-400 font-mono">{emp.employee_code}</p>
@@ -2022,7 +2031,7 @@ const EmployeeManagement = () => {
                 </div>
             ),
         },
-    ], [getDesignationDisplay, getEmploymentTypeDisplay, getStatusDisplay, getStatusClassName, navigateToEmployeeProfile]);
+    ], [getDesignationDisplay, getEmploymentTypeDisplay, getStatusDisplay, getStatusClassName, openEmployeeProfile]);
 
     // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -2152,7 +2161,7 @@ const EmployeeManagement = () => {
                                         icon={
                                             <ProfileAvatar record={emp} name={emp.name}
                                                 className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden"
-                                                onClick={(e) => { e.stopPropagation(); navigateToEmployeeProfile(emp.id); }}>
+                                                onClick={(e) => { e.stopPropagation(); openEmployeeProfile(emp); }}>
                                                 <FaUserCircle className="text-white text-base" />
                                             </ProfileAvatar>
                                         }
@@ -2265,22 +2274,22 @@ const EmployeeManagement = () => {
                             </button>
                             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                                 onClick={() => openDeleteModal(selectedEmployee)}
-                                disabled={deleteEmployeeAccess.disabled}
-                                title={deleteEmployeeAccess.disabled ? getAccessMessage(deleteEmployeeAccess) : ''}
+                                disabled={deleteEmployeeAccess.disabled || isCurrentUserEmployee(selectedEmployee)}
+                                title={isCurrentUserEmployee(selectedEmployee) ? 'You cannot delete yourself as an employee' : (deleteEmployeeAccess.disabled ? getAccessMessage(deleteEmployeeAccess) : '')}
                                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-red-200 transition disabled:opacity-50">
                                 <FaTrash className="h-4 w-4" />Delete
                             </motion.button>
                             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                                 onClick={() => openEmployeeProfile(selectedEmployee)}
-                                disabled={readEmployeeAccess.disabled}
-                                title={readEmployeeAccess.disabled ? getAccessMessage(readEmployeeAccess) : ''}
+                                disabled={readEmployeeAccess.disabled || isCurrentUserEmployee(selectedEmployee)}
+                                title={isCurrentUserEmployee(selectedEmployee) ? 'You cannot open your own employee profile here' : (readEmployeeAccess.disabled ? getAccessMessage(readEmployeeAccess) : '')}
                                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-200 transition disabled:opacity-50">
                                 <FaUserCircle className="h-4 w-4" />Profile
                             </motion.button>
                             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                                 onClick={() => openEditModal(selectedEmployee)}
-                                disabled={updateEmployeeAccess.disabled}
-                                title={updateEmployeeAccess.disabled ? getAccessMessage(updateEmployeeAccess) : ''}
+                                disabled={updateEmployeeAccess.disabled || isCurrentUserEmployee(selectedEmployee)}
+                                title={isCurrentUserEmployee(selectedEmployee) ? 'You cannot edit your own employee configuration' : (updateEmployeeAccess.disabled ? getAccessMessage(updateEmployeeAccess) : '')}
                                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-200 transition disabled:opacity-50">
                                 <FaEdit className="h-4 w-4" />Edit Details
                             </motion.button>
