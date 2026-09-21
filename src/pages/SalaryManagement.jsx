@@ -216,7 +216,10 @@ const SalaryBadge = ({ type, value }) => {
 
 const SalaryDetailModal = ({ salary, onClose, companyCurrency, onEdit, onRevise, onDelete }) => {
     const navigateToEmployeeProfile = useEmployeeNavigation();
+    const { user } = useAuth();
     if (!salary) return null;
+
+    const isOwnSalary = salary.employee?.user_id != null && user?.id != null && Number(salary.employee.user_id) === Number(user.id);
 
     const status = getStatusBadge(salary.effective_to);
     const StatusIcon = status.icon;
@@ -249,7 +252,9 @@ const SalaryDetailModal = ({ salary, onClose, companyCurrency, onEdit, onRevise,
                     {onDelete && (
                         <button
                             onClick={() => { onDelete(salary); onClose(); }}
-                            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-rose-200 transition-all hover:from-rose-700 hover:to-red-700"
+                            disabled={isOwnSalary}
+                            title={isOwnSalary ? 'You cannot change your own salary record' : 'Delete salary'}
+                            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all ${isOwnSalary ? 'cursor-not-allowed bg-slate-300 shadow-none' : 'bg-gradient-to-r from-rose-600 to-red-600 shadow-rose-200 hover:from-rose-700 hover:to-red-700'}`}
                         >
                             <FaTrash size={13} /> Delete
                         </button>
@@ -258,7 +263,9 @@ const SalaryDetailModal = ({ salary, onClose, companyCurrency, onEdit, onRevise,
                         onRevise && (
                             <button
                                 onClick={() => { onRevise(salary); onClose(); }}
-                                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-purple-200 transition-all hover:from-purple-700 hover:to-indigo-700"
+                                disabled={isOwnSalary}
+                                title={isOwnSalary ? 'You cannot change your own salary record' : 'Revise salary'}
+                                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all ${isOwnSalary ? 'cursor-not-allowed bg-slate-300 shadow-none' : 'bg-gradient-to-r from-purple-600 to-indigo-600 shadow-purple-200 hover:from-purple-700 hover:to-indigo-700'}`}
                             >
                                 <FaExchangeAlt size={13} /> Revise Salary
                             </button>
@@ -267,7 +274,9 @@ const SalaryDetailModal = ({ salary, onClose, companyCurrency, onEdit, onRevise,
                         onEdit && (
                             <button
                                 onClick={() => { onEdit(salary); onClose(); }}
-                                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-200 transition-all hover:from-indigo-700 hover:to-blue-700"
+                                disabled={isOwnSalary}
+                                title={isOwnSalary ? 'You cannot change your own salary record' : 'Edit salary'}
+                                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all ${isOwnSalary ? 'cursor-not-allowed bg-slate-300 shadow-none' : 'bg-gradient-to-r from-indigo-600 to-blue-600 shadow-indigo-200 hover:from-indigo-700 hover:to-blue-700'}`}
                             >
                                 <FaEdit size={13} /> Edit Salary
                             </button>
@@ -874,6 +883,7 @@ const ReviseSalaryModal = ({ isOpen, onClose, onSuccess, salary, companyCurrency
 // ─── Assign Salary Modal ──────────────────────────────────────────────────────
 
 const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitTitle, companyCurrency, initialEmployeeId = null, initialEmployee = null }) => {
+    const { user } = useAuth();
     const [packages, setPackages] = useState([]);
     const [availableComponents, setAvailableComponents] = useState([]);
     const [loadingPackages, setLoadingPackages] = useState(false);
@@ -992,6 +1002,7 @@ const AssignSalaryModal = ({ isOpen, onClose, onSuccess, submitDisabled, submitT
                                         onChange={(id, emp) => setSelectedEmployee(emp || (id ? { id } : null))}
                                         placeholder="Select an employee..."
                                         initialEmployee={initialEmployee}
+                                        isOptionDisabled={(employee) => employee.user_id != null && user?.id != null && Number(employee.user_id) === Number(user.id)}
                                     />
                                 </div>
                             )}
@@ -1194,7 +1205,7 @@ const DeleteConfirmModal = ({ isOpen, onClose, onConfirm, salary, processingId }
 
 // ─── Salary Card (Grid) ───────────────────────────────────────────────────────
 
-const SalaryCard = ({ salary, index, onClick, onDelete, activeId, onToggle, onEdit, onRevise, companyCurrency }) => {
+const SalaryCard = ({ salary, index, onClick, onDelete, activeId, onToggle, onEdit, onRevise, companyCurrency, canMutate }) => {
     const navigateToEmployeeProfile = useEmployeeNavigation();
     const status = getStatusBadge(salary.effective_to);
     const StatusIcon = status.icon;
@@ -1203,9 +1214,9 @@ const SalaryCard = ({ salary, index, onClick, onDelete, activeId, onToggle, onEd
     const actions = [
         { label: 'View Details', icon: <FaEye size={13} />, onClick: () => onClick(salary), className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
         salary.payroll_used
-            ? { label: 'Revise Salary', icon: <FaExchangeAlt size={13} />, onClick: () => onRevise(salary), className: 'text-purple-600 hover:text-purple-700 hover:bg-purple-50' }
-            : { label: 'Edit Salary', icon: <FaEdit size={13} />, onClick: () => onEdit(salary), className: 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50' },
-        { label: 'Delete', icon: <FaTrash size={13} />, onClick: () => onDelete(salary), className: 'text-red-600 hover:text-red-700 hover:bg-red-50' }
+            ? { label: 'Revise Salary', icon: <FaExchangeAlt size={13} />, onClick: () => onRevise(salary), disabled: !canMutate, title: !canMutate ? 'You cannot change your own salary record' : '', className: 'text-purple-600 hover:text-purple-700 hover:bg-purple-50' }
+            : { label: 'Edit Salary', icon: <FaEdit size={13} />, onClick: () => onEdit(salary), disabled: !canMutate, title: !canMutate ? 'You cannot change your own salary record' : '', className: 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50' },
+        { label: 'Delete', icon: <FaTrash size={13} />, onClick: () => onDelete(salary), disabled: !canMutate, title: !canMutate ? 'You cannot change your own salary record' : '', className: 'text-red-600 hover:text-red-700 hover:bg-red-50' }
     ];
 
     return (
@@ -1270,7 +1281,7 @@ const SalaryCard = ({ salary, index, onClick, onDelete, activeId, onToggle, onEd
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const SalaryManagement = () => {
-    const { company } = useAuth();
+    const { company, user } = useAuth();
     const navigateToEmployeeProfile = useEmployeeNavigation();
     const companyCurrency = normalizeCurrencyCode(company?.transaction_currency);
     const [salaries, setSalaries] = useState([]);
@@ -1414,12 +1425,14 @@ const SalaryManagement = () => {
     };
 
     // Use payroll_used: false → Edit, true → Revise
+    const canMutateSalary = (salary) => salary.employee?.user_id == null || user?.id == null || Number(salary.employee.user_id) !== Number(user.id);
+
     const salaryTableActions = (salary) => [
         { label: 'View Details', icon: <FaEye size={13} />, onClick: () => setSelectedSalary(salary), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
         salary.payroll_used
-            ? { label: 'Revise Salary', icon: <FaExchangeAlt size={13} />, onClick: () => { setSalaryToRevise(salary); setShowReviseModal(true); }, className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' }
-            : { label: 'Edit Salary', icon: <FaEdit size={13} />, onClick: () => { setSalaryToEdit(salary); setShowEditModal(true); }, className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
-        { label: 'Delete', icon: <FaTrash size={13} />, onClick: () => { setSalaryToDelete(salary); setShowDeleteModal(true); }, className: 'text-red-600 hover:text-red-700 hover:bg-red-50' }
+            ? { label: 'Revise Salary', icon: <FaExchangeAlt size={13} />, onClick: () => { setSalaryToRevise(salary); setShowReviseModal(true); }, disabled: !canMutateSalary(salary), title: !canMutateSalary(salary) ? 'You cannot change your own salary record' : '', className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' }
+            : { label: 'Edit Salary', icon: <FaEdit size={13} />, onClick: () => { setSalaryToEdit(salary); setShowEditModal(true); }, disabled: !canMutateSalary(salary), title: !canMutateSalary(salary) ? 'You cannot change your own salary record' : '', className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
+        { label: 'Delete', icon: <FaTrash size={13} />, onClick: () => { setSalaryToDelete(salary); setShowDeleteModal(true); }, disabled: !canMutateSalary(salary), title: !canMutateSalary(salary) ? 'You cannot change your own salary record' : '', className: 'text-red-600 hover:text-red-700 hover:bg-red-50' }
     ];
 
     const salaryTableColumns = [
@@ -1617,6 +1630,7 @@ const SalaryManagement = () => {
                                 activeId={activeActionMenu}
                                 onToggle={(e, id) => setActiveActionMenu(curr => curr === id ? null : id)}
                                 companyCurrency={companyCurrency}
+                                canMutate={canMutateSalary(salary)}
                             />
                         ))}
                     </ManagementGrid>

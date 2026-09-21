@@ -7,6 +7,7 @@ import ManagementViewSwitcher from "../ManagementViewSwitcher";
 import { ManagementCard, ManagementTable } from "../common";
 import Pagination, { usePagination } from "../PaginationComponent";
 import { AssignSalaryModal, DeleteConfirmModal, EditSalaryModal, ReviseSalaryModal, SalaryDetailModal as SalaryManagementDetailModal } from "../../pages/SalaryManagement";
+import { useAuth } from "../../context/AuthContext";
 
 const getCompanyId = () => {
   const company = localStorage.getItem("company");
@@ -19,6 +20,7 @@ const formatDate = (value) => value
 
 const money = (value) => value == null ? "—" : `₹${Number(value).toLocaleString()}`;
 export default function EmployeeSalaryTab({ employeeId, refreshKey = 0 }) {
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const lastRequestKeyRef = useRef('');
@@ -78,12 +80,14 @@ export default function EmployeeSalaryTab({ employeeId, refreshKey = 0 }) {
     }
   };
 
+  const canMutateSalary = (salary) => salary.employee?.user_id == null || user?.id == null || Number(salary.employee.user_id) !== Number(user.id);
+
   const actions = (salary) => [
     { label: "View Details", icon: <FaEye size={12} />, onClick: () => setSelectedSalary(salary), className: "text-blue-600 hover:bg-blue-50" },
     salary.payroll_used
-      ? { label: "Revise Salary", icon: <FaExchangeAlt size={12} />, onClick: () => setSalaryToRevise(salary), className: "text-purple-600 hover:bg-purple-50" }
-      : { label: "Edit Salary", icon: <FaEdit size={12} />, onClick: () => setSalaryToEdit(salary), className: "text-indigo-600 hover:bg-indigo-50" },
-    { label: "Delete", icon: <FaTrash size={12} />, onClick: () => setSalaryToDelete(salary), className: "text-red-600 hover:bg-red-50" },
+      ? { label: "Revise Salary", icon: <FaExchangeAlt size={12} />, onClick: () => setSalaryToRevise(salary), disabled: !canMutateSalary(salary), title: !canMutateSalary(salary) ? "You cannot change your own salary record" : "", className: "text-purple-600 hover:bg-purple-50" }
+      : { label: "Edit Salary", icon: <FaEdit size={12} />, onClick: () => setSalaryToEdit(salary), disabled: !canMutateSalary(salary), title: !canMutateSalary(salary) ? "You cannot change your own salary record" : "", className: "text-indigo-600 hover:bg-indigo-50" },
+    { label: "Delete", icon: <FaTrash size={12} />, onClick: () => setSalaryToDelete(salary), disabled: !canMutateSalary(salary), title: !canMutateSalary(salary) ? "You cannot change your own salary record" : "", className: "text-red-600 hover:bg-red-50" },
   ];
 
   const columns = [
