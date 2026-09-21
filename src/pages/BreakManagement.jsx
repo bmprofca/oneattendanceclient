@@ -14,6 +14,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import apiCall from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import Pagination, { usePagination } from '../components/PaginationComponent';
 import SkeletonComponent from '../components/SkeletonComponent';
 import ActionMenu from '../components/ActionMenu';
@@ -167,7 +168,7 @@ const SummaryCard = ({ icon, label, value, gradient, delay = 0 }) => (
 
 // ─── Break Detail Modal ────────────────────────────────────────────────────────
 
-const BreakDetailModal = ({ record, onClose, onEdit }) => {
+const BreakDetailModal = ({ record, onClose, onEdit, isSelf = false }) => {
     const navigateToEmployeeProfile = useEmployeeNavigation();
     if (!record) return null;
     const idx = (record.employee_id || 0) % 5;
@@ -294,8 +295,10 @@ const BreakDetailModal = ({ record, onClose, onEdit }) => {
                             className="flex px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-semibold items-center justify-center gap-2">
                             Close
                         </button>
-                        <button onClick={() => { onEdit(record); onClose(); }}
-                            className="flex px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-semibold items-center justify-center gap-2 shadow-sm">
+                        <button onClick={() => { if (!isSelf) { onEdit(record); onClose(); } }}
+                            disabled={isSelf}
+                            title={isSelf ? 'You cannot edit your own break record' : 'Edit break'}
+                            className="flex px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-semibold items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
                             <FaEdit size={14} /> Edit Break
                         </button>
                     </div>
@@ -307,7 +310,7 @@ const BreakDetailModal = ({ record, onClose, onEdit }) => {
 
 // ─── Create / Edit Break Modal ─────────────────────────────────────────────────
 
-export const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false, initialEmployeeData = null, initialDate = '' }) => {
+export const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = false, initialEmployeeData = null, initialDate = '', isOptionDisabled = () => false }) => {
     const [breakStart, setBreakStart] = useState(isEdit ? getTimeStr(record?.break_start) : '');
     const [breakEnd, setBreakEnd] = useState(isEdit ? getTimeStr(record?.break_end) : '');
     const [notes, setNotes] = useState(record?.remark || '');
@@ -389,6 +392,7 @@ export const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = fal
                                 placeholder="Choose an employee..."
                                 disabled={isEdit}
                                 initialEmployee={initialEmployee}
+                                isOptionDisabled={isOptionDisabled}
                             />
                         </div>
                         <div>
@@ -447,6 +451,7 @@ export const BreakFormModal = ({ record, onClose, onSubmit, saving, isEdit = fal
 
 const BreakManagementPage = () => {
     const navigateToEmployeeProfile = useEmployeeNavigation();
+    const { user } = useAuth();
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -465,6 +470,7 @@ const BreakManagementPage = () => {
     });
     const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 20);
     const fetchInProgress = useRef(false);
+    const isSelfRecord = useCallback((record) => Number(record?.user_id) === Number(user?.id), [user?.id]);
 
     useEffect(() => {
         const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 500);
@@ -551,6 +557,10 @@ const BreakManagementPage = () => {
     };
 
     const handleEdit = async (payload) => {
+        if (isSelfRecord(editModalTarget)) {
+            toast.error('You cannot edit your own break record');
+            return;
+        }
         setSaving(true);
         try {
             const companyId = JSON.parse(localStorage.getItem('company'))?.id ?? null;
@@ -768,7 +778,7 @@ const BreakManagementPage = () => {
                         onRowClick={(row) => setDetailTarget(row)}
                         getActions={(record) => [
                             { label: 'View Details', icon: <FaEye size={13} />, onClick: () => setDetailTarget(record), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
-                            { label: 'Edit', icon: <FaEdit size={13} />, onClick: () => setEditModalTarget(record), className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
+                            { label: 'Edit', icon: <FaEdit size={13} />, onClick: () => setEditModalTarget(record), disabled: isSelfRecord(record), title: isSelfRecord(record) ? 'You cannot edit your own break record' : 'Edit break', className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
                         ]}
                         accent="amber"
                     />
@@ -863,7 +873,7 @@ const BreakManagementPage = () => {
                                             onToggle={(e, id) => setActiveActionMenu(curr => curr === id ? null : id)}
                                             actions={[
                                                 { label: 'View Details', icon: <FaEye size={13} />, onClick: () => setDetailTarget(record), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
-                                                { label: 'Edit', icon: <FaEdit size={13} />, onClick: () => setEditModalTarget(record), className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
+                                                { label: 'Edit', icon: <FaEdit size={13} />, onClick: () => setEditModalTarget(record), disabled: isSelfRecord(record), title: isSelfRecord(record) ? 'You cannot edit your own break record' : 'Edit break', className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
                                             ]}
                                         />
                                     </div>
@@ -893,6 +903,7 @@ const BreakManagementPage = () => {
                         record={detailTarget}
                         onClose={() => setDetailTarget(null)}
                         onEdit={(r) => { setDetailTarget(null); setEditModalTarget(r); }}
+                        isSelf={isSelfRecord(detailTarget)}
                     />
                 )}
             </AnimatePresence>
@@ -904,6 +915,7 @@ const BreakManagementPage = () => {
                         onSubmit={handleCreate}
                         saving={saving}
                         isEdit={false}
+                        isOptionDisabled={(employee) => Number(employee?.user_id) === Number(user?.id)}
                     />
                 )}
             </AnimatePresence>

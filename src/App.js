@@ -198,16 +198,6 @@ const EMPLOYEE_HUB_TABS = [
     component: InvitePackageManagement,
     accent: "bg-indigo-50 text-indigo-700 border-indigo-200",
   },
-  {
-    id: "shifts",
-    label: "Shift Management",
-    shortLabel: "Shifts",
-    description: "Monitor and manage employee shift summaries.",
-    icon: FaClock,
-    pageKey: "employeesShifts",
-    component: EmployeesShifts,
-    accent: "bg-amber-50 text-amber-700 border-amber-200",
-  },
 ];
 
 const ATTENDANCE_HUB_TABS = [
@@ -253,6 +243,16 @@ const ATTENDANCE_MANAGEMENT_HUB_TABS = [
     pageKey: "attendanceManagement",
     component: BreakManagement,
     accent: "bg-orange-50 text-orange-700 border-orange-200",
+  },
+  {
+    id: "shifts",
+    label: "Shift Management",
+    shortLabel: "Shifts",
+    description: "Monitor and manage employee shift summaries.",
+    icon: FaClock,
+    pageKey: "employeesShifts",
+    component: EmployeesShifts,
+    accent: "bg-amber-50 text-amber-700 border-amber-200",
   },
 ];
 
@@ -383,7 +383,7 @@ function AppContent() {
           accent="blue"
           tabs={ATTENDANCE_MANAGEMENT_HUB_TABS}
           accessDeniedTitle="No management tabs available"
-          accessDeniedDescription="Your current role does not have access to pending attendance or all attendance records."
+          accessDeniedDescription="Your current role does not have access to employee shifts or break management."
           accessDeniedIcon={FaInfoCircle}
         /></MainLayout></ProtectedRoute>} />
         <Route path="/salary-management" element={<ProtectedRoute pageKey="salaryManagement"><MainLayout><TabbedManagementHub
@@ -400,7 +400,7 @@ function AppContent() {
         /></MainLayout></ProtectedRoute>} />
         <Route path="/salary-components-management" element={<ProtectedRoute pageKey="salaryComponentsManagement"><Navigate to="/salary-management?tab=components" replace /></ProtectedRoute>} />
         <Route path="/salary-package-management" element={<ProtectedRoute pageKey="salaryPackageManagement"><Navigate to="/salary-management?tab=packages" replace /></ProtectedRoute>} />
-        <Route path="/employees-shifts" element={<ProtectedRoute pageKey="employeesShifts"><Navigate to="/employee-management?tab=shifts" replace /></ProtectedRoute>} />
+        <Route path="/employees-shifts" element={<ProtectedRoute pageKey="employeesShifts"><Navigate to="/attendance-management?tab=shifts" replace /></ProtectedRoute>} />
         <Route path="/leave-management" element={<ProtectedRoute pageKey="leaveManagement"><MainLayout><TabbedManagementHub
           routePath="/leave-management"
           defaultTab="requests"
@@ -423,12 +423,12 @@ function AppContent() {
           routePath="/employee-management"
           defaultTab="employees"
           title="Team, Invitations & Packages Hub"
-          description="Manage your active workforce, onboarding invitations, reusable packages, and shift summaries from one place."
+          description="Manage your active workforce, onboarding invitations, and reusable packages from one place."
           eyebrow={<><FaUsers size={11} /> Staff Management</>}
           accent="blue"
           tabs={EMPLOYEE_HUB_TABS}
           accessDeniedTitle="No employee tabs available"
-          accessDeniedDescription="Your current role does not have access to employee management, company invitations, invite packages, or shift summaries."
+          accessDeniedDescription="Your current role does not have access to employee management, company invitations, or invite packages."
           accessDeniedIcon={FaInfoCircle}
         /></MainLayout></ProtectedRoute>} />
         <Route path="/company-settings" element={<ProtectedRoute pageKey="companySettings"><MainLayout><CompanySettings /></MainLayout></ProtectedRoute>} />

@@ -287,7 +287,7 @@ function HomePage() {
         description: employeeShiftsAccess.allowed ? "Monitor team shift summaries" : "No permission",
         icon: FaUserCheck,
         color: employeeShiftsAccess.allowed ? "from-indigo-500 to-cyan-500" : "from-slate-400 to-slate-500",
-        onClick: () => employeeShiftsAccess.allowed && navigate('/employee-management?tab=shifts'),
+        onClick: () => employeeShiftsAccess.allowed && navigate('/attendance-management?tab=shifts'),
         gradient: employeeShiftsAccess.allowed ? "bg-gradient-to-r from-indigo-500 to-cyan-500" : "bg-slate-200",
         disabled: !employeeShiftsAccess.allowed
       },

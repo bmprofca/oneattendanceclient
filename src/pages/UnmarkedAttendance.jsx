@@ -21,6 +21,7 @@ import {
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import apiCall from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import TimePickerField from '../components/TimePicker';
 import SelectField from '../components/SelectField';
@@ -205,6 +206,7 @@ const mapEmployee = (employee) => {
   return {
     id: employee.employee_id || employee.id || src.id,
     employee_id: employee.employee_id || employee.id || src.id,
+    user_id: employee.user_id || src.user_id || src.user?.id || null,
     name: employee.name || src.name || src.user?.name || '',
     email: employee.email || src.email || src.user?.email || '',
     phone: employee.phone || src.phone || src.user?.phone || '',
@@ -352,7 +354,7 @@ const EmployeeAvatar = ({ employee, onClick }) => (
 
 // ─── Employee Row Card ────────────────────────────────────────────────────────
 
-const EmployeeRowCard = ({ employee, onManage, onToggleFlag, onViewLogs, selected = false, onSelect }) => {
+const EmployeeRowCard = ({ employee, onManage, onToggleFlag, onViewLogs, selected = false, onSelect, isSelf = false }) => {
   const navigateToEmployeeProfile = useEmployeeNavigation();
   const activeStatus = normalizeStatusForAction(employee.day_status);
   const statusButtonVariant = (s) => (activeStatus === s ? 'solid' : 'soft');
@@ -376,7 +378,9 @@ const EmployeeRowCard = ({ employee, onManage, onToggleFlag, onViewLogs, selecte
           type="checkbox"
           checked={selected}
           onChange={() => onSelect?.(employee.employee_id)}
-          className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer accent-blue-600"
+          disabled={isSelf}
+          title={isSelf ? 'You cannot select your own attendance record' : 'Select employee'}
+          className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={(e) => e.stopPropagation()}
         />
       </div>
@@ -452,13 +456,13 @@ const EmployeeRowCard = ({ employee, onManage, onToggleFlag, onViewLogs, selecte
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            <ManagementButton size="sm" tone="emerald" variant={statusButtonVariant('present')} fullWidth leftIcon={<FaCheck />} onClick={() => onManage(employee, 'present')}>Present</ManagementButton>
-            <ManagementButton size="sm" tone="blue" variant={statusButtonVariant('half_day')} fullWidth leftIcon={<FaHourglassHalf />} onClick={() => onManage(employee, 'half_day')}>Half Day</ManagementButton>
-            <ManagementButton size="sm" tone="rose" variant={statusButtonVariant('absent')} fullWidth leftIcon={<FaBan />} onClick={() => onManage(employee, 'absent')}>Absent</ManagementButton>
-            <ManagementButton size="sm" tone="violet" variant={statusButtonVariant('leave')} fullWidth leftIcon={<FaUmbrellaBeach />} onClick={() => onManage(employee, 'leave')}>Leave</ManagementButton>
+            <ManagementButton size="sm" tone="emerald" variant={statusButtonVariant('present')} fullWidth leftIcon={<FaCheck />} disabled={isSelf} title={isSelf ? 'You cannot change your own attendance record' : 'Mark present'} onClick={() => onManage(employee, 'present')}>Present</ManagementButton>
+            <ManagementButton size="sm" tone="blue" variant={statusButtonVariant('half_day')} fullWidth leftIcon={<FaHourglassHalf />} disabled={isSelf} title={isSelf ? 'You cannot change your own attendance record' : 'Mark half day'} onClick={() => onManage(employee, 'half_day')}>Half Day</ManagementButton>
+            <ManagementButton size="sm" tone="rose" variant={statusButtonVariant('absent')} fullWidth leftIcon={<FaBan />} disabled={isSelf} title={isSelf ? 'You cannot change your own attendance record' : 'Mark absent'} onClick={() => onManage(employee, 'absent')}>Absent</ManagementButton>
+            <ManagementButton size="sm" tone="violet" variant={statusButtonVariant('leave')} fullWidth leftIcon={<FaUmbrellaBeach />} disabled={isSelf} title={isSelf ? 'You cannot change your own attendance record' : 'Mark leave'} onClick={() => onManage(employee, 'leave')}>Leave</ManagementButton>
             <ManagementButton
               size="sm" tone={employee.is_overtime ? 'amber' : 'slate'} variant="soft" fullWidth
-              disabled={!overtimeActionEnabled} leftIcon={<FaClock />}
+              disabled={isSelf || !overtimeActionEnabled} leftIcon={<FaClock />}
               onClick={() => onToggleFlag(employee, 'overtime')}
               title={employee.is_overtime ? `Overtime: ${formatMinutes(employee.overtime_minutes || eligibility.differenceMinutes)}` : overtimeActionEnabled ? 'Enable overtime' : 'Not eligible'}
             >
@@ -466,7 +470,7 @@ const EmployeeRowCard = ({ employee, onManage, onToggleFlag, onViewLogs, selecte
             </ManagementButton>
             <ManagementButton
               size="sm" tone={employee.is_deductible ? 'rose' : 'slate'} variant="soft" fullWidth
-              disabled={!deductibleActionEnabled} leftIcon={<FaMoneyBillWave />}
+              disabled={isSelf || !deductibleActionEnabled} leftIcon={<FaMoneyBillWave />}
               onClick={() => onToggleFlag(employee, 'deductible')}
               title={employee.is_deductible ? `Deductible: ${formatMinutes(employee.deductible_minutes || eligibility.differenceMinutes)}` : deductibleActionEnabled ? 'Enable deductible' : 'Not eligible'}
             >
@@ -946,6 +950,7 @@ const FlagConfirmModal = ({ state, onClose, onConfirm, saving }) => {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function UnmarkedAttendance() {
+  const { user, company } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1044,12 +1049,22 @@ export default function UnmarkedAttendance() {
   // ── Derived ─────────────────────────────────────────────────────────────────
 
   const counts = useMemo(() => buildCounts(employees), [employees]);
-  const visibleEmployeeIds = useMemo(() => employees.map((e) => e.employee_id), [employees]);
+  const isCurrentUserEmployee = (employee) => Boolean(employee) && (
+    Number(employee.user_id) === Number(user?.id) ||
+    Number(employee.employee_id) === Number(company?.employee_id)
+  );
+  const visibleEmployeeIds = useMemo(
+    () => employees.filter((employee) => !isCurrentUserEmployee(employee)).map((e) => e.employee_id),
+    [employees, company?.employee_id, user?.id]
+  );
   const allVisibleSelected = visibleEmployeeIds.length > 0 && visibleEmployeeIds.every((id) => selectedEmployeeIds.includes(id));
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  const handleManage = (employee, initialStatus) => setModalState({ employee, initialStatus });
+  const handleManage = (employee, initialStatus) => {
+    if (isCurrentUserEmployee(employee)) return;
+    setModalState({ employee, initialStatus });
+  };
 
   const toggleSelectedEmployee = (empId) =>
     setSelectedEmployeeIds((cur) => cur.includes(empId) ? cur.filter((id) => id !== empId) : [...cur, empId]);
@@ -1088,6 +1103,11 @@ export default function UnmarkedAttendance() {
     if (!companyId) { toast.error('Company ID not found'); return; }
 
     const employeeIds = bulkScope === 'all' ? 'all' : selectedEmployeeIds;
+
+    if (bulkScope === 'all' || selectedEmployeeIds.some((id) => employees.some((employee) => employee.employee_id === id && isCurrentUserEmployee(employee)))) {
+      toast.error('You cannot change your own attendance record');
+      return;
+    }
 
     if (bulkScope === 'selected' && !selectedEmployeeIds.length) {
       toast.error('Select at least one employee');
@@ -1145,6 +1165,10 @@ export default function UnmarkedAttendance() {
   };
 
   const handleSave = async (payload) => {
+    if (isCurrentUserEmployee(modalState?.employee)) {
+      toast.error('You cannot change your own attendance record');
+      return;
+    }
     const companyId = getCompanyId();
     if (!companyId) { toast.error('Company ID not found'); return; }
     try {
@@ -1169,6 +1193,10 @@ export default function UnmarkedAttendance() {
     const companyId = getCompanyId();
     if (!companyId || !flagConfirm?.employee) { toast.error('Company ID not found'); return; }
     const { employee, flag } = flagConfirm;
+    if (isCurrentUserEmployee(employee)) {
+      toast.error('You cannot change your own attendance record');
+      return;
+    }
     const isOvertimeToggle = flag === 'overtime';
     const nextOvertime = isOvertimeToggle ? !employee.is_overtime : false;
     const nextDeductible = isOvertimeToggle ? false : !employee.is_deductible;
@@ -1314,7 +1342,9 @@ export default function UnmarkedAttendance() {
                 <button
                   type="button"
                   onClick={toggleSelectAllVisible}
-                  className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                  disabled={!visibleEmployeeIds.length}
+                  title={!visibleEmployeeIds.length ? 'Your own attendance record cannot be selected' : 'Select all eligible employees'}
+                  className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {allVisibleSelected
                     ? <><FaCheckSquare size={13} /> Deselect all</>
@@ -1332,6 +1362,7 @@ export default function UnmarkedAttendance() {
                 onManage={handleManage}
                 onToggleFlag={handleToggleFlag}
                 onViewLogs={handleViewLogs}
+                isSelf={isCurrentUserEmployee(employee)}
                 selected={selectedEmployeeIds.includes(employee.employee_id)}
                 onSelect={toggleSelectedEmployee}
               />
@@ -1379,12 +1410,12 @@ export default function UnmarkedAttendance() {
               <button
                 type="button"
                 onClick={openBulkModalForAll}
-                disabled={!allVisibleSelected}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${allVisibleSelected
+                disabled={!allVisibleSelected || employees.some(isCurrentUserEmployee)}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${allVisibleSelected && !employees.some(isCurrentUserEmployee)
                   ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
                   : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
                   }`}
-                title={allVisibleSelected ? 'Apply to all employees across all pages' : 'Select all visible employees to enable'}
+                title={employees.some(isCurrentUserEmployee) ? 'You cannot change your own attendance record' : allVisibleSelected ? 'Apply to all eligible employees across all pages' : 'Select all visible employees to enable'}
               >
                 <FaLayerGroup size={11} />
                 All
