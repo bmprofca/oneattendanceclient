@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaUsers, FaCheckCircle, FaArrowRight, FaSpinner,
@@ -9,8 +9,8 @@ import {
 import apiCall from '../utils/api';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { initiateLayerPayment } from '../utils/layerPayment';
-import { loadLayerScript } from '../utils/loadLayer';
+import { initiateRazorpayPayment } from '../utils/razorpayPayment';
+import { loadRazorpayScript } from '../utils/loadRazorpay';
 
 // ─── Constants ───────────────────────────────────────────────
 const DURATION_OPTIONS = [
@@ -58,8 +58,9 @@ const StatCell = ({ label, value, sub }) => (
 
 /** Compact subscription plan card (current or upcoming) */
 const PlanCard = ({ plan, variant }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(variant === 'current');
   const isCurrent = variant === 'current';
+  const isUsed = variant === 'used';
   const progressPct = isCurrent && plan.days_remaining != null
     ? Math.max(0, Math.min(100, Math.round(((30 - plan.days_remaining) / 30) * 100)))
     : 0;
@@ -67,7 +68,9 @@ const PlanCard = ({ plan, variant }) => {
   return (
     <div className={`rounded-xl p-3 bg-white transition-all ${isCurrent
         ? 'border-2 border-blue-500'
-        : 'border border-gray-200'
+          : isUsed
+            ? 'border border-gray-200 opacity-85'
+            : 'border border-gray-200'
       }`}>
       {/* Top Section (Always Visible) - Clickable to expand */}
       <div 
@@ -79,9 +82,11 @@ const PlanCard = ({ plan, variant }) => {
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${isCurrent
                 ? 'bg-blue-50 text-blue-700'
-                : 'bg-amber-50 text-amber-700'
+                : isUsed
+                  ? 'bg-gray-100 text-gray-600'
+                  : 'bg-amber-50 text-amber-700'
               }`}>
-              {isCurrent ? 'Current' : 'Upcoming'}
+              {isCurrent ? 'Current' : isUsed ? 'Past' : 'Upcoming'}
             </span>
             <span className="text-[11px] text-gray-400 capitalize bg-gray-50 px-2.5 py-1 rounded-full">
               {plan.subscription_type} billing
@@ -97,7 +102,7 @@ const PlanCard = ({ plan, variant }) => {
         {/* Short info when collapsed */}
         {!isExpanded && (
           <p className="mt-1 text-[11px] text-gray-500 truncate">
-            {plan.employee_limit} employees • {isCurrent ? `${plan.days_remaining ?? '—'} days left` : `Starts in ${plan.until_start ?? '—'} days`}
+            {plan.employee_limit} employees • {isCurrent ? `${plan.days_remaining ?? '—'} days left` : isUsed ? `Ended ${fmtDate(plan.expires_at)}` : `Starts in ${plan.until_start ?? '—'} days`}
           </p>
         )}
       </div>
@@ -114,38 +119,49 @@ const PlanCard = ({ plan, variant }) => {
             {/* Detail rows */}
             <div className="mt-3 text-[12px] text-gray-600 space-y-1.5 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
               <p className="flex items-center gap-2">
-                <span className="w-4 flex justify-center"><FaUsers className={isCurrent ? 'text-blue-400' : 'text-amber-400'} /></span>
+                <span className="w-4 flex justify-center"><FaUsers className={isCurrent ? 'text-blue-400' : isUsed ? 'text-gray-400' : 'text-amber-400'} /></span>
                 <span><strong className="text-gray-800">{plan.employee_limit}</strong> employees limit</span>
               </p>
               <p className="flex items-center gap-2">
-                <span className="w-4 flex justify-center"><FaCalendarCheck className={isCurrent ? 'text-blue-400' : 'text-amber-400'} /></span>
-                <span>Expires: <strong className="text-gray-800">{fmtDate(plan.expires_at)}</strong></span>
+                <span className="w-4 flex justify-center"><FaCalendarCheck className={isCurrent ? 'text-blue-400' : isUsed ? 'text-gray-400' : 'text-amber-400'} /></span>
+                <span>{isUsed ? 'Ended' : 'Expires'}: <strong className="text-gray-800">{fmtDate(plan.expires_at)}</strong></span>
               </p>
               <p className="flex items-center gap-2">
-                <span className="w-4 flex justify-center"><FaCalendarAlt className={isCurrent ? 'text-blue-400' : 'text-amber-400'} /></span>
-                <span>{isCurrent ? 'Time left' : 'Starts in'}: <strong className="text-gray-800">{isCurrent ? `${plan.days_remaining ?? '—'} days` : `${plan.until_start ?? '—'} days`}</strong></span>
+                <span className="w-4 flex justify-center"><FaCalendarAlt className={isCurrent ? 'text-blue-400' : isUsed ? 'text-gray-400' : 'text-amber-400'} /></span>
+                <span>{isCurrent ? 'Time left' : isUsed ? 'Plan status' : 'Starts in'}: <strong className="text-gray-800">{isCurrent ? `${plan.days_remaining ?? '—'} days` : isUsed ? 'Completed' : `${plan.until_start ?? '—'} days`}</strong></span>
               </p>
               <p className="flex items-center gap-2">
-                <span className="w-4 flex justify-center"><FaCreditCard className={isCurrent ? 'text-blue-400' : 'text-amber-400'} /></span>
-                <span>Paid amount: <strong className="text-gray-800">{fmt(plan.amount_paid)}</strong></span>
+                <span className="w-4 flex justify-center"><FaCreditCard className={isCurrent ? 'text-blue-400' : isUsed ? 'text-gray-400' : 'text-amber-400'} /></span>
+                <span>Amount paid: <strong className="text-gray-800">{fmt(plan.amount_paid)}</strong></span>
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="w-4 flex justify-center"><FaCreditCard className={isCurrent ? 'text-blue-400' : isUsed ? 'text-gray-400' : 'text-amber-400'} /></span>
+                <span>VPA: <strong className="text-gray-800">{plan.payment_vpa || 'Not available'}</strong></span>
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="w-4 flex justify-center"><FaCreditCard className={isCurrent ? 'text-blue-400' : isUsed ? 'text-gray-400' : 'text-amber-400'} /></span>
+                <span>UTR: <strong className="text-gray-800">{plan.payment_utr || 'Not available'}</strong></span>
               </p>
             </div>
 
             {/* Progress bar */}
             <div className="mt-3">
               <div className="flex justify-between text-[11px] text-gray-400 mb-1.5">
-                <span>{isCurrent ? 'Period progress' : 'Starts in'}</span>
-                <span>{isCurrent ? `${plan.days_remaining} days left` : `${plan.until_start} days`}</span>
+                <span>{isCurrent ? 'Period progress' : isUsed ? 'Completed' : 'Starts in'}</span>
+                <span>{isCurrent ? `${plan.days_remaining ?? '—'} days left` : isUsed ? '100%' : `${plan.until_start ?? '—'} days`}</span>
               </div>
               <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-700 ${isCurrent ? 'bg-blue-500' : 'bg-amber-400'}`}
-                  style={{ width: isCurrent ? `${progressPct}%` : '0%' }}
+                  className={`h-full rounded-full transition-all duration-700 ${isCurrent ? 'bg-blue-500' : isUsed ? 'bg-gray-400' : 'bg-amber-400'}`}
+                  style={{ width: isCurrent ? `${progressPct}%` : isUsed ? '100%' : '0%' }}
                 />
               </div>
             </div>
 
-            <p className="text-[10px] text-gray-300 font-mono mt-2 truncate"># {plan.payment_reference}</p>
+            <div className="mt-3 pt-2 border-t border-gray-100 space-y-1">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Payment reference</p>
+              <p className="text-[10px] text-gray-500 font-mono truncate">{plan.payment_reference || 'Not available'}</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -163,11 +179,20 @@ const SubscriptionDetailsCard = ({ details, detailsLoading, detailsError }) => {
       </div>
     );
   }
-  if (detailsError || !details) return null;
+  if (detailsError || !details) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
+        <p className="text-sm font-semibold text-red-700">Unable to load subscription details</p>
+        <p className="text-xs text-red-500 mt-1">{detailsError || 'No subscription details were returned.'}</p>
+      </div>
+    );
+  }
 
   const { company, subscriptions } = details;
   const current = subscriptions?.find(s => s.type === 'current');
-  const upcoming = subscriptions?.find(s => s.type === 'upcoming');
+  const upcomingPlans = subscriptions?.filter(s => s.type === 'upcoming') || [];
+  const upcoming = upcomingPlans[0];
+  const usedPlans = subscriptions?.filter(s => s.type === 'used') || [];
 
   return (
     <motion.div
@@ -202,17 +227,38 @@ const SubscriptionDetailsCard = ({ details, detailsLoading, detailsError }) => {
       {/* Stats strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 bg-gray-100 gap-[1px] border-b border-gray-100">
         <StatCell label="Employees" value={company.employee_count} sub={`of ${current?.employee_limit ?? '—'} in plan`} />
-        <StatCell label="Seats free" value={company.employee_available} sub="remaining" />
-        <StatCell label="Days left" value={current?.days_remaining ?? '—'} sub="in current plan" />
-        <StatCell label="Queued" value={company.queued_subscriptions} sub="plans" />
+        <StatCell label="Available seats" value={company.employee_available} sub="remaining" />
+        <StatCell label="Days remaining" value={current?.days_remaining ?? '—'} sub="on current plan" />
+        <StatCell label="Upcoming plans" value={company.queued_subscriptions} sub="waiting to start" />
       </div>
 
       {/* Plan cards */}
       <div className="p-5">
-        {(current || upcoming) && (
-          <div className={`grid gap-4 ${current && upcoming ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1'}`}>
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-gray-800">Your subscription</h2>
+          <p className="text-[11px] text-gray-400 mt-1">Current and upcoming plans for {company.name}.</p>
+        </div>
+        {(current || upcomingPlans.length > 0) && (
+          <div className={`grid gap-4 ${current && upcomingPlans.length > 0 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
             {current && <PlanCard plan={current} variant="current" />}
-            {upcoming && <PlanCard plan={upcoming} variant="upcoming" />}
+            {upcomingPlans.map((plan) => <PlanCard key={plan.id} plan={plan} variant="upcoming" />)}
+          </div>
+        )}
+
+        {!current && upcomingPlans.length === 0 && usedPlans.length === 0 && (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center">
+            <p className="text-sm font-medium text-gray-700">No active subscription</p>
+            <p className="text-xs text-gray-400 mt-1">Choose a plan below to get started.</p>
+          </div>
+        )}
+
+        {usedPlans.length > 0 && (
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-semibold text-gray-800">Subscription history</h3>
+            <p className="text-[11px] text-gray-400 mt-1">Completed plans and their payment details.</p>
+            <div className="grid gap-4 mt-3 grid-cols-1 md:grid-cols-2">
+              {usedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} variant="used" />)}
+            </div>
           </div>
         )}
 
@@ -221,7 +267,7 @@ const SubscriptionDetailsCard = ({ details, detailsLoading, detailsError }) => {
           <div className="mt-4 flex items-start gap-2.5 text-[12px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
             <FaInfoCircle className="mt-0.5 flex-shrink-0 text-amber-500" />
             <span>
-              <strong>{upcoming.package_name}</strong> activates automatically when your current plan expires.
+              <strong>{company.queued_subscriptions} upcoming plan{company.queued_subscriptions === 1 ? '' : 's'}</strong> activate automatically in order when the current plan expires.
             </span>
           </div>
         )}
@@ -283,12 +329,9 @@ const SubscriptionPage = ({ publicView = false, defaultCompanyId = null, default
   const [detailsLoading, setDetailsLoading] = useState(!publicView);
   const [detailsError, setDetailsError] = useState(null);
 
-  const hasFetched = useRef(false);
-  const hasFetchedDetails = useRef(false);
-
   // Load payment gateway script
   useEffect(() => {
-    loadLayerScript().catch((err) => {
+    loadRazorpayScript().catch((err) => {
       console.error(err);
       toast.error('Unable to load payment gateway');
     });
@@ -296,9 +339,6 @@ const SubscriptionPage = ({ publicView = false, defaultCompanyId = null, default
 
   // Fetch subscription details
   useEffect(() => {
-    if (hasFetchedDetails.current) return;
-    hasFetchedDetails.current = true;
-
     (async () => {
       try {
         setDetailsLoading(true);
@@ -327,9 +367,6 @@ const SubscriptionPage = ({ publicView = false, defaultCompanyId = null, default
 
   // Fetch packages
   useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
-
     (async () => {
       try {
         setLoading(true);
@@ -425,14 +462,62 @@ const SubscriptionPage = ({ publicView = false, defaultCompanyId = null, default
       const result = await response.json();
       if (!result.success) throw new Error(result.message || 'Purchase failed');
 
+      if (result.data?.order_id) {
+        toast.info('Opening secure payment checkout...');
+        const owner = JSON.parse(localStorage.getItem('user') || 'null');
+        const paymentResponse = await initiateRazorpayPayment({
+          order: result.data,
+          owner,
+          onFailure: () => toast.error('Payment was not completed.'),
+        });
+
+        const verificationResponse = await apiCall(
+          '/subscriptions/verify-payment',
+          'POST',
+          paymentResponse,
+          company?.id,
+          publicView ? { token: defaultToken, skipUnauthorizedRedirect: true } : {},
+        );
+        const verificationResult = await verificationResponse.json();
+        if (!verificationResponse.ok || !verificationResult.success) {
+          throw new Error(verificationResult.message || 'Unable to verify payment.');
+        }
+
+        toast.info('Payment verified. Waiting for subscription update...');
+        let paymentStatus = 'pending';
+        for (let attempt = 0; attempt < 10 && paymentStatus === 'pending'; attempt += 1) {
+          if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+          const statusResponse = await apiCall(
+            `/subscriptions/payment-status/${encodeURIComponent(result.data.order_id)}`,
+            'GET',
+            null,
+            company?.id,
+            publicView ? { token: defaultToken, skipUnauthorizedRedirect: true } : {},
+          );
+          const statusResult = await statusResponse.json();
+          if (!statusResponse.ok || !statusResult.success) {
+            throw new Error(statusResult.message || 'Unable to confirm payment.');
+          }
+          paymentStatus = statusResult.data?.status || 'pending';
+        }
+
+        if (paymentStatus === 'success') {
+          toast.success('Subscription activated successfully.');
+          navigate('/home');
+          return;
+        }
+
+        if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
+          throw new Error('Payment was not completed.');
+        }
+
+        toast.info('Payment is still being confirmed. Refresh subscription details shortly.');
+        return;
+      }
+
       if (result.message === 'Subscription purchased successfully.') {
         toast.success(result.message);
         setTimeout(() => navigate('/home'), 1500);
-        return;
-      }
-      if (result.data?.payment_token) {
-        toast.info('Redirecting to payment gateway…');
-        await initiateLayerPayment(result.data.payment_token, navigate);
         return;
       }
       toast.success(result.message);
