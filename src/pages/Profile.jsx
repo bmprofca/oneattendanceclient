@@ -586,7 +586,7 @@ export default function ProfilePage() {
                                     {
                                         icon: FaBolt,
                                         label: "Access Level",
-                                        value: permissions.some(p => p.code === "OWN_ALL") ? "Full" : "Limited",
+                                        value: (activeRole === "company_owner" || permissions.length >= 5) ? "Full" : "Limited",
                                         color: "from-amber-500 to-orange-500",
                                         bg: "bg-amber-50",
                                         iconColor: "text-amber-500",

@@ -415,7 +415,7 @@ function AppContent() {
         /></MainLayout></ProtectedRoute>} />
         <Route path="/pending-attendance" element={<ProtectedRoute pageKey="pendingAttendance"><Navigate to="/attendance-management?tab=pending" replace /></ProtectedRoute>} />
         <Route path="/holiday-management" element={<ProtectedRoute pageKey="holidayManagement"><MainLayout><CompanyHolidays /></MainLayout></ProtectedRoute>} />
-        <Route path="/my-calendar" element={<ProtectedRoute pageKey="holidays"><MainLayout><MyCalendar /></MainLayout></ProtectedRoute>} />
+        <Route path="/my-calendar" element={<ProtectedRoute pageKey="myCalendar"><MainLayout><MyCalendar /></MainLayout></ProtectedRoute>} />
         <Route path="/help" element={<ProtectedRoute pageKey="help"><MainLayout><HelpPage /></MainLayout></ProtectedRoute>} />
         <Route path="/my-leaves" element={<ProtectedRoute pageKey="myLeaves"><MainLayout><MyLeave /></MainLayout></ProtectedRoute>} />
         <Route path="/my-invites" element={<ProtectedRoute pageKey="myInvites"><MainLayout> <MyInvites /></MainLayout></ProtectedRoute>} />

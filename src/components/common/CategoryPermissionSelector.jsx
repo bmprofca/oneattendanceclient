@@ -11,10 +11,6 @@ const CAT_STYLES = {
   'Leave': { bg: 'bg-rose-50', text: 'text-rose-700', dot: 'bg-rose-500', border: 'border-rose-200', checkBg: 'bg-rose-600' },
   'Financial': { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', border: 'border-emerald-200', checkBg: 'bg-emerald-600' },
   'Permissions': { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500', border: 'border-purple-200', checkBg: 'bg-purple-600' },
-  // Backward compatibility
-  'Employee': { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500', border: 'border-orange-200', checkBg: 'bg-orange-600' },
-  'Salary': { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500', border: 'border-teal-200', checkBg: 'bg-teal-600' },
-  'Permission': { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500', border: 'border-purple-200', checkBg: 'bg-purple-600' },
 };
 
 const DEFAULT_STYLE = {

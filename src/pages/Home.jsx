@@ -166,7 +166,7 @@ function HomePage() {
     const employeeShiftsAccess = checkPageAccess("employeesShifts");
     const leaveMgmtAccess = checkPageAccess("leaveManagement");
     const holidayMgmtAccess = checkPageAccess("holidayManagement");
-    const holidaysAccess = checkPageAccess("holidays");
+    const myCalendarAccess = checkPageAccess("myCalendar");
     const companySettingsAccess = checkPageAccess("companySettings");
 
     const actions = [

@@ -54,6 +54,12 @@ const PERMISSION_ACCESS_CONFIG = {
       allowCompanyOwner: true,
     },
     myInvites: { permissions: null },
+    myCalendar: {
+      permissions: null,
+      disableForCompanyOwner: true,
+      requireCompany: true,
+      requireAttendanceMethods: true,
+    },
     holidays: {
       permissions: null,
       disableForCompanyOwner: true,
@@ -125,6 +131,9 @@ const PERMISSION_ACCESS_CONFIG = {
     },
     holidayManagement: {
       permissions: ["attendance"],
+    },
+    subscription: {
+      requireCompanyOwner: true,
     },
     help: { permissions: null },
     createCompany: { permissions: null },

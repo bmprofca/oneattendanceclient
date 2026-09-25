@@ -114,7 +114,7 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
       icon: FaCalendarAlt,
       label: 'My Calendar',
       path: '/my-calendar',
-      pageKey: 'holidays'
+      pageKey: 'myCalendar'
     },
     {
       icon: FaBriefcase,
