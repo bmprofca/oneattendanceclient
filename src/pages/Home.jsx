@@ -27,12 +27,14 @@ import {
 import Skeleton from "../components/SkeletonComponent";
 import AddStaffModal from "../components/StaffModals/AddStaffModal";
 import CreateCompanyModal from "../components/CompanyModals/CreateCompanyModal";
+import { usePendingInvites } from '../context/PendingInvitesContext';
 
 
 
 function HomePage() {
   const { user, loading, company, companies = [], refreshUser } = useAuth();
   const { checkPageAccess, checkActionAccess } = usePermissionAccess();
+  const { pendingInviteCount } = usePendingInvites();
   const navigate = useNavigate();
   const [openAddStaffModal, setOpenAddStaffModal] = useState(false);
   const [openCreateCompanyModal, setOpenCreateCompanyModal] = useState(false);
@@ -224,6 +226,7 @@ function HomePage() {
         description: "View personal invitations",
         icon: FaEnvelope,
         color: "from-pink-500 to-rose-500",
+        badgeCount: myInvitesAccess.allowed ? pendingInviteCount : 0,
         onClick: () => myInvitesAccess.allowed && navigate('/my-invites'),
         gradient: "bg-gradient-to-r from-pink-500 to-rose-500",
         disabled: !myInvitesAccess.allowed
@@ -469,10 +472,19 @@ function HomePage() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={action.onClick}
+              aria-label={action.badgeCount > 0
+                ? `${action.title}, ${action.badgeCount} pending invites`
+                : action.title}
               className="group relative bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-100 transition-all text-left flex flex-col gap-3 overflow-hidden"
             >
               {/* Subtle background glow */}
               <div className={`absolute -right-4 -bottom-4 w-16 h-16 rounded-full bg-gradient-to-br ${action.color} opacity-0 group-hover:opacity-10 blur-xl transition-opacity duration-500`}></div>
+
+              {action.badgeCount > 0 && (
+                <span className="absolute right-3 top-3 z-10 min-w-6 h-6 px-1.5 rounded-full bg-rose-600 text-white text-[11px] font-bold inline-flex items-center justify-center shadow-sm">
+                  {action.badgeCount > 99 ? '99+' : action.badgeCount}
+                </span>
+              )}
 
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${action.color} shadow-lg shadow-indigo-500/10 group-hover:rotate-6 transition-transform duration-300`}>
                 <action.icon className="w-5 h-5 text-white" />

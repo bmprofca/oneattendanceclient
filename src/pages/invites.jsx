@@ -20,6 +20,7 @@ import SelectField from "../components/SelectField";
 import AdvancedDateFilter from '../components/AdvancedDateFilter';
 import CurrencyIcon from "../components/common/CurrencyIcon";
 import Modal from "../components/Modal";
+import { usePendingInvites } from '../context/PendingInvitesContext';
 
 // ─── Status badge helper ────────────────────────────────────────────────────
 const getStatusBadge = (status) => {
@@ -557,6 +558,7 @@ export default function MyInvites() {
 
   const { pagination, updatePagination, goToPage, changeLimit } = usePagination(1, 10);
   const { refreshUser } = useAuth();
+  const { refreshPendingInviteCount } = usePendingInvites();
 
   const MODAL_TYPES = {
     VIEW: 'VIEW',
@@ -673,6 +675,7 @@ export default function MyInvites() {
         await refreshUser();
         closeModal();
         await fetchInvites(pagination.page, false);
+        await refreshPendingInviteCount();
       } else {
         throw new Error(result.message || 'Failed to accept invite');
       }
@@ -693,6 +696,7 @@ export default function MyInvites() {
         toast.success("Invitation rejected.");
         closeModal();
         await fetchInvites(pagination.page, false);
+        await refreshPendingInviteCount();
       } else {
         throw new Error(result.message || 'Failed to reject invite');
       }

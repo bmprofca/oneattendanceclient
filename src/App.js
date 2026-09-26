@@ -11,6 +11,7 @@ import MainLayout from "./layout/MainLayout";
 import Home from "./pages/Home";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
+import { PendingInvitesProvider } from "./context/PendingInvitesContext";
 import NotFound from "./pages/NotFound";
 import SettingsPage from "./pages/Setting";
 import CompanyInvites from "./pages/CompanyInviteManagement";
@@ -319,6 +320,7 @@ function AppContent() {
   }
 
   return (
+    <PendingInvitesProvider>
     <>
       <ScrollToTop />
       <Routes>
@@ -472,6 +474,7 @@ function AppContent() {
       </Routes>
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
     </>
+    </PendingInvitesProvider>
   );
 }
 

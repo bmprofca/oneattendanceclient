@@ -24,12 +24,14 @@ import {
 } from 'react-icons/fa';
 import { useLocation, Link } from 'react-router-dom';
 import usePermissionAccess from "../hooks/usePermissionAccess";
+import { usePendingInvites } from '../context/PendingInvitesContext';
 
 const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [manualOpenSections, setManualOpenSections] = useState({});
   const location = useLocation();
   const currentPath = location.pathname;
+  const { pendingInviteCount } = usePendingInvites();
 
   const { checkPageAccess, isCompanyOwnerForCurrentCompany } = usePermissionAccess();
 
@@ -323,6 +325,9 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
                     key={item.label}
                     to={item.path}
                     onClick={() => toggleSidebar()}
+                    aria-label={item.pageKey === 'myInvites' && pendingInviteCount > 0
+                      ? `${item.label}, ${pendingInviteCount} pending invites`
+                      : item.label}
                     className={`
                       flex items-center px-3 py-3 rounded-xl transition-all duration-200 mb-1
                       ${isActive
@@ -341,6 +346,11 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
                       <Icon className="w-4 h-4" />
                     </div>
                     <span className="text-sm font-medium">{item.label}</span>
+                    {item.pageKey === 'myInvites' && pendingInviteCount > 0 && (
+                      <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold inline-flex items-center justify-center">
+                        {pendingInviteCount > 99 ? '99+' : pendingInviteCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -380,15 +390,22 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
       <Link
         key={item.label}
         to={item.path}
+        aria-label={item.pageKey === 'myInvites' && pendingInviteCount > 0
+          ? `${item.label}, ${pendingInviteCount} pending invites`
+          : item.label}
         className={`
-          flex items-center rounded-xl transition-all duration-200 group
+          relative flex items-center rounded-xl transition-all duration-200 group
           ${isExpandedState ? 'px-3 py-2.5 gap-3' : 'px-0 py-2.5 justify-center'}
           ${isActive
             ? 'bg-blue-50 text-blue-700'
             : 'text-gray-700 hover:bg-gray-50 hover:text-blue-600'
           }
         `}
-        title={!isExpandedState ? item.label : ''}
+        title={!isExpandedState
+          ? item.pageKey === 'myInvites' && pendingInviteCount > 0
+            ? `${item.label} (${pendingInviteCount} pending)`
+            : item.label
+          : ''}
       >
         <div className={`
           p-2 rounded-lg transition-all duration-200
@@ -405,10 +422,20 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
             <span className={`flex-1 text-sm font-medium ${isActive ? 'font-semibold' : ''}`}>
               {item.label}
             </span>
+            {item.pageKey === 'myInvites' && pendingInviteCount > 0 && (
+              <span className="min-w-5 h-5 px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold inline-flex items-center justify-center">
+                {pendingInviteCount > 99 ? '99+' : pendingInviteCount}
+              </span>
+            )}
             {isActive && (
               <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
             )}
           </>
+        )}
+        {!isExpandedState && item.pageKey === 'myInvites' && pendingInviteCount > 0 && (
+          <span className="absolute top-1 right-1 min-w-4 h-4 px-0.5 rounded-full bg-rose-600 text-white text-[9px] font-bold inline-flex items-center justify-center">
+            {pendingInviteCount > 99 ? '99+' : pendingInviteCount}
+          </span>
         )}
         {!isExpandedState && isActive && (
           <span className="absolute left-0 w-1 h-8 bg-blue-600 rounded-r-full"></span>
