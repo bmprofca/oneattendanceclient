@@ -22,13 +22,10 @@ import CurrencyIcon from "../components/common/CurrencyIcon";
 import Modal from "../components/Modal";
 
 // ─── Status badge helper ────────────────────────────────────────────────────
-const isExpired = (date) => new Date(date) < new Date();
-
-const getStatusBadge = (status, expiresAt) => {
-  if (isExpired(expiresAt)) {
-    return { icon: FaTimesCircle, text: 'Expired', className: 'bg-red-100 text-red-800 border border-red-200' };
-  }
+const getStatusBadge = (status) => {
   switch (status?.toLowerCase()) {
+    case 'expired':
+      return { icon: FaTimesCircle, text: 'Expired', className: 'bg-red-100 text-red-800 border border-red-200' };
     case 'accepted':
       return { icon: FaCheckCircle, text: 'Accepted', className: 'bg-green-100 text-green-800 border border-green-200' };
     case 'pending':
@@ -104,8 +101,8 @@ const InfoItem = ({ icon, label, value, className = "" }) => (
   </div>
 );
 
-const StatusBadge = ({ status, expiresAt }) => {
-  const badge = getStatusBadge(status, expiresAt);
+const StatusBadge = ({ status }) => {
+  const badge = getStatusBadge(status);
   const Icon = badge.icon;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${badge.className}`}>
@@ -116,7 +113,7 @@ const StatusBadge = ({ status, expiresAt }) => {
 
 // ─── Invite Card (card view) ────────────────────────────────────────────────
 const InviteCard = ({ invite, index, onView, onAccept, onReject }) => {
-  const isPending = invite.status?.toLowerCase() === 'pending' && !isExpired(invite.expires_at);
+  const isPending = invite.status?.toLowerCase() === 'pending';
 
   const companyLogo = invite.company?.logo_url ? (
     <img
@@ -144,7 +141,7 @@ const InviteCard = ({ invite, index, onView, onAccept, onReject }) => {
         <div className="flex-1 min-w-0">
           <div className="flex justify-between items-start">
             <h3 className="font-bold text-lg text-gray-800 truncate">{invite.company?.name || 'Unknown Company'}</h3>
-            <StatusBadge status={invite.status} expiresAt={invite.expires_at} />
+            <StatusBadge status={invite.status} />
           </div>
           <p className="text-xs text-gray-500 mt-1">{formatDisplay(invite.designation)}</p>
           <div className="mt-3 space-y-2">
@@ -198,7 +195,7 @@ const ViewModal = ({ invite, onClose, onAccept, onReject }) => {
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">
             Close
           </button>
-          {invite.status?.toLowerCase() === 'pending' && !isExpired(invite.expires_at) && (
+          {invite.status?.toLowerCase() === 'pending' && (
             <>
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -287,7 +284,7 @@ const ViewModal = ({ invite, onClose, onAccept, onReject }) => {
               <InfoItem
                 icon={<FaTag className="text-orange-500" />}
                 label="Status"
-                value={<StatusBadge status={invite.status} expiresAt={invite.expires_at} />}
+                value={<StatusBadge status={invite.status} />}
               />
             </div>
           </div>
@@ -605,7 +602,12 @@ export default function MyInvites() {
       const result = await response.json();
       if (result.success) {
         // No client‑side filtering – backend returns exactly what we requested
-        const allData = (result.data || []).map(normalizeInviteRecord);
+        const allData = (result.data || []).map((record) => {
+          const invite = normalizeInviteRecord(record);
+          return statusFilter === 'expired' && invite.status?.toLowerCase() === 'pending'
+            ? { ...invite, status: 'expired' }
+            : invite;
+        });
         setInvites(allData);
 
         const currentPage = Number(result.current_page ?? result.page ?? page);
@@ -781,7 +783,7 @@ export default function MyInvites() {
     {
       key: 'status',
       label: 'Status',
-      render: (invite) => <StatusBadge status={invite.status} expiresAt={invite.expires_at} />,
+      render: (invite) => <StatusBadge status={invite.status} />,
     },
     {
       key: 'expires_at',
@@ -917,7 +919,7 @@ export default function MyInvites() {
                       onClick: () => openModal(invite, MODAL_TYPES.VIEW),
                       className: 'text-green-600 hover:text-green-700 hover:bg-green-50',
                     },
-                    ...(invite.status?.toLowerCase() === 'pending' && !isExpired(invite.expires_at)
+                    ...(invite.status?.toLowerCase() === 'pending'
                       ? [
                         {
                           label: 'Accept Invite',
