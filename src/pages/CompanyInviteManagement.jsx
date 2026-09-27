@@ -60,12 +60,10 @@ const INVITE_STATUS_FILTER_OPTIONS = [
 ];
 
 /* ---------- Helpers ---------- */
-const isExpired = (date) => new Date(date) < new Date();
-
-const getStatusBadge = (status, expiresAt) => {
-  if (isExpired(expiresAt))
-    return { icon: FaTimesCircle, text: "Expired", className: "bg-red-100 text-red-800 border border-red-200" };
+const getStatusBadge = (status) => {
   switch (status) {
+    case "expired":
+      return { icon: FaTimesCircle, text: "Expired", className: "bg-red-100 text-red-800 border border-red-200" };
     case "accepted":
       return { icon: FaCheckCircle, text: "Accepted", className: "bg-green-100 text-green-800 border border-green-200" };
     case "pending":
@@ -564,7 +562,7 @@ export default function CompanyInvites() {
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {invites.map((invite, index) => {
-                        const status = getStatusBadge(invite.status, invite.expires_at);
+                        const status = getStatusBadge(invite.status);
                         const StatusIcon = status.icon;
                         return (
                           <motion.tr key={invite.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -640,7 +638,7 @@ export default function CompanyInvites() {
                                 onToggle={(e, id) => setActiveActionMenu((current) => (current === id ? null : id))}
                                 actions={[
                                   { label: 'View Details', icon: <FaEye size={14} />, onClick: () => openModal(invite, MODAL_TYPES.VIEW), className: 'text-green-600 hover:text-green-700 hover:bg-green-50' },
-                                  ...(invite.status === "pending" && !isExpired(invite.expires_at) ? [
+                                  ...(invite.status === "pending" ? [
                                     { label: 'Edit Invite', icon: <FaEdit size={14} />, onClick: () => handleEditClick(invite), disabled: updateInviteAccess.disabled, title: updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : "", className: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' },
                                     { label: 'Cancel Invite', icon: <FaBan size={14} />, onClick: () => !cancelInviteAccess.disabled && openModal(invite, MODAL_TYPES.CANCEL), disabled: cancelInviteAccess.disabled, title: cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : "", className: 'text-red-600 hover:text-red-700 hover:bg-red-50' }
                                   ] : []),
@@ -661,7 +659,7 @@ export default function CompanyInvites() {
             {viewMode === "card" && (
               <ManagementGrid viewMode={viewMode}>
                 {invites.map((invite, index) => {
-                  const status = getStatusBadge(invite.status, invite.expires_at);
+                  const status = getStatusBadge(invite.status);
                   const StatusIcon = status.icon;
                   return (
                     <motion.div key={invite.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -706,7 +704,7 @@ export default function CompanyInvites() {
                       </div>
                       <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => openModal(invite, MODAL_TYPES.VIEW)} className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all hover:scale-110"><FaEye size={16} /></button>
-                        {invite.status === "pending" && !isExpired(invite.expires_at) && (
+                        {invite.status === "pending" && (
                           <>
                             <button onClick={() => handleEditClick(invite)} disabled={updateInviteAccess.disabled} title={updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : ""} className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all hover:scale-110 disabled:opacity-50"><FaEdit size={16} /></button>
                             <button onClick={() => !cancelInviteAccess.disabled && openModal(invite, MODAL_TYPES.CANCEL)} disabled={cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all hover:scale-110 disabled:opacity-50"><FaBan size={16} /></button>
@@ -754,18 +752,14 @@ export default function CompanyInvites() {
                         {processingId === `resend-${selectedInvite.id}` ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaEnvelope className="h-4 w-4" />}
                         {processingId === `resend-${selectedInvite.id}` ? 'Resending...' : 'Resend Invite'}
                       </motion.button>
-                      {!isExpired(selectedInvite?.expires_at) && (
-                        <>
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            onClick={() => !cancelInviteAccess.disabled && openModal(selectedInvite, MODAL_TYPES.CANCEL)}
-                            disabled={cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""}
-                            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-red-200 transition disabled:opacity-50"><FaBan className="h-4 w-4" />Cancel Invite</motion.button>
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            onClick={() => handleEditClick(selectedInvite)}
-                            disabled={updateInviteAccess.disabled} title={updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : ""}
-                            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-green-200 transition disabled:opacity-50"><FaEdit className="h-4 w-4" />Edit Invite</motion.button>
-                        </>
-                      )}
+                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={() => !cancelInviteAccess.disabled && openModal(selectedInvite, MODAL_TYPES.CANCEL)}
+                        disabled={cancelInviteAccess.disabled} title={cancelInviteAccess.disabled ? getAccessMessage(cancelInviteAccess) : ""}
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-red-200 transition disabled:opacity-50"><FaBan className="h-4 w-4" />Cancel Invite</motion.button>
+                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={() => handleEditClick(selectedInvite)}
+                        disabled={updateInviteAccess.disabled} title={updateInviteAccess.disabled ? getAccessMessage(updateInviteAccess) : ""}
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-green-200 transition disabled:opacity-50"><FaEdit className="h-4 w-4" />Edit Invite</motion.button>
                     </>
                   )}
                 </>
@@ -833,8 +827,8 @@ export default function CompanyInvites() {
                       <InfoItem icon={<FaClock className="text-yellow-500" />} label="Expires At" value={formatDate(selectedInvite.expires_at)} />
                       <InfoItem icon={<FaTag className="text-orange-500" />} label="Status"
                         value={
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(selectedInvite.status, selectedInvite.expires_at).className}`}>
-                            {getStatusBadge(selectedInvite.status, selectedInvite.expires_at).text}
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(selectedInvite.status).className}`}>
+                            {getStatusBadge(selectedInvite.status).text}
                           </span>
                         }
                       />
