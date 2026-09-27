@@ -979,29 +979,98 @@ export default function CompanyInvites() {
                     </AnimatePresence>
                   </div>
 
-                  {/* Permissions */}
-                  {selectedInvite.permissions?.length > 0 && (
+                  {/* Permission Package & Permissions */}
+                  {(selectedInvite.permission_package || selectedInvite.permissions?.length > 0) && (
                     <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden shadow-sm">
-                      <button onClick={() => setShowPermissions(!showPermissions)} className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 transition-colors">
+                      <button
+                        onClick={() => setShowPermissions(!showPermissions)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 transition-colors"
+                      >
                         <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                          <FaShieldAlt className="text-blue-500" /> Assigned Permissions
+                          <FaShieldAlt className="text-blue-500" /> Permission Package
                         </h4>
                         <div className="flex items-center gap-3">
-                          <span className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700 font-bold">{selectedInvite.permissions.length}</span>
+                          {selectedInvite.permissions?.length > 0 && (
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700 font-bold">
+                              {selectedInvite.permissions.length}
+                            </span>
+                          )}
                           <motion.div animate={{ rotate: showPermissions ? 180 : 0 }}>
                             <FaChevronDown className="w-3 h-3 text-slate-400" />
                           </motion.div>
                         </div>
                       </button>
+
                       <AnimatePresence>
                         {showPermissions && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-blue-50">
-                            <div className="p-3 flex flex-wrap gap-2">
-                              {selectedInvite.permissions.map((perm, idx) => (
-                                <span key={perm.id || `perm-${idx}`} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-100 shadow-sm" title={perm.code || undefined}>
-                                  {perm.description || perm.name || formatDisplay(perm.code)}
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden bg-white border-t border-blue-50"
+                          >
+                            <div className="p-4 space-y-3">
+                              {/* Package Name */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                  Package
                                 </span>
-                              ))}
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm">
+                                  <FaShieldAlt size={10} />
+                                  {selectedInvite.permission_package?.name
+                                    || selectedInvite.permission_package_name
+                                    || "N/A"}
+                                </span>
+                              </div>
+
+                              {/* Permissions grouped by category */}
+                              {selectedInvite.permissions?.length > 0 ? (
+                                <div className="space-y-2">
+                                  {Object.entries(
+                                    selectedInvite.permissions.reduce((acc, perm) => {
+                                      const cat = perm.category || "Other";
+                                      if (!acc[cat]) acc[cat] = [];
+                                      acc[cat].push(perm);
+                                      return acc;
+                                    }, {})
+                                  ).map(([category, perms]) => (
+                                    <div
+                                      key={category}
+                                      className="rounded-xl border border-slate-100 bg-slate-50/60 p-3"
+                                    >
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                          {category}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400">
+                                          ({perms.length})
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {perms.map((perm, idx) => (
+                                          <span
+                                            key={perm.id || `perm-${idx}`}
+                                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white text-slate-700 text-[11px] font-semibold rounded-lg border border-slate-200 shadow-sm"
+                                            title={perm.code || undefined}
+                                          >
+                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                            <span>{perm.description || formatDisplay(perm.code)}</span>
+                                            {perm.action && (
+                                              <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-blue-100 text-blue-700">
+                                                {perm.action}
+                                              </span>
+                                            )}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-400 italic">
+                                  No permissions assigned to this package.
+                                </p>
+                              )}
                             </div>
                           </motion.div>
                         )}
