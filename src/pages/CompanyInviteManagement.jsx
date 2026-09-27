@@ -998,7 +998,9 @@ export default function CompanyInvites() {
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-white border-t border-blue-50">
                             <div className="p-3 flex flex-wrap gap-2">
                               {selectedInvite.permissions.map((perm, idx) => (
-                                <span key={perm.id || `perm-${idx}`} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-100 shadow-sm">{perm.description}</span>
+                                <span key={perm.id || `perm-${idx}`} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-100 shadow-sm" title={perm.code || undefined}>
+                                  {perm.description || perm.name || formatDisplay(perm.code)}
+                                </span>
                               ))}
                             </div>
                           </motion.div>
