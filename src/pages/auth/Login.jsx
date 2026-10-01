@@ -22,6 +22,7 @@ import { toast } from "react-toastify";
 import { getPreciseLocation } from "../../utils/geolocation";
 import GoogleAuthButton from "../../components/GoogleAuthButton";
 import FacebookAuthButton from "../../components/FacebookAuthButton";
+import BrandLogo from "../../components/BrandLogo";
 
 const Login = () => {
   const { user, login, selectCompany, companies, mustSelectCompany, showCompanySelection, setShowCompanySelection } = useAuth();
@@ -330,6 +331,9 @@ const Login = () => {
 
           {/* Left Content */}
           <motion.div variants={itemVariants} className="hidden lg:block lg:w-1/2 text-white px-4 lg:px-8">
+            <div className="mb-6 inline-flex rounded-2xl bg-white p-2 shadow-lg">
+              <BrandLogo className="h-14 w-14" />
+            </div>
             <motion.h1 initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, type: "spring" }} className="text-5xl lg:text-6xl font-bold leading-tight">
               Welcome to <span className="bg-clip-text text-transparent bg-gradient-to-r from-yellow-300 to-pink-300">OneAttendance</span>
             </motion.h1>
@@ -353,9 +357,7 @@ const Login = () => {
                 {!showCompanySelection ? (
                   <motion.div key="login" initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 50, opacity: 0 }}>
                     <div className="flex flex-col items-center mb-3">
-                      <motion.div whileHover={{ rotate: 360, scale: 1.1 }} className="bg-gradient-to-r from-blue-600 to-purple-600 p-2.5 rounded-xl text-white text-xl shadow-md">
-                        <FaUserShield />
-                      </motion.div>
+                      <BrandLogo className="h-14 w-14" />
                       <h2 className="text-lg font-bold text-gray-800 mt-1.5">{otpSent ? 'Verify OTP' : 'Secure Login'}</h2>
                       <p className="text-xs text-gray-500 text-center">{otpSent ? (activeTab === "phone" ? 'Enter the 6-digit code sent to your phone' : 'Enter the 6-digit code sent to your email') : 'Access your account securely'}</p>
                     </div>
@@ -507,6 +509,7 @@ const Login = () => {
                 ) : (
                   <motion.div key="company-selection" initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -50, opacity: 0 }}>
                     <div className="flex flex-col items-center mb-4">
+                      <BrandLogo className="mb-2 h-14 w-14" />
                       <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-xl text-white mb-2"><FaBuilding size={20} /></div>
                       <h2 className="text-lg font-bold text-gray-800">Select Company</h2>
                       <p className="text-xs text-gray-500">{userCompanies.length} available</p>

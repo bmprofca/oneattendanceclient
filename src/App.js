@@ -1,12 +1,9 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import LandingPage from "./pages/Landing";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import AcceptInvite from "./pages/AcceptInvite";
-import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
 import DataDeletion from "./pages/legal/DataDeletion";
-import Terms from "./pages/legal/Terms";
 import MainLayout from "./layout/MainLayout";
 import Home from "./pages/Home";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -51,7 +48,6 @@ import UnmarkedAttendance from "./pages/UnmarkedAttendance";
 import BreakManagement from "./pages/BreakManagement";
 import ServerUnavailable from "./pages/ServerUnavailable";
 import Subscription from "./pages/Subscription";
-import PublicSubscription from "./pages/PublicSubscription";
 import {
   TabbedManagementHub,
 } from "./components/common";
@@ -303,6 +299,21 @@ const MY_SALARY_HUB_TABS = [
   },
 ];
 
+const WEBSITE_URL = (
+  process.env.REACT_APP_WEBSITE_URL
+  || (process.env.NODE_ENV === "development" ? "http://localhost:3002" : "")
+).replace(/\/$/, "");
+
+function WebsiteRedirect({ path }) {
+  useEffect(() => {
+    if (!WEBSITE_URL) return;
+    window.location.replace(`${WEBSITE_URL}${path}`);
+  }, [path]);
+
+  if (!WEBSITE_URL) return <NotFound />;
+  return null;
+}
+
 function AppContent() {
   const { user, loading, mustSelectCompany, serverUnavailable, retryConnection, activeRole, company } = useAuth();
   
@@ -324,8 +335,10 @@ function AppContent() {
     <>
       <ScrollToTop />
       <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/"
+          element={user && !mustSelectCompany ? <Navigate to="/home" replace /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/login"
           element={
@@ -339,10 +352,17 @@ function AppContent() {
           }
         />
         <Route path="/accept-invite" element={<AcceptInvite />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/privacy-policy" element={<WebsiteRedirect path="/privacy-policy" />} />
         <Route path="/data-deletion" element={<DataDeletion />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/public-subscription" element={<PublicSubscription />} />
+        <Route path="/terms" element={<WebsiteRedirect path="/terms" />} />
+        <Route path="/disclaimer" element={<WebsiteRedirect path="/disclaimer" />} />
+        <Route path="/refund-policy" element={<WebsiteRedirect path="/refund-policy" />} />
+        <Route path="/cookie-policy" element={<WebsiteRedirect path="/cookie-policy" />} />
+        <Route path="/shipping-policy" element={<WebsiteRedirect path="/shipping-policy" />} />
+        <Route path="/grievance" element={<WebsiteRedirect path="/grievance" />} />
+        <Route path="/contact" element={<WebsiteRedirect path="/contact" />} />
+        <Route path="/public-subscription" element={<WebsiteRedirect path="/pricing" />} />
+        <Route path="/pricing" element={<WebsiteRedirect path="/pricing" />} />
 
         {/* Protected Routes - Only accessible after company selection */}
         <Route path="/home" element={<ProtectedRoute pageKey="home"> <MainLayout> <Home /> </MainLayout> </ProtectedRoute>} />

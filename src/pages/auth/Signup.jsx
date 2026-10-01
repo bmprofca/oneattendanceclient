@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  FaUserShield,
   FaArrowRight,
   FaArrowLeft,
   FaCheckCircle,
@@ -17,6 +16,7 @@ import { BiReset } from "react-icons/bi";
 import countryCodes from "../../utils/countryCodes.json";
 import { CountryCodeModal, getFlagEmoji } from "../../components/common";
 import apiCall from "../../utils/api";
+import BrandLogo from "../../components/BrandLogo";
 import { toast } from "react-toastify";
 import { useAuth } from "../../context/AuthContext";
 import GoogleAuthButton from "../../components/GoogleAuthButton";
@@ -351,6 +351,9 @@ const Signup = () => {
             variants={itemVariants}
             className="hidden lg:block lg:w-1/2 text-white px-4 lg:px-8"
           >
+            <div className="mb-6 inline-flex rounded-2xl bg-white p-2 shadow-lg">
+              <BrandLogo className="h-14 w-14" />
+            </div>
             <motion.h1
               initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -410,13 +413,7 @@ const Signup = () => {
                 variants={itemVariants}
                 className="flex flex-col items-center mb-3"
               >
-                <motion.div
-                  whileHover={{ rotate: 360, scale: 1.1 }}
-                  transition={{ duration: 0.5 }}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 p-2.5 rounded-xl text-white text-xl shadow-md"
-                >
-                  <FaUserShield />
-                </motion.div>
+                <BrandLogo className="h-14 w-14" />
                 <motion.h2
                   variants={itemVariants}
                   className="text-lg font-bold text-gray-800 mt-1.5"

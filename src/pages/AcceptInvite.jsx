@@ -15,6 +15,7 @@ import {
 import { toast } from "react-toastify";
 
 import { API_BASE } from "../utils/api";
+import BrandLogo from "../components/BrandLogo";
 
 const STATUS_CONTENT = {
   pending: {
@@ -140,8 +141,8 @@ export default function AcceptInvite() {
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-5 text-white sm:px-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-sm ring-1 ring-white/20">
-                  <FaEnvelopeOpenText size={22} />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm">
+                  <BrandLogo className="h-10 w-10" />
                 </div>
                 <div>
                   <p className="text-lg font-black leading-tight">OneAttendance</p>

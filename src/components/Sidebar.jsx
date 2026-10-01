@@ -25,6 +25,7 @@ import {
 import { useLocation, Link } from 'react-router-dom';
 import usePermissionAccess from "../hooks/usePermissionAccess";
 import { usePendingInvites } from '../context/PendingInvitesContext';
+import BrandLogo from './BrandLogo';
 
 const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -237,6 +238,10 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
           overflow-y-auto overflow-x-hidden
         `}>
           <div className="p-4">
+            <Link to="/home" onClick={() => toggleSidebar()} className="mb-4 flex items-center gap-2.5 rounded-xl px-1 py-1">
+              <BrandLogo className="h-9 w-9 shrink-0" />
+              <span className="text-base font-bold tracking-tight text-slate-900">One<span className="font-medium text-blue-600">Attendance</span></span>
+            </Link>
             <nav className="space-y-1">
               {menuItems.map((item) => {
                 if (item.isSection) {
@@ -560,7 +565,17 @@ const Sidebar = ({ isMobile, sidebarOpen, toggleSidebar, onHover, isExpanded }) 
       onMouseLeave={handleMouseLeave}
     >
       <div className="flex flex-col h-full">
-        <nav className="flex-1 py-6 px-2">
+        <Link
+          to="/home"
+          className={`mt-4 flex items-center ${isSidebarExpanded ? 'gap-2.5 px-3' : 'justify-center'}`}
+          aria-label="OneAttendance home"
+        >
+          <BrandLogo className="h-9 w-9 shrink-0" />
+          {isSidebarExpanded && (
+            <span className="text-sm font-bold tracking-tight text-slate-900">One<span className="font-medium text-blue-600">Attendance</span></span>
+          )}
+        </Link>
+        <nav className="flex-1 py-4 px-2">
           {menuItems.map((item) => {
             if (item.isSection) {
               return renderSection(item, isSidebarExpanded);

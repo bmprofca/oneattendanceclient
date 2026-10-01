@@ -20,6 +20,7 @@ import {
 import Modal from "../components/Modal";
 import { useAuth } from "../context/AuthContext";
 import { getMediaUrl } from "../utils/api";
+import BrandLogo from "./BrandLogo";
 
 const formatRole = (role) =>
     role?.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'User';
@@ -222,9 +223,7 @@ const Navbar = ({
                                 className="flex items-center gap-1 rounded-lg transition-opacity duration-200 hover:opacity-90 focus:outline-none"
                                 aria-label="Go to home"
                             >
-                                {/* <div className="bg-white/20 p-1.5 rounded-xl backdrop-blur-sm shadow-inner">
-                                    <FaFingerprint className="h-5 w-5 text-white" />
-                                </div> */}
+                                <BrandLogo className="h-9 w-9 rounded-lg bg-white" />
                                 <div>
                                     <span className="text-xl font-bold text-white tracking-tight">
                                         One<span className="font-light text-white/90">Attendance</span>

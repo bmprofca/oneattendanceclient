@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import BrandLogo from "../components/BrandLogo";
 import { Link } from "react-router-dom";
 import { 
   FaHome, 
@@ -14,6 +15,9 @@ export default function NotFound() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50 flex items-center justify-center p-4">
       <div className="max-w-3xl w-full text-center">
+        <div className="mb-6 flex justify-center">
+          <BrandLogo className="h-16 w-16" />
+        </div>
         <motion.div
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
