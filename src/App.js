@@ -70,10 +70,20 @@ import {
   FaBuilding,
   FaUniversity,
   FaMoneyBillWave,
+  FaMapMarkedAlt,
 } from "react-icons/fa";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+const EmployeeLocations = React.lazy(() => import("./pages/EmployeeLocations"));
+
+function EmployeeLocationsTab() {
+  return (
+    <React.Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading location map...</div>}>
+      <EmployeeLocations />
+    </React.Suspense>
+  );
+}
 
 const PAYROLL_HUB_TABS = [
   {
@@ -194,6 +204,16 @@ const EMPLOYEE_HUB_TABS = [
     pageKey: "invitePackages",
     component: InvitePackageManagement,
     accent: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  },
+  {
+    id: "locations",
+    label: "Live Locations",
+    shortLabel: "Locations",
+    description: "See active employee locations and review location history.",
+    icon: FaMapMarkedAlt,
+    pageKey: "employeeManagement",
+    component: EmployeeLocationsTab,
+    accent: "bg-emerald-50 text-emerald-700 border-emerald-200",
   },
 ];
 
