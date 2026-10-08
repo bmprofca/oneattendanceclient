@@ -6,9 +6,25 @@ import { FaHistory, FaMapMarkerAlt, FaSyncAlt } from "react-icons/fa";
 import { toast } from "react-toastify";
 import apiCall from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import SelectField from "../components/SelectField";
+import { DateRangePickerField } from "../components/DatePicker";
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_ACCESS_TOKEN || "";
 const REFRESH_MS = 12000;
+
+function getThisMonthRange() {
+  const today = new Date();
+  const toIsoDate = date => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  return {
+    start: toIsoDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+    end: toIsoDate(today),
+  };
+}
 
 function ageLabel(value) {
   if (!value) return "No recent update";
@@ -67,8 +83,7 @@ export default function EmployeeLocations() {
   const [historyPoints, setHistoryPoints] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [mode, setMode] = useState("live");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [dateRange, setDateRange] = useState(getThisMonthRange);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [page, setPage] = useState(1);
@@ -93,8 +108,8 @@ export default function EmployeeLocations() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(requestedPage), limit: "500" });
-      if (fromDate) params.set("from", `${fromDate} 00:00:00`);
-      if (toDate) params.set("to", `${toDate} 23:59:59`);
+      if (dateRange.start) params.set("from", `${dateRange.start} 00:00:00`);
+      if (dateRange.end) params.set("to", `${dateRange.end} 23:59:59`);
       const response = await apiCall(
         `/location/admin/${employeeId}/history?${params.toString()}`,
         "GET",
@@ -112,7 +127,7 @@ export default function EmployeeLocations() {
     } finally {
       setLoading(false);
     }
-  }, [companyId, fromDate, toDate]);
+  }, [companyId, dateRange]);
 
   useEffect(() => {
     if (!companyId) return undefined;
@@ -245,6 +260,9 @@ export default function EmployeeLocations() {
   const selectedHistoryEmployee = selectedLive
     || employeeOptions.find(employee => Number(employee.employee_id) === Number(selectedEmployee))
     || (selectedEmployee ? { employee_id: selectedEmployee, name: "Selected employee" } : null);
+  const selectedEmployeeOption = employeeOptions
+    .map(employee => ({ value: employee.employee_id, label: employee.name, employee }))
+    .find(option => Number(option.value) === Number(selectedEmployee)) || null;
 
   return (
     <section className="space-y-4">
@@ -339,32 +357,57 @@ export default function EmployeeLocations() {
               </div>
               <label className="block text-[11px] text-slate-500">
                 Employee
-                <input
-                  type="search"
-                  value={employeeSearch}
-                  onChange={event => setEmployeeSearch(event.target.value)}
+                <SelectField
+                  className="mt-1 text-xs"
+                  classNamePrefix="employee-history"
                   placeholder="Search employees"
-                  className="mt-1 w-full rounded-md border border-slate-300 p-2 text-xs text-slate-800"
-                />
-                <select
-                  value={selectedEmployee || ""}
-                  onChange={event => {
-                    const employeeId = Number(event.target.value);
-                    const employee = employeeOptions.find(item => Number(item.employee_id) === employeeId);
-                    setSelectedEmployee(employeeId || null);
+                  value={selectedEmployeeOption}
+                  options={employeeOptions.map(employee => ({
+                    value: employee.employee_id,
+                    label: employee.name,
+                    employee,
+                  }))}
+                  inputValue={employeeSearch}
+                  onInputChange={(value, action) => {
+                    if (action.action === "input-change") setEmployeeSearch(value);
+                    return value;
+                  }}
+                  onChange={option => {
+                    const employee = option?.employee;
+                    setSelectedEmployee(employee?.employee_id || null);
+                    setEmployeeSearch("");
                     if (employee) loadHistory(employee, 1);
                   }}
-                  className="mt-1 w-full rounded-md border border-slate-300 p-2 text-xs text-slate-800">
-                  <option value="">Choose employee</option>
-                  {employeeOptions.map(employee => (
-                    <option key={employee.employee_id} value={employee.employee_id}>{employee.name}</option>
-                  ))}
-                </select>
+                  isClearable
+                  styles={{
+                    control: (base, state) => ({
+                      ...base,
+                      minHeight: "38px",
+                      borderRadius: "0.5rem",
+                      backgroundColor: "#fff",
+                      borderColor: state.isFocused ? "#047857" : "#cbd5e1",
+                      boxShadow: state.isFocused ? "0 0 0 3px rgba(4, 120, 87, 0.1)" : "none",
+                      "&:hover": { borderColor: "#047857" },
+                    }),
+                    valueContainer: base => ({ ...base, padding: "0 0.625rem" }),
+                    menu: base => ({ ...base, zIndex: 30 }),
+                    menuPortal: base => ({ ...base, zIndex: 100 }),
+                  }}
+                />
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] text-slate-500">From<input type="date" value={fromDate} onChange={event => setFromDate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 p-1.5 text-xs text-slate-800" /></label>
-                <label className="text-[11px] text-slate-500">To<input type="date" value={toDate} onChange={event => setToDate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 p-1.5 text-xs text-slate-800" /></label>
-              </div>
+              <label className="block text-[11px] text-slate-500">
+                Date range
+                <DateRangePickerField
+                  value={dateRange}
+                  onChange={setDateRange}
+                  placeholder="Choose date range"
+                  initialTab="quick"
+                  mode="range"
+                  maxDays={Infinity}
+                  buttonClassName="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-slate-800 shadow-sm hover:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                  popoverClassName="mt-2"
+                />
+              </label>
               <button
                 type="button"
                 disabled={loading || !selectedHistoryEmployee}
